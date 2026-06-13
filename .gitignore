@@ -9,3 +9,4 @@ venv/
 # 生成物・ユーザーデータ（ログ・リンク・プレビュー）は上げない
 data/*
 !data/.gitkeep
+!data/queue.example.csv
