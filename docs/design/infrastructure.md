@@ -12,27 +12,34 @@
 ### 比較
 | 候補 | 固定IP | 常時起動 | Python自由 | コスト | 評価 |
 |------|:---:|:---:|:---:|------|------|
-| **小型VPS（推奨）** | ◎ | ◎ | ◎ | 月600〜1000円 | ✅ 最適。非属人・無人に向く |
-| 既存サーバー | △(要確認) | ◎ | △(レンタルだと不可な場合) | 既存 | 条件を満たせば可 |
+| **エックスサーバー同居（採用）** | ◎ | ◎ | ◯(SSH/cron/Python可) | 既存（追加0円） | ✅ 採用。追加コストなし |
+| 小型VPS（フォールバック） | ◎ | ◎ | ◎ | 月600〜1000円 | Python制約が出たら移行 |
 | 常時起動Mac | △(動的IPが多い) | △(スリープ/電源) | ◎ | 0円 | 安定性に難。非属人に不向き |
 | GitHub Actions等 | ✕(動的IP) | スケジュールのみ | ◎ | 無料枠 | 楽天IP許可と相性が悪く不可 |
 
-### 推奨構成
-- **小型VPS**（さくらのVPS / ConoHa / Xserver VPS など）
-  - スペック目安: 1vCPU / メモリ1GB / SSD（最小プランで十分）
-  - OS: Ubuntu LTS
-  - 固定グローバルIPを取得 → **楽天APIの許可IPに登録**
+### 採用構成：エックスサーバー同居（追加コストなし）
+WordPressを置いているエックスサーバーは **SSH・cron・Python に対応**しており、
+生成ツールを**同じサーバーに同居**できる。固定の共有IPがあるため楽天APIのIP許可も満たせる。
+→ 別途VPSは不要。生成ツールはWordPressとREST APIで通信するだけなので、同居しても役割は分離される。
 
-## セットアップ手順（VPS・初回）
+> **フォールバック**: もしエックスサーバー上でPython環境（バージョン/パッケージ導入）に
+> 制約が出た場合は、小型VPS（さくら/ConoHa等・月600〜1000円）へ移すだけで同じ構成が動く。
+
+## セットアップ手順（エックスサーバー・初回）
+> ⚠️ 実機での実施は #6 で行う。ここでは設計上の手順を示す。
+
 ```bash
-# 1. 依存
-sudo apt update && sudo apt install -y python3 python3-venv git
+# 0. サーバーパネルで「SSH設定」を有効化し、公開鍵を登録 → SSHログイン
+
+# 1. Pythonの確認（古い場合はpyenvで3.11等を入れる）
+python3 --version          # 3.9未満なら pyenv 推奨（google-genai等が3.9+を要求）
+#   例) pyenvでの導入（必要時）:
+#   git clone https://github.com/pyenv/pyenv.git ~/.pyenv && ... && pyenv install 3.11.x
 
 # 2. 取得
-git clone https://github.com/kgn7645/afi.git
-cd afi
+git clone https://github.com/kgn7645/afi.git && cd afi
 
-# 3. Python環境
+# 3. Python環境（プリビルドwheelで導入されるため通常コンパイル不要）
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
@@ -41,18 +48,25 @@ cp .env.example .env
 #   GEMINI_API_KEY / WP_* / MOSHIMO_AID / RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY / INDEXNOW_* を記入
 chmod 600 .env
 
-# 5. 楽天APIの許可IPに、このVPSのグローバルIPを登録（楽天ウェブサービス管理画面）
-curl -s https://api.ipify.org   # ← このIPを許可リストへ
+# 5. このサーバーの送信元IPを確認 → 楽天APIの許可IPに登録
+curl -s https://api.ipify.org
 ```
-> 詳細な新環境セットアップは #6 を参照。
+
+### エックスサーバー特有の注意
+- **Pythonバージョン**: 標準python3が古い場合があるため、`pyenv`等で3.11系を用意するのが安全。
+- **cron**: サーバーパネルの「Cron設定」からでも、SSHの`crontab -e`からでも設定可。
+- **実行時間/プロセス制限**: 共有サーバーは長時間プロセスに制限あり。1回のバッチが長引く場合は
+  `--limit` を小さめ（例: 5〜10件×複数回）に分割する。
+- **送信元IP**: サイトのIPと送信元IPが同じか、SSHで `curl ifconfig.me` で実値を確認して登録する。
 
 ## cron 設定
+エックスサーバーのホームは `/home/<アカウント>/`。パスは実環境に合わせる。
 ```cron
-# 記事バッチ：毎朝6時に15件を下書き生成
-0 6 * * *   cd /home/USER/afi && .venv/bin/python batch.py --limit 15 >> data/batch.log 2>&1
+# 記事バッチ：毎朝6時に10件を下書き生成（共有サーバーの実行時間制限に配慮し控えめ）
+0 6 * * *   cd ~/afi && .venv/bin/python batch.py --limit 10 >> data/batch.log 2>&1
 
 # IndexNow：30分毎に公開済みを検知して送信（SEOプラグインで代替する場合は不要）
-*/30 * * * * cd /home/USER/afi && .venv/bin/python index_submit.py >> data/index.log 2>&1
+*/30 * * * * cd ~/afi && .venv/bin/python index_submit.py >> data/index.log 2>&1
 ```
 
 ## シークレット・データ管理
