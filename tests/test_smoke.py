@@ -58,3 +58,39 @@ def test_affiliate_insert():
     out = affiliate.insert_into_body(body, "<a>link</a>")
     assert "affiliate-link" in out
     assert "<a>link</a>" in out
+
+
+def test_moshimo_click_url():
+    from core import moshimo_link as ml
+    url = ml.build_click_url(5633316, "https://item.rakuten.co.jp/e-kurashi/s1k76/", "rakuten")
+    assert url.startswith("https://af.moshimo.com/af/c/click?")
+    assert "a_id=5633316" in url
+    assert "p_id=54&pc_id=54&pl_id=27059" in url
+    assert "url=https%3A%2F%2Fitem.rakuten.co.jp%2Fe-kurashi%2Fs1k76%2F" in url
+
+
+def test_moshimo_easylink_roundtrip():
+    """実リンクの商品データから再生成し、payloadが一致することを確認。"""
+    import json
+    import re
+
+    from core import moshimo_link as ml
+
+    real = (Path(__file__).resolve().parent.parent / "data" / "link.txt")
+    if not real.exists():
+        return  # 実リンク未配置の環境ではスキップ
+    payload = json.loads(re.search(r"msmaflink\((\{.*\})\);", real.read_text(encoding="utf-8"), re.S).group(1).replace("\\/", "/"))
+    html = ml.build_easylink_html(
+        a_id=payload["b_l"][0]["a_id"], name=payload["n"], product_url=payload["u"]["u"],
+        image_domain=payload["d"], image_path_prefix=payload["c_p"], image_paths=payload["p"],
+        program="rakuten", eid=payload["eid"],
+    )
+    gen = json.loads(re.search(r"msmaflink\((\{.*\})\);", html, re.S).group(1).replace("\\/", "/"))
+    assert gen == payload
+
+
+def test_moshimo_easylink_html_shape():
+    from core import moshimo_link as ml
+    html = ml.build_easylink_html(a_id=123, name="テスト", product_url="https://item.rakuten.co.jp/s/x/", program="rakuten")
+    ok, issues = affiliate.validate_moshimo_link(html)
+    assert ok, issues

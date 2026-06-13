@@ -29,6 +29,12 @@ class Settings:
             "<!-- START MoshimoAffiliateEasyLink -->\nリンク\n<!-- MoshimoAffiliateEasyLink END -->",
         ).replace("\\n", "\n")
 
+        # もしもアフィリエイトの成果ID（かんたんリンク自動生成に使用）
+        _aid = os.getenv("MOSHIMO_AID", "").strip()
+        self.moshimo_aid = int(_aid) if _aid.isdigit() else None
+        # 楽天ウェブサービス アプリID（商品検索API・無料）
+        self.rakuten_app_id = os.getenv("RAKUTEN_APP_ID", "").strip()
+
         self.app_host = os.getenv("APP_HOST", "127.0.0.1")
         self.app_port = int(os.getenv("APP_PORT", "8000"))
 
