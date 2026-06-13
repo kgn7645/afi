@@ -74,6 +74,47 @@ def create_draft(article: Article, *, status: str | None = None, timeout: int = 
     }
 
 
+def list_published_since(after_iso: str = "", *, per_page: int = 50, timeout: int = 30) -> list[dict]:
+    """公開済み記事を新しい順で取得。after_iso(ISO8601)より後のものだけ返す。
+
+    返り値: [{id, link, date_gmt}] （date_gmt昇順）
+    """
+    s = get_settings()
+    params = {"status": "publish", "per_page": per_page, "orderby": "date", "order": "desc",
+              "_fields": "id,link,date_gmt"}
+    if after_iso:
+        params["after"] = after_iso
+    resp = requests.get(
+        f"{s.wp_base_url}/wp-json/wp/v2/posts", params=params,
+        headers=_auth_header(), timeout=timeout,
+    )
+    resp.raise_for_status()
+    posts = [{"id": p["id"], "link": p["link"], "date_gmt": p.get("date_gmt", "")} for p in resp.json()]
+    posts.sort(key=lambda p: p["date_gmt"])
+    return posts
+
+
+def upload_text_file(filename: str, content: str, *, timeout: int = 30) -> dict:
+    """テキストファイルをメディアとしてアップロード（IndexNowキーファイル設置用）。
+
+    返り値: {id, source_url}
+    """
+    s = get_settings()
+    resp = requests.post(
+        f"{s.wp_base_url}/wp-json/wp/v2/media",
+        headers={
+            **_auth_header(),
+            "Content-Type": "text/plain",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+        data=content.encode("utf-8"),
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    d = resp.json()
+    return {"id": d.get("id"), "source_url": d.get("source_url", "")}
+
+
 def test_connection(timeout: int = 15) -> tuple[bool, str]:
     s = get_settings()
     if not s.wordpress_ready:

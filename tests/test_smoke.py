@@ -133,3 +133,42 @@ def test_batch_run_skips_duplicates(monkeypatch, tmp_path):
     # limitの尊重
     s2 = batch.run_batch(queue_path=str(q), limit=1, post_to_wp=False, skip_dedup=True)
     assert s2["generated"] == 1
+
+
+def test_indexnow_key_and_host():
+    from core import indexnow
+    key = indexnow.generate_key()
+    assert len(key) == 32 and all(c in "0123456789abcdef" for c in key)
+    assert indexnow.key_file_content(key) == key
+    assert indexnow.host_of("https://ouchibase.com/foo/") == "ouchibase.com"
+    assert indexnow.default_key_location("ouchibase.com", "abc") == "https://ouchibase.com/abc.txt"
+
+
+def test_indexnow_submit_payload(monkeypatch):
+    from core import indexnow
+
+    captured = {}
+
+    class FakeResp:
+        status_code = 200
+        text = "ok"
+
+    def fake_post(url, json, headers, timeout):  # noqa: A002
+        captured["url"] = url
+        captured["json"] = json
+        return FakeResp()
+
+    monkeypatch.setattr(indexnow.requests, "post", fake_post)
+    res = indexnow.submit(
+        ["https://ouchibase.com/a/", "https://ouchibase.com/b/"],
+        key="deadbeef", key_location="https://ouchibase.com/deadbeef.txt",
+    )
+    assert res["ok"] and res["count"] == 2 and res["host"] == "ouchibase.com"
+    assert captured["json"]["host"] == "ouchibase.com"
+    assert captured["json"]["key"] == "deadbeef"
+    assert captured["json"]["urlList"] == ["https://ouchibase.com/a/", "https://ouchibase.com/b/"]
+
+
+def test_indexnow_submit_noop():
+    from core import indexnow
+    assert indexnow.submit([], key="x")["status"] == "noop"
