@@ -6,13 +6,26 @@
 """
 from __future__ import annotations
 
+import time
 from urllib.parse import urlsplit
 
 import requests
 
 from .config import get_settings
 
-_ENDPOINT = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+_ENDPOINT = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
+
+# 楽天APIは約1リクエスト/秒の制限。連続呼び出しの最小間隔(秒)
+_MIN_INTERVAL = 1.2
+_last_call = 0.0
+
+
+def _throttle() -> None:
+    global _last_call
+    elapsed = time.time() - _last_call
+    if elapsed < _MIN_INTERVAL:
+        time.sleep(_MIN_INTERVAL - elapsed)
+    _last_call = time.time()
 
 
 def _split_image_url(url: str) -> tuple[str, str]:
@@ -29,11 +42,12 @@ def search_item(keyword: str, *, timeout: int = 15) -> dict | None:
     返り値: {name, url, price, image_domain, image_paths}
     """
     s = get_settings()
-    if not s.rakuten_app_id:
-        raise RuntimeError("RAKUTEN_APP_ID が未設定です（.env）。")
+    if not s.rakuten_app_id or not s.rakuten_access_key:
+        raise RuntimeError("RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY が未設定です（.env）。")
 
     params = {
         "applicationId": s.rakuten_app_id,
+        "accessKey": s.rakuten_access_key,
         "keyword": keyword,
         "hits": 1,
         "format": "json",
@@ -41,7 +55,15 @@ def search_item(keyword: str, *, timeout: int = 15) -> dict | None:
         "availability": 1,       # 在庫ありのみ
         "sort": "standard",
     }
-    resp = requests.get(_ENDPOINT, params=params, timeout=timeout)
+    # 収益はもしも(a_id)経由で取るため、楽天独自アフィリ(affiliateId)は使わない。
+    resp = None
+    for attempt in range(4):
+        _throttle()
+        resp = requests.get(_ENDPOINT, params=params, timeout=timeout)
+        if resp.status_code == 429:  # レート制限 → 待って再試行
+            time.sleep(2 * (attempt + 1))
+            continue
+        break
     resp.raise_for_status()
     items = resp.json().get("Items", [])
     if not items:
@@ -59,9 +81,12 @@ def search_item(keyword: str, *, timeout: int = 15) -> dict | None:
             image_domain = d
             image_paths.append(p)
 
+    # クエリ(rafcid等)を除いたクリーンな商品URLにする
+    clean_url = item.get("itemUrl", "").split("?")[0]
+
     return {
         "name": item.get("itemName", ""),
-        "url": item.get("itemUrl", ""),
+        "url": clean_url,
         "price": item.get("itemPrice"),
         "image_domain": image_domain,
         "image_paths": image_paths,
