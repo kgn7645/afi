@@ -41,11 +41,32 @@ python app.py
 ```
 フォームにAmazon URL（または手動で商品情報）を入力 → 「記事を生成する」→ プレビュー確認 → WordPressに下書き保存。
 
-### CLI / 量産・cron
+### CLI（単発）
 ```bash
 python cli.py --url "https://www.amazon.co.jp/dp/XXXXXXXXXX" --category "DCモーター扇風機"
 python cli.py --brand COMFEE' --category 扇風機 --model CFS-12 --name "..." --no-wp   # WP送らず確認のみ
 ```
+
+### バッチ（量産・無人運用 / Issue #9・#10）
+キューCSV（`data/queue.example.csv` をコピーして `data/queue.csv` を作成）から、
+1日N件をまとめて生成→WP下書き。既出商品（`articles_log.csv`）は自動でスキップ。
+```bash
+cp data/queue.example.csv data/queue.csv   # 商品リストを編集
+python batch.py --limit 15                  # 15件まで生成
+python batch.py --no-wp                      # WP送らず確認のみ
+```
+キューCSVの列: `brand,category,model_number,product_name,price,company_hint,url,affiliate_link_html`
+（`brand`+`category` か `url` があれば最小限でOK。リンクは未指定なら楽天検索で自動生成）
+
+cron例（毎朝6時に15件・サーバー常駐運用、Issue #21で整備）:
+```
+0 6 * * *  cd /path/to/affiliate-automation && .venv/bin/python batch.py --limit 15 >> data/batch.log 2>&1
+```
+
+### もしもリンクの自動生成（Issue #8）
+`.env` に `MOSHIMO_AID`（もしもの成果ID）と `RAKUTEN_APP_ID`/`RAKUTEN_ACCESS_KEY`
+（楽天ウェブサービス・無料）を設定すると、リンク未指定時にブランド+カテゴリで
+楽天検索し、もしもかんたんリンクを自動生成・挿入する。
 
 ## 注意・既知の制約
 - **Amazon自動抽出**はbot対策で失敗することがあります。その場合はフォームの手動入力で補完してください（両対応設計）。商用の安定取得が必要なら Amazon PA-API への差し替えを推奨。

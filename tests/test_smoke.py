@@ -94,3 +94,42 @@ def test_moshimo_easylink_html_shape():
     html = ml.build_easylink_html(a_id=123, name="テスト", product_url="https://item.rakuten.co.jp/s/x/", program="rakuten")
     ok, issues = affiliate.validate_moshimo_link(html)
     assert ok, issues
+
+
+def test_batch_dedup_key():
+    from core import batch
+    assert batch.dedup_key(brand="COMFEE'", model_number="CFS-12") == "comfee'|cfs-12"
+    assert batch.dedup_key(brand="RANVOO", category="ネッククーラー") == "ranvoo|ネッククーラー"
+    assert batch.dedup_key(product_name="謎の商品") == "謎の商品"
+
+
+def test_batch_run_skips_duplicates(monkeypatch, tmp_path):
+    """run_batch が重複スキップとlimitを守ることを、pipelineをスタブして検証。"""
+    from core import batch
+    from core.models import Article, PipelineResult, Product
+
+    calls = []
+
+    def fake_run(*, url, manual, affiliate_link_html, post_to_wp, wp_status, gemini):
+        calls.append(manual.get("brand"))
+        p = Product(brand=manual.get("brand", ""), category=manual.get("category", ""))
+        return PipelineResult(product=p, article=Article(title=f"記事 {p.brand}"), selection_ok=True, wp_post_id=1)
+
+    monkeypatch.setattr(batch.pipeline, "run", fake_run)
+
+    q = tmp_path / "q.csv"
+    q.write_text(
+        "brand,category,model_number,product_name,price,company_hint,url,affiliate_link_html\n"
+        "A,扇風機,,,,,,\n"
+        "A,扇風機,,,,,,\n"   # 重複
+        "B,除湿機,,,,,,\n",
+        encoding="utf-8",
+    )
+    s = batch.run_batch(queue_path=str(q), limit=5, post_to_wp=False, skip_dedup=False)
+    assert s["generated"] == 2          # A, B
+    assert s["skipped_dup"] == 1        # 2行目のA
+    assert calls == ["A", "B"]
+
+    # limitの尊重
+    s2 = batch.run_batch(queue_path=str(q), limit=1, post_to_wp=False, skip_dedup=True)
+    assert s2["generated"] == 1
