@@ -1,0 +1,71 @@
+# アフィリエイト記事 自動化ツール（アマバイザー）
+
+Amazonの無名・中華系メーカー商品を題材にした「**○○はどこの国のメーカー？評判・口コミレビュー**」系の定型記事を、**Gemini（無料枠）** で自動生成し、**WordPress（`amaviser.com`）へ下書き投稿**するツールです。
+元のスプレッドシート運用（A〜E作業）を解析し、その作業フローを自動化しています。
+
+## 対応している作業工程
+
+| 工程 | 元シート | 本ツールの自動化 |
+|------|----------|------------------|
+| A | 商品選定 | 価格3000円以上 / 在庫あり / 消え物・化粧品・薬品の除外を自動判定（`config.yaml`） |
+| B | 基本情報整理 | Amazon URLからブランド・型番・スペック抽出（手動入力も可）＋タイトル・キャッチコピー生成 |
+| C | AI記事作成 | Geminiで「企業の正体→★5つ星信頼度→レビュー→大手比較→まとめ」の定型本文を生成 |
+| D | アフィリエイトリンク | もしもかんたんリンクHTMLを本文へ自動挿入（未取得時はプレースホルダ） |
+| E | WordPress作業 | メタディスクリプション/キーワード生成 → REST APIで下書き投稿 |
+
+> note投稿・ショート動画・Canvaアイキャッチは現時点で対象外（拡張余地として後述）。
+
+## セットアップ
+
+```bash
+cd affiliate-automation
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # 値を埋める
+```
+
+### .env に設定するもの
+- `GEMINI_API_KEY` … [Google AI Studio](https://aistudio.google.com/app/apikey) で無料発行
+- `GEMINI_MODEL` … `gemini-2.5-flash`（無料枠）。制限が厳しければ `gemini-2.0-flash`
+- `WP_BASE_URL` / `WP_USERNAME` / `WP_APP_PASSWORD` … WordPress管理画面 > ユーザー > プロフィール > **アプリケーションパスワード** で発行
+
+### config.yaml
+選定ルール（最低価格・除外キーワード）、記事の文体、比較対象の大手メーカー、SEOプラグイン種別（`rankmath`/`yoast`）を調整できます。
+
+## 使い方
+
+### Web UI（推奨）
+```bash
+python app.py
+# → http://127.0.0.1:8000 をブラウザで開く
+```
+フォームにAmazon URL（または手動で商品情報）を入力 → 「記事を生成する」→ プレビュー確認 → WordPressに下書き保存。
+
+### CLI / 量産・cron
+```bash
+python cli.py --url "https://www.amazon.co.jp/dp/XXXXXXXXXX" --category "DCモーター扇風機"
+python cli.py --brand COMFEE' --category 扇風機 --model CFS-12 --name "..." --no-wp   # WP送らず確認のみ
+```
+
+## 注意・既知の制約
+- **Amazon自動抽出**はbot対策で失敗することがあります。その場合はフォームの手動入力で補完してください（両対応設計）。商用の安定取得が必要なら Amazon PA-API への差し替えを推奨。
+- **企業情報の正確性**: Gemini無料枠は検索グラウンディングが弱く、企業の国籍・沿革を誤る可能性があります。`企業ヒント`欄に正しい情報を渡すと精度が上がります。**公開前に必ず人がチェック**してください（既定が下書き保存なのはこのため）。
+- **もしもアフィリエイト**は公開APIが無いため、リンクHTMLは手動取得して貼り付けるか、プレースホルダのまま投稿し後で差し替えます。
+- 薬機法・景表法に触れる表現が出ないようプロンプトで抑制していますが、最終確認は人が行ってください。
+
+## 今後の拡張余地
+- Canvaアイキャッチ自動生成（Canva API / 画像生成）
+- note自動投稿
+- Amazon売れ筋ランキングからの商品候補自動収集（A作業の完全自動化）
+- Googleスプレッドシートへの実績書き戻し（現在は `data/articles_log.csv` に記録）
+
+## ディレクトリ
+```
+core/        ロジック（抽出・選定・生成・WP投稿・オーケストレーション）
+web/         Web UIテンプレート
+data/        投稿ログ(CSV)
+tests/       スモークテスト
+app.py       Web UI起動
+cli.py       コマンド実行
+config.yaml  生成ルール
+```

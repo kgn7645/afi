@@ -1,0 +1,132 @@
+"""
+A/B作業: 商品情報の取得。
+- Amazon URLからの自動抽出（best-effort。bot対策で失敗しうる）
+- 失敗時は手動入力にフォールバック
+"""
+from __future__ import annotations
+
+import re
+from urllib.parse import urlparse
+
+import requests
+from bs4 import BeautifulSoup
+
+from .models import Product
+
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    ),
+    "Accept-Language": "ja,en;q=0.8",
+}
+
+_ASIN_RE = re.compile(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})")
+
+
+def extract_asin(url: str) -> str:
+    m = _ASIN_RE.search(url)
+    return m.group(1) if m else ""
+
+
+def _price_to_int(text: str) -> int | None:
+    digits = re.sub(r"[^\d]", "", text or "")
+    return int(digits) if digits else None
+
+
+def extract_from_amazon(url: str, *, timeout: int = 15) -> tuple[Product, list[str]]:
+    """Amazon商品ページから可能な範囲で情報抽出。warningsも返す。"""
+    warnings: list[str] = []
+    product = Product(source_url=url, model_number=extract_asin(url))
+
+    if "amazon." not in urlparse(url).netloc:
+        warnings.append("Amazon以外のURLです。手動入力での補完を推奨します。")
+        return product, warnings
+
+    try:
+        resp = requests.get(url, headers=_HEADERS, timeout=timeout)
+        resp.raise_for_status()
+    except Exception as e:  # noqa: BLE001
+        warnings.append(f"Amazonページ取得に失敗（手動入力で補完してください）: {e}")
+        return product, warnings
+
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    title_el = soup.select_one("#productTitle")
+    if title_el:
+        product.product_name = title_el.get_text(strip=True)
+
+    # ブランド
+    brand_el = soup.select_one("#bylineInfo") or soup.select_one("a#brand")
+    if brand_el:
+        bt = brand_el.get_text(strip=True)
+        bt = re.sub(r"(ブランド:|のストアを表示|を表示|Visit the|Store)", "", bt).strip()
+        product.brand = bt
+
+    # 価格
+    price_el = soup.select_one(".a-price .a-offscreen") or soup.select_one("#priceblock_ourprice")
+    if price_el:
+        product.price = _price_to_int(price_el.get_text())
+
+    # 在庫
+    avail = soup.select_one("#availability")
+    if avail and ("在庫切れ" in avail.get_text() or "現在在庫切れ" in avail.get_text()):
+        product.in_stock = False
+
+    # スペック（仕様テーブル）
+    specs: list[str] = []
+    for row in soup.select("#productDetails_techSpec_section_1 tr, table.a-keyvalue tr"):
+        k = row.select_one("th")
+        v = row.select_one("td")
+        if k and v:
+            specs.append(f"{k.get_text(strip=True)}: {v.get_text(strip=True)}")
+    # 箇条書き特徴
+    for li in soup.select("#feature-bullets li span.a-list-item"):
+        t = li.get_text(strip=True)
+        if t:
+            specs.append(t)
+    product.specs = specs[:12]
+
+    if not product.product_name:
+        warnings.append(
+            "商品名を取得できませんでした（Amazonのbot対策の可能性）。手動入力で補完してください。"
+        )
+    return product, warnings
+
+
+def from_manual(
+    *,
+    brand: str,
+    category: str,
+    model_number: str,
+    product_name: str,
+    price: int | None = None,
+    in_stock: bool = True,
+    specs: list[str] | None = None,
+    company_hint: str = "",
+    source_url: str = "",
+) -> Product:
+    return Product(
+        source_url=source_url,
+        brand=brand,
+        category=category,
+        model_number=model_number,
+        product_name=product_name,
+        price=price,
+        in_stock=in_stock,
+        specs=specs or [],
+        company_hint=company_hint,
+    )
+
+
+def merge(base: Product, override: Product) -> Product:
+    """自動抽出(base)に手動入力(override)を上書きマージ。"""
+    data = base.model_dump()
+    for k, v in override.model_dump().items():
+        if v not in (None, "", [], False) or k == "in_stock":
+            # in_stock は明示Falseも反映
+            if k == "in_stock":
+                data[k] = v
+            elif v not in (None, "", []):
+                data[k] = v
+    return Product(**data)

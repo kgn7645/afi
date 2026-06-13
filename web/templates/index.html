@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アフィリエイト記事 自動化ツール</title>
+  <style>
+    :root { --accent:#ff9900; --bg:#f7f7f8; --line:#e2e2e6; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+           margin:0; background:var(--bg); color:#222; line-height:1.7; }
+    header { background:#232f3e; color:#fff; padding:16px 24px; }
+    header h1 { margin:0; font-size:18px; }
+    .status { font-size:12px; margin-top:4px; opacity:.85; }
+    .ok { color:#7CFC9A; } .ng { color:#ff8585; }
+    .wrap { max-width:980px; margin:24px auto; padding:0 16px; display:grid;
+            grid-template-columns: 1fr; gap:20px; }
+    @media(min-width:840px){ .wrap{ grid-template-columns: 380px 1fr; } }
+    .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px; }
+    label { display:block; font-size:13px; font-weight:600; margin:12px 0 4px; }
+    input[type=text], input[type=number], textarea, select {
+      width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
+    textarea { min-height:64px; resize:vertical; }
+    .hint { font-size:11px; color:#888; margin-top:2px; }
+    .row { display:flex; gap:10px; } .row > div { flex:1; }
+    .checks { font-size:13px; margin-top:12px; }
+    button { background:var(--accent); color:#222; font-weight:700; border:0;
+             padding:12px 18px; border-radius:8px; font-size:15px; cursor:pointer; width:100%; margin-top:16px; }
+    h2 { font-size:16px; border-left:4px solid var(--accent); padding-left:8px; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; }
+    .badge.ok{ background:#e3f7e8; color:#177a35; } .badge.ng{ background:#fdeaea; color:#b42318; }
+    .preview { border:1px solid var(--line); border-radius:8px; padding:16px; max-height:520px; overflow:auto; }
+    .preview h2{ border:0; padding:0; } .preview h3{ font-size:14px; }
+    .kv { font-size:13px; } .kv b{ display:inline-block; min-width:120px; color:#555; }
+    .warn { background:#fff7e6; border:1px solid #ffe0a3; padding:8px 12px; border-radius:8px; font-size:13px; margin:8px 0; }
+    code { background:#f0f0f3; padding:1px 4px; border-radius:4px; font-size:12px; }
+    a.btn { display:inline-block; background:#232f3e; color:#fff; text-decoration:none; padding:8px 14px; border-radius:8px; font-size:13px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛒 アフィリエイト記事 自動化ツール</h1>
+    <div class="status">
+      Gemini: <span class="{{ 'ok' if gemini_ready else 'ng' }}">{{ '接続準備OK' if gemini_ready else '未設定(.env)' }}</span>
+      ｜ WordPress:
+      <span class="{{ 'ok' if wp_ok else 'ng' }}">{{ wp_status if wp_status else ('準備OK' if wp_ready else '未設定') }}</span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- 入力フォーム -->
+    <form class="card" method="post" action="/generate">
+      <h2>商品情報の入力</h2>
+      <label>Amazon商品URL（自動抽出を試みます）</label>
+      <input type="text" name="url" placeholder="https://www.amazon.co.jp/dp/XXXXXXXXXX"
+             value="{{ form.url if form else '' }}">
+      <div class="hint">URLが取得できない場合は下を手動で埋めてください（両対応）。</div>
+
+      <div class="row">
+        <div><label>ブランド名</label><input type="text" name="brand" value="{{ form.brand if form else '' }}"></div>
+        <div><label>カテゴリー</label><input type="text" name="category" placeholder="DCモーター扇風機" value="{{ form.category if form else '' }}"></div>
+      </div>
+      <div class="row">
+        <div><label>品番/型番/ASIN</label><input type="text" name="model_number" value="{{ form.model_number if form else '' }}"></div>
+        <div><label>価格(円)</label><input type="number" name="price" value="{{ form.price if form else '' }}"></div>
+      </div>
+      <label>商品名</label>
+      <input type="text" name="product_name" value="{{ form.product_name if form else '' }}">
+
+      <label>企業ヒント（任意・誤生成防止）</label>
+      <textarea name="company_hint" placeholder="例: 中国Midea傘下のブランド。日本法人あり。">{{ form.company_hint if form else '' }}</textarea>
+
+      <label>スペック（1行1項目・任意）</label>
+      <textarea name="specs" placeholder="羽根径: 30cm&#10;消費電力: 1.7〜20W">{{ form.specs if form else '' }}</textarea>
+
+      <label>もしもかんたんリンクHTML（任意）</label>
+      <textarea name="affiliate_link_html" placeholder="未入力ならプレースホルダを挿入">{{ form.affiliate_link_html if form else '' }}</textarea>
+
+      <div class="checks">
+        <label style="font-weight:400"><input type="checkbox" name="post_to_wp" value="1" checked> 生成後にWordPressへ送る</label>
+        <label style="font-weight:400">投稿ステータス:
+          <select name="wp_status" style="width:auto;display:inline-block">
+            <option value="draft">下書き(draft)</option>
+            <option value="publish">即公開(publish)</option>
+          </select>
+        </label>
+        <label style="font-weight:400"><input type="checkbox" name="skip_selection_gate" value="1"> 選定NGでも生成する</label>
+      </div>
+
+      <button type="submit">記事を生成する</button>
+    </form>
+
+    <!-- 結果 -->
+    <div class="card">
+      <h2>生成結果</h2>
+      {% if not result %}
+        <p style="color:#888">左のフォームから商品を入力して生成してください。</p>
+        <p class="hint">A:選定判定 → B:タイトル/コピー → C:本文(Gemini) → D:アフィリリンク → E:WP下書き、まで自動実行します。</p>
+      {% else %}
+        <p>選定判定:
+          {% if result.selection_ok %}<span class="badge ok">OK</span>{% else %}<span class="badge ng">NG</span>{% endif %}
+          <span class="hint">{{ result.selection_reason }}</span>
+        </p>
+        {% for w in result.warnings %}<div class="warn">⚠ {{ w }}</div>{% endfor %}
+
+        {% if result.article %}
+          <div class="kv">
+            <p><b>記事タイトル</b>{{ result.article.title }}</p>
+            <p><b>キャッチコピー</b>{{ result.article.catch_copy }}</p>
+            <p><b>メタ説明</b>{{ result.article.meta_description }}</p>
+            <p><b>キーワード</b>{{ result.article.meta_keywords | join(', ') }}</p>
+            {% if result.article.trust_total %}<p><b>信頼度(総合)</b>★{{ result.article.trust_total }}/5.0</p>{% endif %}
+          </div>
+
+          {% if result.wp_post_id %}
+            <p>✅ WordPress投稿ID: <code>{{ result.wp_post_id }}</code></p>
+            <a class="btn" href="{{ result.wp_edit_link }}" target="_blank">WordPressで編集する</a>
+          {% endif %}
+
+          <h3 style="margin-top:18px">本文プレビュー</h3>
+          <div class="preview">{{ result.article.body_html | safe }}</div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
