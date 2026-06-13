@@ -37,6 +37,11 @@ class Settings:
         self.rakuten_access_key = os.getenv("RAKUTEN_ACCESS_KEY", "").strip()
         self.rakuten_affiliate_id = os.getenv("RAKUTEN_AFFILIATE_ID", "").strip()
 
+        # IndexNow（Bing/Yandex等への即時インデックス通知）用キー
+        self.indexnow_key = os.getenv("INDEXNOW_KEY", "").strip()
+        # キーファイルの設置URL（未指定なら https://<host>/<key>.txt を仮定）
+        self.indexnow_key_location = os.getenv("INDEXNOW_KEY_LOCATION", "").strip()
+
         self.app_host = os.getenv("APP_HOST", "127.0.0.1")
         self.app_port = int(os.getenv("APP_PORT", "8000"))
 
