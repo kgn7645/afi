@@ -210,6 +210,21 @@ def test_note_export_markdown():
     assert "<script" not in md and "msmaflink" not in md  # JSウィジェットは含めない
 
 
+def test_note_export_html():
+    from core import note_export
+    from core.models import Article, Product
+    art = Article(
+        title="T", affiliate_click_url="https://af.moshimo.com/af/c/click?a_id=1&url=u",
+        raw_sections={"body_md": "## 見出し\n本文**強調**です。\n- 項目"},
+    )
+    html, length = note_export.build_note_html(art, Product(brand="X", category="扇風機"))
+    assert '<h2 name=' in html and 'id=' in html          # 見出しにUUID付与
+    assert "<strong>強調</strong>" in html                # 太字
+    assert 'href="https://af.moshimo.com' in html         # 成果リンク
+    assert "msmaflink" not in html and "<script" not in html
+    assert length > 0
+
+
 def test_batch_load_queue_dispatches(monkeypatch, tmp_path):
     from core import batch
     # URL → sheet_queue.fetch_rows

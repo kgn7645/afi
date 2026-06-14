@@ -30,6 +30,30 @@ python cli.py --brand RANVOO --category ネッククーラー --no-wp --note
 2. note にも出す記事は、`--note` で生成したMarkdownをnoteへ貼り付け
 3. note側で公開
 
-## 将来の選択肢（任意・リスク承知の上で）
-- 非公式APIでのnote下書き自動作成（セッションCookieを定期更新して運用）。
-  規約・安定性リスクを許容できる場合のみ。別途実装を検討。
+## 自動下書き作成（非公式API・実装済み）
+ブラウザのキャプチャから判明した内部APIで、note下書きを自動作成できる（**公開はしない**）。
+
+⚠️ **非公式・規約上非推奨・仕様変更で予告なく壊れうる。自分のアカウントの自動化用。**
+
+### 内部APIの仕様（キャプチャで確認）
+1. `POST https://note.com/api/v1/text_notes`  body `{"template_key": null}` → 下書きid取得
+2. `POST https://note.com/api/v1/text_notes/draft_save?id={id}&is_temp_saved=true`
+   body `{"body": <HTML>, "body_length": N, "name": <title>, "index": false, "is_lead_form": false}`
+- 認証: Cookie `_note_session_v5` ＋ ヘッダ `x-requested-with: XMLHttpRequest`（XSRF不要）
+- 本文: HTML（各ブロックに `name`/`id` のUUID）
+
+### セットアップ
+`.env` に Cookie を設定:
+```
+NOTE_SESSION=<ブラウザの _note_session_v5 の値>
+```
+取得: note にログイン → DevTools → Application → Cookies → `note.com` → `_note_session_v5` の値。
+**セッションは時間が経つと失効する**ため、失効したら取り直して更新する。
+
+### 使い方
+```bash
+python note_post.py --test                                  # セッション確認
+python note_post.py --brand SOUNDPEATS --category ワイヤレスイヤホン   # 生成→note下書き作成
+```
+作成後、noteの「下書き」一覧に入る → 内容を確認して**note側で公開**する。
+（cronでの無人投稿はCookie失効リスクのため非推奨。投稿したい時に手動実行する運用を推奨）
