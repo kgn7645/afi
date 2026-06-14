@@ -154,6 +154,20 @@ def test_fetch_amazon_product_card(monkeypatch):
     assert pe.fetch_amazon_product_card("https://www.amazon.co.jp/dp/X") is None
 
 
+def test_article_body_prompt_depth():
+    from core import prompts
+    from core.models import Product
+
+    rules = {"article": {"min_chars": 6000, "reviews_each": 5,
+                         "competitor_brands": ["パナソニック", "アイリスオーヤマ"]}}
+    p = prompts.article_body_prompt(
+        Product(brand="RANVOO", category="ネッククーラー"), rules, "（評価ブロック）")
+    assert "6000字以上" in p                       # ボリューム指定が反映
+    assert "各5件" in p                            # 口コミ件数
+    assert "ペルソナ" in p and "利用シミュレーション" in p   # 厚みセクション
+    assert "比喩" in p                             # 導入の引き込み
+
+
 def test_upload_image_and_featured_media(monkeypatch):
     from core import wordpress as wp
     from core.models import Article
