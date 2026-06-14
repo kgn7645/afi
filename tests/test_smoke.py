@@ -225,6 +225,20 @@ def test_note_export_html():
     assert length > 0
 
 
+def test_no_stray_bold_markers():
+    """対になっていない ** が文字列として残らない（note/WP両方）。"""
+    from core import note_export
+    from core.content_generator import _inline as wp_inline
+    from core.models import Article, Product
+    # 閉じない ** が混ざった本文でも、リテラルの ** は残さない
+    art = Article(raw_sections={"body_md": "コスパ重視の方**におすすめ。安心の**正規品**です。"})
+    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"))
+    assert "**" not in html
+    # WP側: 正しく対になっていれば太字化、余分な ** は消える
+    assert "**" not in wp_inline("未対応の**マーカー")
+    assert "<strong>太字</strong>" in wp_inline("これは**太字**です")
+
+
 def test_batch_load_queue_dispatches(monkeypatch, tmp_path):
     from core import batch
     # URL → sheet_queue.fetch_rows

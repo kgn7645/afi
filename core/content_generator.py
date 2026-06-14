@@ -85,6 +85,7 @@ def markdown_to_html(md: str) -> str:
 
 def _inline(text: str) -> str:
     text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    text = text.replace("**", "")  # 対になっていない ** を除去
     text = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2" target="_blank" rel="nofollow noopener">\1</a>', text)
     return text
 

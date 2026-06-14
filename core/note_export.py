@@ -65,7 +65,8 @@ def _inline(text: str) -> str:
 
 
 def _bold(escaped: str) -> str:
-    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    return escaped.replace("**", "")  # 対になっていない ** が文字列として残らないよう除去
 
 
 def build_note_html(article: Article, product: Product) -> tuple[str, int]:
