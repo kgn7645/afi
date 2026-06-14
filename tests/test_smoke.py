@@ -75,15 +75,15 @@ def test_insert_amazon_buttons_three_spots():
             "<h2>まとめ</h2><p>x</p>")
     url = "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22"
     out = affiliate.insert_amazon_buttons(body, url)
-    assert out.count("amazon-cta") == 3                  # レビュー前・比較前・末尾
+    assert out.count("amazon-cta-btn") == 3              # レビュー前・比較前・末尾
     assert out.count("tag=chance274-22") == 3
     # レビュー見出しの前に最初のボタンが入る（導入の後）
-    assert out.index("amazon-cta") < out.index("おすすめ商品")
+    assert out.index("amazon-cta-btn") < out.index("おすすめ商品")
 
 
 def test_insert_amazon_buttons_fallback_when_no_anchor():
     out = affiliate.insert_amazon_buttons("<p>本文だけ</p>", "https://amzn/dp/X?tag=t")
-    assert out.count("amazon-cta") == 1                  # アンカー無しでも末尾に1つ
+    assert out.count("amazon-cta-btn") == 1              # アンカー無しでも末尾に1つ
 
 
 def test_amazon_url_alive(monkeypatch):
