@@ -26,7 +26,7 @@ cp .env.example .env   # 値を埋める
 
 ### .env に設定するもの
 - `GEMINI_API_KEY` … [Google AI Studio](https://aistudio.google.com/app/apikey) で無料発行
-- `GEMINI_MODEL` … `gemini-2.5-flash`（無料枠）。制限が厳しければ `gemini-2.0-flash`
+- `GEMINI_MODEL` … **`gemini-2.5-flash-lite` 推奨**（量産向け）。`gemini-2.5-flash`は無料枠が1日20件と極端に少なく、`gemini-2.0-flash`は無料枠対象外（実測）。安定した量産が必要なら従量課金(Tier1・月数百円規模)も検討
 - `WP_BASE_URL` / `WP_USERNAME` / `WP_APP_PASSWORD` … WordPress管理画面 > ユーザー > プロフィール > **アプリケーションパスワード** で発行
 
 ### config.yaml
