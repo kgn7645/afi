@@ -121,20 +121,28 @@ def build_note_html(article: Article, product: Product,
     text_len = 0
 
     label = " ".join(p for p in (product.brand, product.category) if p) or "この商品"
+    promo_idx = 0  # 誘導ブロックを置いた回数（画像の巡回に使用）
 
     def add(tag: str, raw_text: str) -> None:
         nonlocal text_len
         blocks.append(_block(tag, _inline(raw_text)))
         text_len += len(raw_text)
 
-    def add_link() -> None:
-        nonlocal text_len
+    def add_promo() -> None:
+        """商品画像＋リンクの『誘導ブロック』を1つ追加（画像→リンクでクリック誘導）。"""
+        nonlocal text_len, promo_idx
         if not article.affiliate_click_url:
             return
+        # 画像（あれば巡回して使う）→ リンクの順で、近接させて誘導力を上げる
+        if note_images:
+            url, w, h = note_images[promo_idx % len(note_images)]
+            blocks.append(_image_figure(url, w, h))
         uid = str(uuid.uuid4())
-        inner = f'▼ <a href="{_html.escape(article.affiliate_click_url)}">{_html.escape(label)}をチェックする</a>'
+        inner = (f'👉 <a href="{_html.escape(article.affiliate_click_url)}">'
+                 f"{_html.escape(label)}を見てみる</a>")
         blocks.append(f'<p name="{uid}" id="{uid}">{inner}</p>')
-        text_len += len(label) + 10
+        text_len += len(label) + 8
+        promo_idx += 1
 
     h2_count = 0
     for line in body_md.splitlines():
@@ -146,17 +154,14 @@ def build_note_html(article: Article, product: Product,
         elif s.startswith("## ") or s.startswith("# "):
             h2_count += 1
             if h2_count in _LINK_BEFORE_H2:
-                add_link()  # 直前のセクション末尾にリンク
+                add_promo()  # 直前のセクション末尾に「画像＋リンク」
             add("h2", s[3:] if s.startswith("## ") else s[2:])
-            if h2_count == 3:  # おすすめ商品レビューの直後に商品画像
-                for url, w, h in note_images:
-                    blocks.append(_image_figure(url, w, h))
         elif s.startswith(("- ", "* ", "・")):
             add("p", "・" + s.lstrip("-*・ ").strip())
         else:
             add("p", s)
 
-    add_link()           # まとめ後（末尾）
+    add_promo()           # まとめ後（末尾）の「画像＋リンク」
     add("p", DISCLOSURE)  # PR表記は末尾（参考記事に合わせる）
 
     return "".join(blocks), text_len
