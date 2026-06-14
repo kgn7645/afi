@@ -35,7 +35,8 @@ selection:
 article:
   tone: "親しみやすく、友達とおしゃべりしているような口調。専門用語は噛み砕く。"
   use_tables: false            # 比較は文章で（表は使わない）
-  min_chars: 3000              # 本文の目安最低文字数
+  min_chars: 6000              # 本文の目安最低文字数（amaviser水準）
+  reviews_each: 5              # 良い/気になる口コミの件数（各）
   # 比較で言及する大手メーカー（カテゴリに応じてAIが選ぶ）
   competitor_brands:
     - パナソニック

@@ -82,7 +82,8 @@ def article_body_prompt(product: Product, rules: dict, trust_block_md: str) -> s
     competitors = rules.get("article", {}).get(
         "competitor_brands", ["パナソニック", "シャープ", "アイリスオーヤマ"]
     )
-    min_chars = rules.get("article", {}).get("min_chars", 3000)
+    min_chars = rules.get("article", {}).get("min_chars", 6000)
+    reviews_each = rules.get("article", {}).get("reviews_each", 5)
     specs_md = "\n".join(f"  - {s}" for s in product.specs) if product.specs else "  - （スペックは商品名から妥当に推定。断定しすぎない）"
 
     return f"""{STYLE_GUIDE}
@@ -97,17 +98,21 @@ def article_body_prompt(product: Product, rules: dict, trust_block_md: str) -> s
 {specs_md}
 
 # タスク
-下記の【固定構成】に厳密に従って、Markdownで本文を書いてください。本文合計{min_chars}字以上。
+下記の【固定構成】に厳密に従って、Markdownで本文を書いてください。**本文合計{min_chars}字以上**（薄い記事はNG。各セクションを具体例・数字・生活シーンで厚く）。
 - 見出しは指定の通り（##=大見出し, ###=小見出し）。
 - 「企業詳細」と「★企業信頼度評価」のセクションには、後述の【信頼度評価ブロック】を**そのまま差し込む**こと（再生成しない）。
 - 「商品スペック」は与えられた既知スペックを箇条書きで。
-- 良い口コミ/気になる口コミは、それぞれ4〜5件、実在しそうな自然な体験談を「」付きで。
+- **導入**は読者の生活シーン・あるあるの悩みから入り、比喩を1つ使って引き込む（例：住宅事情／猛暑／在宅ワークなど、カテゴリーに合う情景）。
+- **口コミは良い/気になるを各{reviews_each}件**、実在しそうな自然な体験談を「」付きで（使う場面・期間・具体的な数字感を含める）。
+- **ペルソナ**を明確に（「一人暮らし向け」「在宅ワークの人向け」等、誰に刺さるかを言い切る）。
+- **利用シミュレーション**で、買った後の使い方・設置/収納・1日の使い方を具体的に描く。
+- メリット/デメリットは双方を厚く。デメリットも正直に書くことで信頼を得る。
 - 比較は文章のみ。比較対象の大手: {", ".join(competitors)} から、カテゴリーに合うものを2系統選ぶ。
-- 最後に必ずまとめで「どんな人に買いか」を提示。
+- 最後に必ずまとめで「どんな人に買いか／どんな人は避けるべきか」を提示。
 
 【固定構成】
 ## はじめに：{product.brand}の{product.category}が話題の理由
-（導入。読者の悩み→このブランドに注目する理由）
+（生活シーン＋悩み＋比喩で引き込む導入。読者の悩み→このブランドに注目する理由）
 
 ## {product.brand}とは？：どこの国の企業か、その正体を深掘り
 ### 企業詳細
@@ -121,12 +126,16 @@ def article_body_prompt(product: Product, rules: dict, trust_block_md: str) -> s
 ### 気になる口コミ
 ### ポジティブな特色
 ### ネガティブな特色：購入前に知っておきたい注意点
+### こんな人におすすめ（ペルソナ）
+### 使ってみたら？利用シミュレーション
+（設置/収納・1日の使い方・買った後の生活の変化を具体的に）
 
 ## 他メーカーと比較！{product.brand}の{product.category}はどんな人にぴったり？
 ### {product.brand} vs. 国内大手メーカー
 ### {product.brand} vs. コスパ重視メーカー
 
 ## まとめ：{product.brand}の{product.category}はあなたにとって「買い」か？
+（買うべき人／避けるべき人を言い切って締める）
 
 # 【信頼度評価ブロック】（このまま該当セクションに差し込む）
 {trust_block_md}
