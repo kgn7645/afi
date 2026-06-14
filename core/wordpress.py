@@ -45,31 +45,37 @@ _IMG_UA = {
 }
 
 
+def upload_image_bytes(data: bytes, *, filename: str, content_type: str = "image/jpeg",
+                       timeout: int = 30) -> dict:
+    """画像バイト列をWPメディアに登録。 {id, source_url} を返す。"""
+    s = get_settings()
+    resp = requests.post(
+        f"{s.wp_base_url}/wp-json/wp/v2/media",
+        headers={
+            **_auth_header(),
+            "Content-Type": content_type,
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+        data=data,
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    d = resp.json()
+    return {"id": d.get("id"), "source_url": d.get("source_url", "")}
+
+
 def upload_image_from_url(image_url: str, *, filename: str = "", timeout: int = 30) -> dict:
     """画像URLをダウンロードしてWPメディアに登録。 {id, source_url} を返す。
 
     アイキャッチ(featured image)設定用（Issue #42）。
     """
-    s = get_settings()
     img = requests.get(image_url, headers=_IMG_UA, timeout=timeout)
     img.raise_for_status()
     ctype = img.headers.get("content-type", "image/jpeg").split(";")[0].strip()
     ext = "png" if "png" in ctype else "webp" if "webp" in ctype else "jpg"
     if not filename:
         filename = f"product-{abs(hash(image_url)) % 10**10}.{ext}"
-    resp = requests.post(
-        f"{s.wp_base_url}/wp-json/wp/v2/media",
-        headers={
-            **_auth_header(),
-            "Content-Type": ctype,
-            "Content-Disposition": f'attachment; filename="{filename}"',
-        },
-        data=img.content,
-        timeout=timeout,
-    )
-    resp.raise_for_status()
-    d = resp.json()
-    return {"id": d.get("id"), "source_url": d.get("source_url", "")}
+    return upload_image_bytes(img.content, filename=filename, content_type=ctype, timeout=timeout)
 
 
 def first_image_src(html: str) -> str:

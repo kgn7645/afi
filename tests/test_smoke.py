@@ -294,6 +294,38 @@ def test_article_body_prompt_depth():
     assert "比喩" in p                             # 導入の引き込み
 
 
+def test_eyecatch_wrap_jp():
+    # 折り返しはPillow非依存の純ロジックなので常に検証
+    from core import eyecatch
+
+    class FakeFont:
+        pass
+
+    class FakeDraw:
+        def textlength(self, s, font=None):
+            return len(s) * 10  # 1文字=10px
+
+    lines = eyecatch._wrap_jp("あいうえおかきくけこ", FakeFont(), FakeDraw(), 50)
+    assert all(len(l) <= 5 for l in lines)            # 50px/10px=5文字で折り返し
+    assert "".join(lines) == "あいうえおかきくけこ"
+
+
+def test_eyecatch_build():
+    import io
+    from core import eyecatch
+    if not eyecatch.available():
+        import pytest
+        pytest.skip("Pillow/日本語フォントが無い環境")
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 300), "#cccccc").save(buf, format="PNG")
+    png = eyecatch.build_eyecatch("夏の暑さを快適に！テスト用キャッチコピー", buf.getvalue(),
+                                  brand="TestBrand", site_name="おうちベース")
+    assert png and png[:8] == b"\x89PNG\r\n\x1a\n"   # PNGシグネチャ
+    im = Image.open(io.BytesIO(png))
+    assert im.size == (1200, 630)                      # OGPサイズ
+
+
 def test_first_image_src():
     from core import wordpress as wp
     body = '<p>x</p><figure><img alt="a" src="https://x/img1.jpg" width="100"></figure><img src="https://x/2.jpg">'
