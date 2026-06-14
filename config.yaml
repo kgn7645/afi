@@ -74,6 +74,14 @@ wordpress:
   # SEOプラグインのメタ用キー（Rank Math / Yoast）。使うものに合わせる
   seo_plugin: "rankmath"       # rankmath | yoast | none
 
+# --- アイキャッチ画像の自動生成（Issue #5: キャッチコピー＋商品画像を合成） ---
+eyecatch:
+  enabled: true
+  font_path: ""                # 日本語フォント(.ttf/.ttc)パス。空なら自動探索(mac/Linux)
+  bg_color: "#0d1b2a"
+  accent_color: "#ff9900"
+  text_color: "#ffffff"
+
 # --- E-E-A-T（信頼性の土台） ---
 eeat:
   site_name: "おうちベース"

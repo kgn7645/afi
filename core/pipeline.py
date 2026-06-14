@@ -8,7 +8,7 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import (affiliate, content_generator, moshimo_link, product_extractor,
+from . import (affiliate, content_generator, eyecatch, moshimo_link, product_extractor,
                product_selector, prompts, qa, site_setup, wordpress)
 from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
@@ -114,14 +114,8 @@ def run(
     # E: WordPress下書き
     if post_to_wp:
         try:
-            # アイキャッチ（Issue #42）: 商品画像をメディア化してfeatured_mediaに
-            featured_id = None
-            if article.product_image_urls:
-                try:
-                    media = wordpress.upload_image_from_url(article.product_image_urls[0])
-                    featured_id = media.get("id")
-                except Exception as e:  # noqa: BLE001
-                    result.warnings.append(f"アイキャッチ設定に失敗（投稿は継続）: {e}")
+            # アイキャッチ（#42 商品画像 / #5 デザイン生成）
+            featured_id = _make_featured_media(article, product, result)
             # カテゴリ自動割当（Issue #44: 未分類を避ける）
             category_ids = _pick_category_ids(product, result, gemini)
             wp = wordpress.create_draft(article, status=wp_status,
@@ -136,6 +130,41 @@ def run(
         _log(result, wp_status="not_posted")
 
     return result
+
+
+def _make_featured_media(article, product: Product, result: PipelineResult) -> int | None:
+    """アイキャッチを用意してメディアIDを返す（Issue #5 / #42）。
+
+    1. eyecatch有効＋フォント有＋コピー有 → デザイン画像を生成して使用
+    2. それ以外/失敗 → 商品画像そのまま（#42）
+    """
+    urls = article.product_image_urls
+    if not urls:
+        return None
+    rules = get_rules()
+    if (rules.get("eyecatch", {}).get("enabled", True)
+            and eyecatch.available() and (article.catch_copy or "").strip()):
+        try:
+            import requests
+            img = requests.get(urls[0], headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+            img.raise_for_status()
+            site = rules.get("eeat", {}).get("site_name", "")
+            png = eyecatch.build_eyecatch(article.catch_copy, img.content,
+                                          brand=product.brand, site_name=site)
+            if png:
+                fid = abs(hash(article.title)) % 10**8
+                media = wordpress.upload_image_bytes(
+                    png, filename=f"eyecatch-{fid}.png", content_type="image/png")
+                return media.get("id")
+        except Exception as e:  # noqa: BLE001
+            result.warnings.append(f"アイキャッチ生成に失敗（商品画像で代替）: {e}")
+    # フォールバック: 商品画像そのまま
+    try:
+        media = wordpress.upload_image_from_url(urls[0])
+        return media.get("id")
+    except Exception as e:  # noqa: BLE001
+        result.warnings.append(f"アイキャッチ設定に失敗（投稿は継続）: {e}")
+        return None
 
 
 def _ground_company(product: Product, gemini: GeminiClient,
