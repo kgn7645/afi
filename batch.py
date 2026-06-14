@@ -28,10 +28,15 @@ def main() -> None:
     args = p.parse_args()
 
     print(f"[batch] queue={args.queue} limit={args.limit} wp={not args.no_wp} status={args.status}")
-    s = batch.run_batch(
-        queue_path=args.queue, limit=args.limit,
-        post_to_wp=not args.no_wp, wp_status=args.status, skip_dedup=args.skip_dedup,
-    )
+    try:
+        s = batch.run_batch(
+            queue_path=args.queue, limit=args.limit,
+            post_to_wp=not args.no_wp, wp_status=args.status, skip_dedup=args.skip_dedup,
+        )
+    except FileNotFoundError as e:
+        # cronで毎日走るため、キュー未配置でも異常終了させず静かに終える
+        print(f"[batch] キューが無いためスキップ: {e}")
+        return
 
     print("=" * 60)
     print(f"生成: {s['generated']} / 重複スキップ: {s['skipped_dup']} / 失敗: {s['failed']}")
