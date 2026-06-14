@@ -91,15 +91,16 @@ def get_image_size(data: bytes) -> tuple[int, int]:
     return 620, 620
 
 
-def _image_figure(url: str, width: int, height: int) -> str:
+def _image_figure(url: str, width: int, height: int, link: str = "") -> str:
     uid = str(uuid.uuid4())
     # note本文の表示幅(約620px)に合わせて縮小
     if width > 620:
         height = max(1, round(height * 620 / width))
         width = 620
-    return (f'<figure name="{uid}" id="{uid}">'
-            f'<img src="{_html.escape(url)}" alt="" width="{width}" height="{height}">'
-            f"<figcaption></figcaption></figure>")
+    img = f'<img src="{_html.escape(url)}" alt="" width="{width}" height="{height}">'
+    if link:  # 画像自体をクリックで成果リンクへ（バナー的に誘導）
+        img = f'<a href="{_html.escape(link)}" rel="nofollow noopener" target="_blank">{img}</a>'
+    return f'<figure name="{uid}" id="{uid}">{img}<figcaption></figcaption></figure>'
 
 
 # アフィリエイトリンクを挿入するh2見出しの位置（1始まり）。
@@ -133,10 +134,10 @@ def build_note_html(article: Article, product: Product,
         nonlocal text_len, promo_idx
         if not article.affiliate_click_url:
             return
-        # 画像（あれば巡回して使う）→ リンクの順で、近接させて誘導力を上げる
+        # 画像（あれば巡回して使う・画像自体もリンク化）→ テキストリンクの順で誘導力を上げる
         if note_images:
             url, w, h = note_images[promo_idx % len(note_images)]
-            blocks.append(_image_figure(url, w, h))
+            blocks.append(_image_figure(url, w, h, link=article.affiliate_click_url))
         uid = str(uuid.uuid4())
         inner = (f'👉 <a href="{_html.escape(article.affiliate_click_url)}">'
                  f"{_html.escape(label)}を見てみる</a>")

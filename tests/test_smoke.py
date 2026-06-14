@@ -234,9 +234,11 @@ def test_note_html_links_and_images():
                   raw_sections={"body_md": body})
     imgs = [("https://assets.st-note.com/img/a.png", 1240, 826)]
     html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"), imgs)
-    assert html.count("af.moshimo.com") == 3                  # リンク3箇所
+    assert html.count('id="') >= 3                            # 誘導ブロック3箇所
     assert 'src="https://assets.st-note.com/img/a.png"' in html  # 画像埋め込み
     assert 'width="620"' in html                              # 620pxへ縮小
+    assert '<a href="https://af.moshimo.com' in html          # 成果リンク
+    assert 'noopener" target="_blank"><img' in html           # 画像自体がクリック可能
 
 
 def test_get_image_size_png():
