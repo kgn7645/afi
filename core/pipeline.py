@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import affiliate, content_generator, moshimo_link, product_extractor, product_selector, wordpress
-from .config import ROOT, get_settings
+from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
 from .models import PipelineResult, Product
 
@@ -70,15 +70,25 @@ def run(
     # C: 記事生成
     article = content_generator.generate_article(product, gemini=gemini)
 
-    # D: アフィリエイトリンク取得（未指定なら楽天検索で自動生成 / Issue #8）
-    link_html = affiliate_link_html
-    if not link_html:
+    # D: アフィリエイトリンク（Issue #41: 既定はAmazon自タグに統一。noteと同じ）
+    #   優先度: 明示指定(もしも等) > Amazonモード > 楽天検索＋もしも自動生成
+    mode = get_rules().get("affiliate", {}).get("mode", "amazon")
+    s = get_settings()
+    if affiliate_link_html:
+        article.body_html = affiliate.insert_into_body(article.body_html, affiliate_link_html)
+    elif mode == "amazon" and "amazon." in product.source_url and s.amazon_associate_tag:
+        amazon_url = product_extractor.amazon_affiliate_url(
+            product.source_url, s.amazon_associate_tag)
+        label = get_rules().get("affiliate", {}).get("amazon_button_label", "Amazonで見る")
+        article.affiliate_click_url = amazon_url
+        article.body_html = affiliate.insert_amazon_buttons(
+            article.body_html, amazon_url, label=label)
+    else:
         link_html, click_url, image_urls = _auto_affiliate_link(product, result)
         article.affiliate_click_url = click_url
         article.product_image_urls = image_urls
+        article.body_html = affiliate.insert_into_body(article.body_html, link_html)
 
-    # D: アフィリエイトリンク埋め込み
-    article.body_html = affiliate.insert_into_body(article.body_html, link_html)
     result.article = article
 
     # E: WordPress下書き

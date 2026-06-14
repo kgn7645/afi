@@ -60,6 +60,32 @@ def test_affiliate_insert():
     assert "<a>link</a>" in out
 
 
+def test_amazon_button_has_tag_and_attrs():
+    url = "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22"
+    btn = affiliate.build_amazon_button(url, "Amazonで見る")
+    assert "tag=chance274-22" in btn
+    assert "Amazonで見る" in btn
+    assert 'rel="nofollow noopener sponsored"' in btn   # アフィリのrel必須
+
+
+def test_insert_amazon_buttons_three_spots():
+    body = ("<h2>はじめに</h2><p>x</p>"
+            "<h2>おすすめ商品「X」徹底レビュー</h2><p>x</p>"
+            "<h2>他メーカーと比較</h2><p>x</p>"
+            "<h2>まとめ</h2><p>x</p>")
+    url = "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22"
+    out = affiliate.insert_amazon_buttons(body, url)
+    assert out.count("amazon-cta") == 3                  # レビュー前・比較前・末尾
+    assert out.count("tag=chance274-22") == 3
+    # レビュー見出しの前に最初のボタンが入る（導入の後）
+    assert out.index("amazon-cta") < out.index("おすすめ商品")
+
+
+def test_insert_amazon_buttons_fallback_when_no_anchor():
+    out = affiliate.insert_amazon_buttons("<p>本文だけ</p>", "https://amzn/dp/X?tag=t")
+    assert out.count("amazon-cta") == 1                  # アンカー無しでも末尾に1つ
+
+
 def test_moshimo_click_url():
     from core import moshimo_link as ml
     url = ml.build_click_url(5633316, "https://item.rakuten.co.jp/e-kurashi/s1k76/", "rakuten")

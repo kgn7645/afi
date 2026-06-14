@@ -7,6 +7,7 @@ D作業: もしもアフィリエイトのリンク埋め込み。
 """
 from __future__ import annotations
 
+import html
 import re
 
 from .config import get_settings
@@ -76,3 +77,37 @@ def insert_into_body(body_html: str, link_html: str) -> str:
             insert_at = nxt if nxt != -1 else len(body_html)
             return body_html[:insert_at] + block + body_html[insert_at:]
     return body_html + block
+
+
+def build_amazon_button(amazon_url: str, label: str = "Amazonで見る") -> str:
+    """Amazon自タグの「Amazonで見る」CTAボタン（中央寄せ）を返す。"""
+    href = html.escape(amazon_url, quote=True)
+    return (
+        '\n<div class="affiliate-link amazon-cta" style="text-align:center;margin:28px 0;">\n'
+        f'  <a href="{href}" target="_blank" rel="nofollow noopener sponsored" '
+        'style="display:inline-block;background:#ff9900;color:#111;font-weight:bold;'
+        'text-decoration:none;padding:14px 32px;border-radius:8px;font-size:1.1em;">'
+        f"{html.escape(label)}</a>\n"
+        "</div>\n"
+    )
+
+
+# Amazonボタンを差し込む見出しアンカー（この直前に挿入）。+末尾に1つ＝計3箇所。
+_AMAZON_ANCHORS = ["<h2>おすすめ商品", "<h2>他メーカー"]
+
+
+def insert_amazon_buttons(body_html: str, amazon_url: str,
+                          *, label: str = "Amazonで見る") -> str:
+    """Amazon CTAボタンを本文の複数箇所（レビュー前・比較前・末尾）に差し込む。
+
+    note の3箇所配置と統一。アンカーが無い場合でも末尾に最低1つは入る。
+    """
+    block = build_amazon_button(amazon_url, label)
+    out = body_html
+    # 後ろのアンカーから挿入してインデックスのズレを防ぐ
+    positions = sorted(
+        (out.find(a) for a in _AMAZON_ANCHORS if a in out), reverse=True
+    )
+    for idx in positions:
+        out = out[:idx] + block + out[idx:]
+    return out + block  # 末尾CTA
