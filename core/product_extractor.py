@@ -42,6 +42,26 @@ def amazon_affiliate_url(url: str, tag: str) -> str:
     return f"{url}{sep}tag={tag}"
 
 
+def amazon_url_alive(url: str, *, timeout: int = 15) -> bool:
+    """Amazon商品ページが生きているか（404=リンク切れ）を判定。
+
+    死んだASINのアフィリリンクを公開しないためのガード。
+    404 のみを「死」と判定し、503/captcha等のbot対策レスポンスは
+    （誤判定で有効リンクを捨てないよう）生きているものとして扱う。
+    通信失敗時も True（保守的にブロックしない）。
+    """
+    try:
+        r = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
+    except requests.RequestException:
+        return True
+    if r.status_code == 404:
+        return False
+    # 200でも「何かお探しですか？」ページ（無効ASIN）はリンク切れ扱い
+    if r.status_code == 200 and "何かお探し" in r.text:
+        return False
+    return True
+
+
 def _price_to_int(text: str) -> int | None:
     digits = re.sub(r"[^\d]", "", text or "")
     return int(digits) if digits else None

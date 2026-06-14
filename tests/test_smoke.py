@@ -86,6 +86,28 @@ def test_insert_amazon_buttons_fallback_when_no_anchor():
     assert out.count("amazon-cta") == 1                  # アンカー無しでも末尾に1つ
 
 
+def test_amazon_url_alive(monkeypatch):
+    from core import product_extractor as pe
+
+    class Resp:
+        def __init__(self, code, text=""):
+            self.status_code = code
+            self.text = text
+
+    # 404 = 死んだASIN → False
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(404))
+    assert pe.amazon_url_alive("https://www.amazon.co.jp/dp/DEAD0ASIN0") is False
+    # 200だが「何かお探し」ページ = 無効ASIN → False
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(200, "何かお探しですか？"))
+    assert pe.amazon_url_alive("https://www.amazon.co.jp/dp/GHOST00000") is False
+    # 200で実商品 → True
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(200, "<title>RANVOO...</title>"))
+    assert pe.amazon_url_alive("https://www.amazon.co.jp/dp/B0D7C999LG") is True
+    # 503(bot対策) は誤判定回避のため True 扱い
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(503))
+    assert pe.amazon_url_alive("https://www.amazon.co.jp/dp/B0D7C999LG") is True
+
+
 def test_moshimo_click_url():
     from core import moshimo_link as ml
     url = ml.build_click_url(5633316, "https://item.rakuten.co.jp/e-kurashi/s1k76/", "rakuten")

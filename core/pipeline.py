@@ -76,7 +76,9 @@ def run(
     s = get_settings()
     if affiliate_link_html:
         article.body_html = affiliate.insert_into_body(article.body_html, affiliate_link_html)
-    elif mode == "amazon" and "amazon." in product.source_url and s.amazon_associate_tag:
+    elif (mode == "amazon" and "amazon." in product.source_url
+          and s.amazon_associate_tag
+          and product_extractor.amazon_url_alive(product.source_url)):
         amazon_url = product_extractor.amazon_affiliate_url(
             product.source_url, s.amazon_associate_tag)
         label = get_rules().get("affiliate", {}).get("amazon_button_label", "Amazonで見る")
@@ -84,6 +86,10 @@ def run(
         article.body_html = affiliate.insert_amazon_buttons(
             article.body_html, amazon_url, label=label)
     else:
+        if mode == "amazon" and "amazon." in product.source_url and s.amazon_associate_tag:
+            # Amazon URLは指定されたがページが無効（404等）→ 死んだリンクは貼らない
+            result.warnings.append(
+                f"Amazon商品ページが無効のためAmazonリンクをスキップ: {product.source_url}")
         link_html, click_url, image_urls = _auto_affiliate_link(product, result)
         article.affiliate_click_url = click_url
         article.product_image_urls = image_urls
