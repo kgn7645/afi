@@ -326,6 +326,25 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_canva_available_and_fallback(monkeypatch):
+    from core import canva
+    s = canva.get_settings()
+    # 既定（config canva.enabled=false）では無効
+    monkeypatch.setattr(canva, "_cfg", lambda: {"enabled": False})
+    assert canva.available() is False
+    # build_eyecatchは無効時にネットアクセスせずNone
+    assert canva.build_eyecatch("コピー", b"img") is None
+
+    # 設定が揃えば有効と判定
+    monkeypatch.setattr(canva, "_cfg",
+                        lambda: {"enabled": True, "brand_template_id": "BT123"})
+    monkeypatch.setattr(s, "canva_client_id", "cid", raising=False)
+    monkeypatch.setattr(s, "canva_client_secret", "sec", raising=False)
+    monkeypatch.setattr(s, "canva_refresh_token", "rt", raising=False)
+    monkeypatch.setattr(canva, "_stored_refresh_token", lambda: "")
+    assert canva.available() is True
+
+
 def test_first_image_src():
     from core import wordpress as wp
     body = '<p>x</p><figure><img alt="a" src="https://x/img1.jpg" width="100"></figure><img src="https://x/2.jpg">'

@@ -45,6 +45,11 @@ class Settings:
         # Amazonアソシエイトのタグ（例 chance274-22）。note Amazonカード等に使用
         self.amazon_associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG", "").strip()
 
+        # Canva Connect API（アイキャッチ生成 / Issue #5）。OAuthのリフレッシュトークン運用。
+        self.canva_client_id = os.getenv("CANVA_CLIENT_ID", "").strip()
+        self.canva_client_secret = os.getenv("CANVA_CLIENT_SECRET", "").strip()
+        self.canva_refresh_token = os.getenv("CANVA_REFRESH_TOKEN", "").strip()
+
         # IndexNow（Bing/Yandex等への即時インデックス通知）用キー
         self.indexnow_key = os.getenv("INDEXNOW_KEY", "").strip()
         # キーファイルの設置URL（未指定なら https://<host>/<key>.txt を仮定）
