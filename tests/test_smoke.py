@@ -154,6 +154,51 @@ def test_fetch_amazon_product_card(monkeypatch):
     assert pe.fetch_amazon_product_card("https://www.amazon.co.jp/dp/X") is None
 
 
+def test_upload_image_and_featured_media(monkeypatch):
+    from core import wordpress as wp
+    from core.models import Article
+
+    # .envに依存せずWP設定をスタブ
+    s = wp.get_settings()
+    monkeypatch.setattr(s, "wp_base_url", "https://example.test", raising=False)
+    monkeypatch.setattr(s, "wp_username", "u", raising=False)
+    monkeypatch.setattr(s, "wp_app_password", "p", raising=False)
+
+    class Resp:
+        def __init__(self, json_data=None, content=b"", headers=None):
+            self._j = json_data or {}
+            self.content = content
+            self.headers = headers or {}
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._j
+
+    monkeypatch.setattr(wp.requests, "get",
+                        lambda *a, **k: Resp(content=b"IMG",
+                                             headers={"content-type": "image/jpeg"}))
+    captured = {}
+
+    def fake_post(url, **k):
+        captured.setdefault("posts", []).append((url, k.get("json")))
+        if url.endswith("/media"):
+            return Resp(json_data={"id": 99, "source_url": "https://example.test/img.jpg"})
+        return Resp(json_data={"id": 30, "link": "https://example.test/p", "status": "draft"})
+
+    monkeypatch.setattr(wp.requests, "post", fake_post)
+
+    media = wp.upload_image_from_url("https://m.media-amazon.com/images/I/x.jpg")
+    assert media["id"] == 99
+
+    out = wp.create_draft(Article(title="t", body_html="<p>x</p>"), featured_media=99)
+    assert out["id"] == 30
+    # 投稿payloadにアイキャッチが入る
+    post_payload = next(j for u, j in captured["posts"] if u.endswith("/posts"))
+    assert post_payload["featured_media"] == 99
+
+
 def test_moshimo_click_url():
     from core import moshimo_link as ml
     url = ml.build_click_url(5633316, "https://item.rakuten.co.jp/e-kurashi/s1k76/", "rakuten")

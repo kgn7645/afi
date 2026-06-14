@@ -92,7 +92,15 @@ def run(
     # E: WordPress下書き
     if post_to_wp:
         try:
-            wp = wordpress.create_draft(article, status=wp_status)
+            # アイキャッチ（Issue #42）: 商品画像をメディア化してfeatured_mediaに
+            featured_id = None
+            if article.product_image_urls:
+                try:
+                    media = wordpress.upload_image_from_url(article.product_image_urls[0])
+                    featured_id = media.get("id")
+                except Exception as e:  # noqa: BLE001
+                    result.warnings.append(f"アイキャッチ設定に失敗（投稿は継続）: {e}")
+            wp = wordpress.create_draft(article, status=wp_status, featured_media=featured_id)
             result.wp_post_id = wp["id"]
             result.wp_edit_link = wp["edit_link"]
             _log(result, wp_status=wp.get("status", ""))
