@@ -19,8 +19,12 @@ from core.config import ROOT
 
 
 def main() -> None:
+    # 既定キュー: QUEUE_SHEET_CSV_URL があればスプレッドシート公開CSV、なければローカルCSV
+    from core.config import get_settings
+    default_queue = get_settings().queue_sheet_csv_url or str(ROOT / "data" / "queue.csv")
+
     p = argparse.ArgumentParser(description="アフィリエイト記事のバッチ生成")
-    p.add_argument("--queue", default=str(ROOT / "data" / "queue.csv"), help="キューCSVのパス")
+    p.add_argument("--queue", default=default_queue, help="キューCSVのパス or 公開CSV URL")
     p.add_argument("--limit", type=int, default=15, help="1回で生成する最大件数")
     p.add_argument("--no-wp", action="store_true", help="WordPressへ送らない")
     p.add_argument("--status", default="draft", choices=["draft", "publish"], help="投稿ステータス")
