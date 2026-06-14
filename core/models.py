@@ -47,6 +47,8 @@ class Article(BaseModel):
     meta_description: str = ""          # メタディスクリプション
     meta_keywords: list[str] = Field(default_factory=list)
     body_html: str = ""                 # WordPress投入用HTML本文
+    affiliate_click_url: str = ""       # note用などのプレーンな成果リンク(af.moshimo.com)
+    product_image_urls: list[str] = Field(default_factory=list)  # 商品画像URL(楽天)。note埋め込み用
     trust_total: Optional[float] = None # 総合信頼度（★）
     raw_sections: dict = Field(default_factory=dict)  # デバッグ用の生成中間物
 

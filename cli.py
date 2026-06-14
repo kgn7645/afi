@@ -30,6 +30,7 @@ def main() -> None:
     p.add_argument("--no-wp", action="store_true", help="WordPressへ送らない")
     p.add_argument("--publish", action="store_true", help="下書きでなく即公開")
     p.add_argument("--force", action="store_true", help="選定NGでも生成")
+    p.add_argument("--note", action="store_true", help="note貼り付け用Markdownも出力(data/note/)")
     args = p.parse_args()
 
     result = pipeline.run(
@@ -79,6 +80,19 @@ def main() -> None:
             encoding="utf-8",
         )
         print(f"📄 本文プレビュー保存: {out}")
+
+    # note用Markdown出力
+    if args.note and result.article:
+        from core import note_export
+        note_md = note_export.build_note_markdown(result.article, result.product)
+        note_dir = ROOT / "data" / "note"
+        note_dir.mkdir(parents=True, exist_ok=True)
+        note_path = note_dir / f"{datetime.now():%Y%m%d-%H%M%S}_{slug}.md"
+        note_path.write_text(note_md, encoding="utf-8")
+        print(f"📝 note用Markdown保存: {note_path}")
+        print("----- note貼り付け用（ここから）-----")
+        print(note_md)
+        print("----- note貼り付け用（ここまで）-----")
     print("=" * 60)
 
 

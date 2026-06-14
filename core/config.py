@@ -40,6 +40,9 @@ class Settings:
         # キュー: Googleスプレッドシートの「ウェブに公開(CSV)」URL（設定時はこちらを優先）
         self.queue_sheet_csv_url = os.getenv("QUEUE_SHEET_CSV_URL", "").strip()
 
+        # note 非公式API用のセッションCookie（_note_session_v5 の値 / Issue #2）
+        self.note_session = os.getenv("NOTE_SESSION", "").strip()
+
         # IndexNow（Bing/Yandex等への即時インデックス通知）用キー
         self.indexnow_key = os.getenv("INDEXNOW_KEY", "").strip()
         # キーファイルの設置URL（未指定なら https://<host>/<key>.txt を仮定）
@@ -55,6 +58,10 @@ class Settings:
     @property
     def wordpress_ready(self) -> bool:
         return bool(self.wp_base_url and self.wp_username and self.wp_app_password)
+
+    @property
+    def note_ready(self) -> bool:
+        return bool(self.note_session)
 
 
 @lru_cache

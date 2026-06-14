@@ -194,6 +194,74 @@ def test_sheet_queue_fetch_rows(monkeypatch):
     assert rows[0]["brand"] == "KLOUDIC" and rows[1]["category"] == "ネッククーラー"
 
 
+def test_note_export_markdown():
+    from core import note_export
+    from core.models import Article, Product
+    art = Article(
+        title="【X】はどこの国？", affiliate_click_url="https://af.moshimo.com/af/c/click?a_id=1&url=u",
+        raw_sections={"body_md": "## はじめに\n本文です。"},
+    )
+    prod = Product(brand="X", category="扇風機")
+    md = note_export.build_note_markdown(art, prod)
+    assert note_export.DISCLOSURE in md          # 広告表記
+    assert "# 【X】はどこの国？" in md            # タイトル見出し
+    assert "## はじめに" in md                    # 本文
+    assert "af.moshimo.com" in md                 # プレーン成果リンク
+    assert "<script" not in md and "msmaflink" not in md  # JSウィジェットは含めない
+
+
+def test_note_export_html():
+    from core import note_export
+    from core.models import Article, Product
+    art = Article(
+        title="T", affiliate_click_url="https://af.moshimo.com/af/c/click?a_id=1&url=u",
+        raw_sections={"body_md": "## 見出し\n本文**強調**です。\n- 項目"},
+    )
+    html, length = note_export.build_note_html(art, Product(brand="X", category="扇風機"))
+    assert '<h2 name=' in html and 'id=' in html          # 見出しにUUID付与
+    assert "<strong>強調</strong>" in html                # 太字
+    assert 'href="https://af.moshimo.com' in html         # 成果リンク
+    assert "msmaflink" not in html and "<script" not in html
+    assert length > 0
+
+
+def test_note_html_links_and_images():
+    from core import note_export
+    from core.models import Article, Product
+    body = "\n".join(["## はじめに", "x", "## とは", "x", "## おすすめ商品レビュー",
+                       "x", "## 他メーカー比較", "x", "## まとめ", "x"])
+    art = Article(affiliate_click_url="https://af.moshimo.com/af/c/click?a_id=1&url=u",
+                  raw_sections={"body_md": body})
+    imgs = [("https://assets.st-note.com/img/a.png", 1240, 826)]
+    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"), imgs)
+    assert html.count('id="') >= 3                            # 誘導ブロック3箇所
+    assert 'src="https://assets.st-note.com/img/a.png"' in html  # 画像埋め込み
+    assert 'width="620"' in html                              # 620pxへ縮小
+    assert '<a href="https://af.moshimo.com' in html          # 成果リンク
+    assert 'noopener" target="_blank"><img' in html           # 画像自体がクリック可能
+
+
+def test_get_image_size_png():
+    from core import note_export
+    # PNGヘッダ(幅=300,高さ=200)を最小構成で作る
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (300).to_bytes(4, "big") + (200).to_bytes(4, "big")
+    assert note_export.get_image_size(png) == (300, 200)
+
+
+def test_no_stray_bold_markers():
+    """対になっていない ** が文字列として残らない（note/WP両方）。"""
+    from core import note_export
+    from core.content_generator import _inline as wp_inline
+    from core.models import Article, Product
+    # 閉じない ** が混ざった本文でも、リテラルの ** は残さない
+    art = Article(raw_sections={"body_md": "コスパ重視の方**におすすめ。安心の**正規品**です。"})
+    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"))
+    assert "**" not in html
+    # WP側: 正しく対になっていれば太字化、余分な ** は消える
+    assert "**" not in wp_inline("未対応の**マーカー")
+    assert "<strong>太字</strong>" in wp_inline("これは**太字**です")
+
+
 def test_batch_load_queue_dispatches(monkeypatch, tmp_path):
     from core import batch
     # URL → sheet_queue.fetch_rows
