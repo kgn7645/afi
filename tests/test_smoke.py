@@ -253,10 +253,12 @@ def test_note_html_amazon_card_mode():
     body = "\n".join(["## はじめに", "x", "## とは", "x", "## おすすめ商品レビュー",
                        "x", "## 他メーカー比較", "x", "## まとめ", "x"])
     art = Article(raw_sections={"body_md": body})
-    amzn = "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22"
-    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"), amazon_card_url=amzn)
-    assert html.count("tag=chance274-22") == 3   # 3箇所に裸URL
-    assert "af.moshimo.com" not in html          # Amazonモードではもしもリンクは入れない
+    embed = {"url": "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22",
+             "key": "emb00xyz", "html": '<span><div class="external-article-widget">card</div></span>'}
+    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"), amazon_embed=embed)
+    assert html.count('embedded-content-key="emb00xyz"') == 3   # カード3箇所
+    assert html.count("external-article-widget") == 3           # カード本体3箇所
+    assert "af.moshimo.com" not in html                          # Amazonモードではもしもリンクなし
 
 
 def test_get_image_size_png():

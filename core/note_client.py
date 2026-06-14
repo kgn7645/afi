@@ -66,39 +66,55 @@ def upload_image(image_bytes: bytes, filename: str, content_type: str = "image/j
     return final_url
 
 
-def create_draft(title: str, body_html: str, body_length: int, *, timeout: int = 30) -> dict:
-    """note下書きを作成する。 {id, key, edit_url} を返す。"""
+def create_empty_note(*, timeout: int = 30) -> dict:
+    """空の下書きを作成し {id, key} を返す。"""
     sess = _session()
+    r = sess.post(_BASE, json={"template_key": None}, timeout=timeout)
+    r.raise_for_status()
+    d = r.json().get("data", r.json())
+    if not d.get("id"):
+        raise RuntimeError(f"下書きidの取得に失敗: {r.text[:200]}")
+    return {"id": d.get("id"), "key": d.get("key", "")}
 
-    # 1) 空の下書きを作成して id を得る
-    r1 = sess.post(_BASE, json={"template_key": None}, timeout=timeout)
-    r1.raise_for_status()
-    data1 = r1.json().get("data", r1.json())
-    note_id = data1.get("id")
-    note_key = data1.get("key", "")
-    if not note_id:
-        raise RuntimeError(f"下書きidの取得に失敗: {r1.text[:200]}")
 
-    # 2) 本文を保存
-    payload = {
-        "body": body_html,
-        "body_length": body_length,
-        "name": title,
-        "index": False,
-        "is_lead_form": False,
-    }
-    r2 = sess.post(
+def save_draft(note_id: int, title: str, body_html: str, body_length: int, *, timeout: int = 30) -> None:
+    """本文を下書き保存する。"""
+    sess = _session()
+    r = sess.post(
         f"{_BASE}/draft_save",
         params={"id": note_id, "is_temp_saved": "true"},
-        json=payload,
+        json={"body": body_html, "body_length": body_length, "name": title,
+              "index": False, "is_lead_form": False},
         timeout=timeout,
     )
-    r2.raise_for_status()
+    r.raise_for_status()
 
+
+def get_external_embed(note_key: str, url: str, *, timeout: int = 25) -> dict:
+    """外部URLのカード（リンクカード）情報を生成し {key, html_for_embed} を返す。
+
+    note内部API: GET /api/v2/embed_by_external_api。URLに既にAmazonタグが付いていれば
+    そのタグでカードが作られる（自分のタグで収益化）。
+    """
+    sess = _session()
+    r = sess.get(
+        "https://note.com/api/v2/embed_by_external_api",
+        params={"url": url, "service": "external-article",
+                "embeddable_key": note_key, "embeddable_type": "Note"},
+        timeout=timeout,
+    )
+    r.raise_for_status()
+    d = r.json()["data"]
+    return {"key": d["key"], "html_for_embed": d["html_for_embed"]}
+
+
+def create_draft(title: str, body_html: str, body_length: int, *, timeout: int = 30) -> dict:
+    """空下書き作成→本文保存をまとめて行う。 {id, key, edit_url} を返す。"""
+    note = create_empty_note(timeout=timeout)
+    save_draft(note["id"], title, body_html, body_length, timeout=timeout)
     return {
-        "id": note_id,
-        "key": note_key,
-        "edit_url": f"https://editor.note.com/notes/{note_key}/edit/" if note_key else "",
+        "id": note["id"], "key": note["key"],
+        "edit_url": f"https://editor.note.com/notes/{note['key']}/edit/" if note["key"] else "",
     }
 
 

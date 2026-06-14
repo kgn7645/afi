@@ -75,25 +75,28 @@ def main() -> None:
     # Amazonカードモード: Amazon URL＋自分のタグがあれば、タグ付きURLを本文に置く
     #（noteで末尾Enter→Amazonカード化。あなたのタグで収益化／カードに画像も含まれる）
     s = get_settings()
-    amazon_card_url = ""
-    if "amazon." in args.url and s.amazon_associate_tag:
-        amazon_card_url = product_extractor.amazon_affiliate_url(args.url, s.amazon_associate_tag)
+    use_amazon = "amazon." in args.url and s.amazon_associate_tag
 
-    if amazon_card_url:
+    if use_amazon:
+        # Amazonカードモード: 空下書き作成→カード生成(自分のタグ)→本文に埋め込み（Enter不要）
+        amazon_url = product_extractor.amazon_affiliate_url(args.url, s.amazon_associate_tag)
+        note = note_client.create_empty_note()
+        emb = note_client.get_external_embed(note["key"], amazon_url)
+        amazon_embed = {"url": amazon_url, "key": emb["key"], "html": emb["html_for_embed"]}
         body_html, body_len = note_export.build_note_html(
-            result.article, result.product, amazon_card_url=amazon_card_url)
-        print(f"本文長: {body_len}文字 / Amazonカード(タグ={s.amazon_associate_tag}) 3箇所")
-        print("   ※note下書きを開き、各Amazon URLの末尾でEnterするとカード化します")
+            result.article, result.product, amazon_embed=amazon_embed)
+        note_client.save_draft(note["id"], result.article.title, body_html, body_len)
+        edit_url = f"https://editor.note.com/notes/{note['key']}/edit/"
+        print(f"本文長: {body_len}文字 / Amazonカード(タグ={s.amazon_associate_tag}) 3箇所・自動埋め込み")
+        print("✅ note下書きを作成しました")
+        print(f"   下書きID: {note['id']}  編集URL: {edit_url}")
     else:
         note_images = _upload_product_images(result.article.product_image_urls)
         body_html, body_len = note_export.build_note_html(result.article, result.product, note_images)
         print(f"本文長: {body_len}文字 / もしもリンク＋画像{len(note_images)}枚")
-
-    res = note_client.create_draft(result.article.title, body_html, body_len)
-    print("✅ note下書きを作成しました")
-    print(f"   下書きID: {res['id']}")
-    if res["edit_url"]:
-        print(f"   編集URL: {res['edit_url']}")
+        res = note_client.create_draft(result.article.title, body_html, body_len)
+        print("✅ note下書きを作成しました")
+        print(f"   下書きID: {res['id']}  編集URL: {res['edit_url']}")
     print("   → note の「下書き」一覧で確認し、問題なければnote側で公開してください。")
 
 

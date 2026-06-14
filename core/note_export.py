@@ -109,14 +109,22 @@ def _image_figure(url: str, width: int, height: int, link: str = "") -> str:
 _LINK_BEFORE_H2 = {2, 4}
 
 
+def _external_figure(url: str, emb_key: str, html_for_embed: str) -> str:
+    """note外部リンクカード(external-article)のfigureを組み立てる（UUIDは都度新規）。"""
+    uid = str(uuid.uuid4())
+    return (f'<figure name="{uid}" id="{uid}" data-src="{_html.escape(url)}" '
+            f'data-identifier="null" embedded-service="external-article" '
+            f'embedded-content-key="{emb_key}">{html_for_embed}</figure>')
+
+
 def build_note_html(article: Article, product: Product,
                     note_images: list[tuple[str, int, int]] | None = None,
-                    amazon_card_url: str = "") -> tuple[str, int]:
+                    amazon_embed: dict | None = None) -> tuple[str, int]:
     """note内部API投入用のHTML本文と本文文字数を返す。
 
     - アフィリエイトリンクを本文中の複数箇所(計3箇所)に配置（参考記事に合わせ）
-    - amazon_card_url 指定時: 各箇所に「タグ付きAmazon URLの裸リンク」を置く
-      （noteエディタで末尾Enter→Amazonカード化。あなたのタグで収益化）
+    - amazon_embed={url,key,html} 指定時: 各箇所にAmazon商品カードを埋め込む
+      （embed_by_external_apiの結果。Enter不要・あなたのタグで収益化）
     - それ以外: note_images（楽天画像）＋もしもリンクの誘導ブロック
     """
     body_md = article.raw_sections.get("body_md", "")
@@ -135,11 +143,10 @@ def build_note_html(article: Article, product: Product,
     def add_promo() -> None:
         """商品への誘導ブロックを1つ追加。"""
         nonlocal text_len, promo_idx
-        # Amazonカードモード: タグ付きURLを裸で置く（編集時にカード化）
-        if amazon_card_url:
-            uid = str(uuid.uuid4())
-            blocks.append(f'<p name="{uid}" id="{uid}">{_html.escape(amazon_card_url)}</p>')
-            text_len += len(amazon_card_url)
+        # Amazonカードモード: 完成カード(figure)を埋め込む（Enter不要）
+        if amazon_embed:
+            blocks.append(_external_figure(amazon_embed["url"], amazon_embed["key"],
+                                           amazon_embed["html"]))
             promo_idx += 1
             return
         if not article.affiliate_click_url:
