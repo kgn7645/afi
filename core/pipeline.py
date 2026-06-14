@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import (affiliate, content_generator, moshimo_link, product_extractor,
-               product_selector, prompts, site_setup, wordpress)
+               product_selector, prompts, qa, site_setup, wordpress)
 from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
 from .models import PipelineResult, Product
@@ -98,6 +98,18 @@ def run(
     # 著者情報ボックス（Issue #44: E-E-A-T）を本文末尾に付与
     article.body_html = site_setup.append_author_box(article.body_html)
     result.article = article
+
+    # QA（Issue #16）: 禁止表現・構成・整形を検査
+    qa_rules = get_rules().get("qa", {})
+    if qa_rules.get("enabled", True):
+        issues = qa.check_article(article, product)
+        result.qa_issues = issues
+        result.warnings.extend(qa.format_issues(issues))
+        effective_status = wp_status or get_settings().wp_default_status
+        if (qa.has_errors(issues) and qa_rules.get("block_publish_on_error", True)
+                and effective_status == "publish"):
+            wp_status = "draft"
+            result.warnings.append("QA: error検出のため公開を中止し下書きにしました")
 
     # E: WordPress下書き
     if post_to_wp:

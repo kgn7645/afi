@@ -215,6 +215,35 @@ def test_pick_category_ids(monkeypatch):
     assert ids == [4]
 
 
+def test_qa_clean_article():
+    from core import qa
+    from core.models import Article
+    body = ("<h2>はじめに</h2><p>" + "あ" * 6000 + "</p>"
+            "<h2>RANVOOとは</h2><p>x</p><h2>徹底レビュー</h2>"
+            '<a class="amazon-cta-btn" href="#">Amazonで見る</a>'
+            "<h2>他メーカーと比較</h2><h2>まとめ</h2>")
+    art = Article(title="T", body_html=body)
+    issues = qa.check_article(art, Product(), rules={})
+    assert not qa.has_errors(issues)                    # 重大問題なし
+
+
+def test_qa_detects_problems():
+    from core import qa
+    from core.models import Article
+    # 薬機法NG・誇大・アフィリ無し・タイトル無し・薄い
+    art = Article(title="", body_html="<p>この除湿機を使えば肩こりが治る。日本一の効果。**強調**</p>")
+    issues = qa.check_article(art, Product(), rules={})
+    codes = {i["code"] for i in issues}
+    assert "pharma" in codes                            # 「治る」
+    assert "exaggeration" in codes                      # 「日本一」
+    assert "no_affiliate" in codes                      # リンク無し
+    assert "no_title" in codes                          # タイトル無し
+    assert "markdown_leftover" in codes                 # ** 残り
+    assert qa.has_errors(issues)                        # errorあり（no_affiliate/no_title）
+    msgs = qa.format_issues(issues)
+    assert any("QA" in m for m in msgs)
+
+
 def test_company_grounding_prompt():
     from core import prompts
     p = prompts.company_grounding_prompt("RANVOO", "ネッククーラー")

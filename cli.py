@@ -50,6 +50,10 @@ def main() -> None:
     print(f"選定: {'OK' if result.selection_ok else 'NG'} - {result.selection_reason}")
     for w in result.warnings:
         print(f"⚠ {w}")
+    if result.qa_issues:
+        errs = sum(1 for i in result.qa_issues if i.get("level") == "error")
+        warns = len(result.qa_issues) - errs
+        print(f"🔎 QA: error {errs}件 / warn {warns}件")
     if result.article:
         print(f"タイトル: {result.article.title}")
         print(f"コピー  : {result.article.catch_copy}")

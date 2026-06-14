@@ -61,3 +61,4 @@ class PipelineResult(BaseModel):
     wp_post_id: Optional[int] = None
     wp_edit_link: str = ""
     warnings: list[str] = Field(default_factory=list)
+    qa_issues: list[dict] = Field(default_factory=list)  # 自動QAの検出結果（Issue #16）
