@@ -6,6 +6,7 @@ SEOメタはRank Math / Yoast のメタキーに対応。
 from __future__ import annotations
 
 import base64
+import re
 
 import requests
 
@@ -69,6 +70,37 @@ def upload_image_from_url(image_url: str, *, filename: str = "", timeout: int = 
     resp.raise_for_status()
     d = resp.json()
     return {"id": d.get("id"), "source_url": d.get("source_url", "")}
+
+
+def first_image_src(html: str) -> str:
+    """本文HTMLから最初の<img src>を返す（サムネ補完用）。無ければ空。"""
+    m = re.search(r'<img[^>]+src="([^"]+)"', html or "")
+    return m.group(1) if m else ""
+
+
+def list_posts(*, statuses: str = "publish,draft", per_page: int = 100,
+               fields: str = "id,title,status,featured_media", timeout: int = 30) -> list[dict]:
+    """投稿一覧を返す（サムネ補完バッチ等で使用）。"""
+    s = get_settings()
+    resp = requests.get(
+        f"{s.wp_base_url}/wp-json/wp/v2/posts",
+        params={"status": statuses, "per_page": per_page, "context": "edit", "_fields": fields},
+        headers=_auth_header(), timeout=timeout,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def set_featured_media(post_id: int, media_id: int, *, timeout: int = 30) -> dict:
+    """既存投稿のアイキャッチ(featured_media)を更新。"""
+    s = get_settings()
+    resp = requests.post(
+        f"{s.wp_base_url}/wp-json/wp/v2/posts/{post_id}",
+        json={"featured_media": media_id},
+        headers={**_auth_header(), "Content-Type": "application/json"}, timeout=timeout,
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 def list_categories(*, timeout: int = 30) -> list[dict]:
