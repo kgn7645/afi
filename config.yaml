@@ -51,6 +51,13 @@ article:
     - 日本市場でのサポート体制
     - 価格競争力
 
+# --- アフィリエイト（収益導線） ---
+affiliate:
+  # amazon = Amazon自タグの「Amazonで見る」ボタンを本文複数箇所に（note と統一）
+  # moshimo = 従来の楽天検索＋もしもかんたんリンク
+  mode: amazon                 # amazon | moshimo
+  amazon_button_label: "Amazonで見る"
+
 # --- WordPress ---
 wordpress:
   category_id: null            # 投稿カテゴリID（null=未指定）

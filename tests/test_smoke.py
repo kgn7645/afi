@@ -60,6 +60,100 @@ def test_affiliate_insert():
     assert "<a>link</a>" in out
 
 
+def test_amazon_button_has_tag_and_attrs():
+    url = "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22"
+    btn = affiliate.build_amazon_button(url, "Amazonで見る")
+    assert "tag=chance274-22" in btn
+    assert "Amazonで見る" in btn
+    assert 'rel="nofollow noopener sponsored"' in btn   # アフィリのrel必須
+
+
+def test_insert_amazon_buttons_three_spots():
+    body = ("<h2>はじめに</h2><p>x</p>"
+            "<h2>おすすめ商品「X」徹底レビュー</h2><p>x</p>"
+            "<h2>他メーカーと比較</h2><p>x</p>"
+            "<h2>まとめ</h2><p>x</p>")
+    url = "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22"
+    out = affiliate.insert_amazon_buttons(body, url)
+    assert out.count("amazon-cta") == 3                  # レビュー前・比較前・末尾
+    assert out.count("tag=chance274-22") == 3
+    # レビュー見出しの前に最初のボタンが入る（導入の後）
+    assert out.index("amazon-cta") < out.index("おすすめ商品")
+
+
+def test_insert_amazon_buttons_fallback_when_no_anchor():
+    out = affiliate.insert_amazon_buttons("<p>本文だけ</p>", "https://amzn/dp/X?tag=t")
+    assert out.count("amazon-cta") == 1                  # アンカー無しでも末尾に1つ
+
+
+def test_amazon_url_alive(monkeypatch):
+    from core import product_extractor as pe
+
+    class Resp:
+        def __init__(self, code, text=""):
+            self.status_code = code
+            self.text = text
+
+    # 404 = 死んだASIN → False
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(404))
+    assert pe.amazon_url_alive("https://www.amazon.co.jp/dp/DEAD0ASIN0") is False
+    # 200だが「何かお探し」ページ = 無効ASIN → False
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(200, "何かお探しですか？"))
+    assert pe.amazon_url_alive("https://www.amazon.co.jp/dp/GHOST00000") is False
+    # 200で実商品 → True
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(200, "<title>RANVOO...</title>"))
+    assert pe.amazon_url_alive("https://www.amazon.co.jp/dp/B0D7C999LG") is True
+    # 503(bot対策) は誤判定回避のため True 扱い
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(503))
+    assert pe.amazon_url_alive("https://www.amazon.co.jp/dp/B0D7C999LG") is True
+
+
+def test_build_amazon_card():
+    card = affiliate.build_amazon_card(
+        "https://www.amazon.co.jp/dp/B0D7C999LG?tag=chance274-22",
+        "RANVOO AICE3 ネッククーラー",
+        "https://m.media-amazon.com/images/I/61ILah3+YKL._AC_SL1500_.jpg",
+    )
+    assert "amazon-card" in card
+    assert "<img" in card and "61ILah3" in card               # 商品画像
+    assert "RANVOO AICE3 ネッククーラー" in card               # 商品名
+    assert "tag=chance274-22" in card
+    assert 'rel="nofollow noopener sponsored"' in card
+
+
+def test_insert_amazon_cards_three_spots():
+    body = ("<h2>はじめに</h2><p>x</p>"
+            "<h2>おすすめ商品「X」</h2><p>x</p>"
+            "<h2>他メーカーと比較</h2><p>x</p>"
+            "<h2>まとめ</h2><p>x</p>")
+    out = affiliate.insert_amazon_cards(body, '<div class="amazon-card">CARD</div>')
+    assert out.count("amazon-card") == 3
+
+
+def test_fetch_amazon_product_card(monkeypatch):
+    from core import product_extractor as pe
+
+    class Resp:
+        def __init__(self, code, text=""):
+            self.status_code = code
+            self.text = text
+
+    live = ('<html><span id="productTitle"> RANVOO AICE3 </span>'
+            '..."hiRes":"https://m.media-amazon.com/images/I/61ILah3+YKL._AC_SL1500_.jpg"...')
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(200, live))
+    card = pe.fetch_amazon_product_card("https://www.amazon.co.jp/dp/B0D7C999LG")
+    assert card == {"title": "RANVOO AICE3",
+                    "image": "https://m.media-amazon.com/images/I/61ILah3+YKL._AC_SL1500_.jpg"}
+
+    # 無効ASINページ → None
+    monkeypatch.setattr(pe.requests, "get", lambda *a, **k: Resp(200, "何かお探しですか？"))
+    assert pe.fetch_amazon_product_card("https://www.amazon.co.jp/dp/GHOST00000") is None
+    # 画像が取れない → None
+    monkeypatch.setattr(pe.requests, "get",
+                        lambda *a, **k: Resp(200, '<span id="productTitle">X</span>'))
+    assert pe.fetch_amazon_product_card("https://www.amazon.co.jp/dp/X") is None
+
+
 def test_moshimo_click_url():
     from core import moshimo_link as ml
     url = ml.build_click_url(5633316, "https://item.rakuten.co.jp/e-kurashi/s1k76/", "rakuten")
