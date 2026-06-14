@@ -26,37 +26,18 @@ WordPressと同居するが、ツールはREST APIで通信するだけで役割
    ```
    接続できたら STEP 2 へ。
 
-## STEP 2. Python を準備（3.9以上）
-```bash
-python3 --version
-```
-- **3.9以上**なら次へ。
-- 古い／無い場合は pyenv で導入：
-  ```bash
-  git clone https://github.com/pyenv/pyenv.git ~/.pyenv
-  echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
-  echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
-  echo 'eval "$(pyenv init -)"' >> ~/.bashrc
-  source ~/.bashrc
-  pyenv install 3.11.9 && pyenv global 3.11.9
-  python3 --version   # 3.11.9 を確認
-  ```
+## STEP 2-4. リポジトリ取得＋Python＋依存（セットアップスクリプト）
+> エックスサーバー標準Pythonは3.6.8と古いため、コンパイル不要の事前ビルド版
+> Python3.11を導入する。以下のスクリプトが Python導入→venv→依存インストールまで自動で行う。
 
-## STEP 3. リポジトリを取得
 ```bash
 cd ~
 git clone https://github.com/kgn7645/afi.git
 cd afi
+bash scripts/setup_xserver.sh
 ```
-
-## STEP 4. Python環境と依存
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-> エラーが出たら STEP 末尾の「トラブル」を参照。
+- 末尾に「次の手順」と、楽天APIに登録すべき送信元IPが表示される。
+- 失敗時は「トラブル」を参照。
 
 ## STEP 5. シークレット(.env)を作成
 ```bash
