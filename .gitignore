@@ -10,3 +10,11 @@ venv/
 data/*
 !data/.gitkeep
 !data/queue.example.csv
+
+# 秘密鍵は絶対に上げない
+*.key
+*.pem
+
+# スクリーンショット
+screencapture-*.png
+スクリーンショット*.png
