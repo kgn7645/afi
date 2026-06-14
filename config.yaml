@@ -61,6 +61,18 @@ affiliate:
 
 # --- WordPress ---
 wordpress:
-  category_id: null            # 投稿カテゴリID（null=未指定）
+  category_id: null            # 投稿カテゴリID（null=自動割当に任せる）
+  auto_category: true          # 既存カテゴリへ記事を自動割当（未分類を避ける）
   # SEOプラグインのメタ用キー（Rank Math / Yoast）。使うものに合わせる
   seo_plugin: "rankmath"       # rankmath | yoast | none
+
+# --- E-E-A-T（信頼性の土台） ---
+eeat:
+  site_name: "おうちベース"
+  # サイトの軸（在宅ワーク・おうち時間）。記事のフレーミングにも使う
+  site_concept: "在宅ワーク・おうち時間を快適にする道具を、企業の素性や口コミまで調べて選ぶメディア"
+  author_name: "おうちベース編集部"     # 運営者名（ハンドルでOK。実名不要・要確認）
+  author_bio: "在宅ワークで使えるガジェット・家電を、メーカーの素性や実際の口コミまで調べてレビューしています。"
+  profile_slug: "about"               # 運営者情報ページのスラッグ
+  # 自動割当に失敗した時の保険カテゴリslug（「未分類(uncategorized)」を避ける）
+  default_category_slug: "tools"

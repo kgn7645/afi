@@ -8,7 +8,8 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import affiliate, content_generator, moshimo_link, product_extractor, product_selector, wordpress
+from . import (affiliate, content_generator, moshimo_link, product_extractor,
+               product_selector, prompts, site_setup, wordpress)
 from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
 from .models import PipelineResult, Product
@@ -87,6 +88,8 @@ def run(
         article.product_image_urls = image_urls
         article.body_html = affiliate.insert_into_body(article.body_html, link_html)
 
+    # 著者情報ボックス（Issue #44: E-E-A-T）を本文末尾に付与
+    article.body_html = site_setup.append_author_box(article.body_html)
     result.article = article
 
     # E: WordPress下書き
@@ -100,7 +103,10 @@ def run(
                     featured_id = media.get("id")
                 except Exception as e:  # noqa: BLE001
                     result.warnings.append(f"アイキャッチ設定に失敗（投稿は継続）: {e}")
-            wp = wordpress.create_draft(article, status=wp_status, featured_media=featured_id)
+            # カテゴリ自動割当（Issue #44: 未分類を避ける）
+            category_ids = _pick_category_ids(product, result, gemini)
+            wp = wordpress.create_draft(article, status=wp_status,
+                                        featured_media=featured_id, categories=category_ids)
             result.wp_post_id = wp["id"]
             result.wp_edit_link = wp["edit_link"]
             _log(result, wp_status=wp.get("status", ""))
@@ -111,6 +117,40 @@ def run(
         _log(result, wp_status="not_posted")
 
     return result
+
+
+def _pick_category_ids(product: Product, result: PipelineResult,
+                       gemini: GeminiClient | None) -> list[int] | None:
+    """既存カテゴリから記事に合うものを選びIDで返す（Issue #44）。
+
+    auto_category無効/未設定や判定失敗時は default_category_slug、
+    それも無ければ None（= configのcategory_id/未指定にフォールバック）。
+    """
+    rules = get_rules()
+    if not rules.get("wordpress", {}).get("auto_category", False):
+        return None
+    try:
+        cats = wordpress.list_categories()
+    except Exception as e:  # noqa: BLE001
+        result.warnings.append(f"カテゴリ取得に失敗（既定運用）: {e}")
+        return None
+    by_slug = {c["slug"]: c["id"] for c in cats}
+    pickable = [c for c in cats if c["slug"] != "uncategorized"]
+    default_slug = rules.get("eeat", {}).get("default_category_slug", "")
+
+    chosen = ""
+    if pickable:
+        try:
+            g = gemini or GeminiClient()
+            concept = rules.get("eeat", {}).get("site_concept", "")
+            raw = g.generate(prompts.category_pick_prompt(product, pickable, concept),
+                             temperature=0.0)
+            chosen = raw.strip().split()[0].strip().strip('"').strip("`") if raw else ""
+        except Exception as e:  # noqa: BLE001
+            result.warnings.append(f"カテゴリ自動判定に失敗（既定運用）: {e}")
+    if chosen not in by_slug:
+        chosen = default_slug
+    return [by_slug[chosen]] if chosen in by_slug else None
 
 
 def _embed_amazon(product_article, product: Product, s, result: PipelineResult) -> bool:
