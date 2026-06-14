@@ -215,6 +215,42 @@ def test_pick_category_ids(monkeypatch):
     assert ids == [4]
 
 
+def test_company_grounding_prompt():
+    from core import prompts
+    p = prompts.company_grounding_prompt("RANVOO", "ネッククーラー")
+    assert "RANVOO" in p
+    assert "確認できた事実のみ" in p                 # 推測禁止
+    assert "公開情報では" in p                       # 不明時の明記指示
+
+
+def test_ground_company(monkeypatch):
+    from core import pipeline
+    from core.models import Product, PipelineResult
+
+    class FakeGemini:
+        def __init__(self, out=None, exc=None):
+            self.out = out
+            self.exc = exc
+
+        def generate_grounded(self, *a, **k):
+            if self.exc:
+                raise self.exc
+            return self.out
+
+    res = PipelineResult(product=Product())
+    # 取得成功 → company_hintに反映＋warning
+    hint = pipeline._ground_company(
+        Product(brand="RANVOO", category="ネッククーラー"),
+        FakeGemini(out="・中国の企業\n・2018年設立"), res)
+    assert "中国" in hint
+    assert any("グラウンディング" in w for w in res.warnings)
+    # 失敗 → 空文字で継続
+    res2 = PipelineResult(product=Product())
+    hint2 = pipeline._ground_company(
+        Product(brand="X"), FakeGemini(exc=RuntimeError("429")), res2)
+    assert hint2 == ""
+
+
 def test_article_body_prompt_depth():
     from core import prompts
     from core.models import Product
