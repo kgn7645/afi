@@ -194,6 +194,22 @@ def test_sheet_queue_fetch_rows(monkeypatch):
     assert rows[0]["brand"] == "KLOUDIC" and rows[1]["category"] == "ネッククーラー"
 
 
+def test_note_export_markdown():
+    from core import note_export
+    from core.models import Article, Product
+    art = Article(
+        title="【X】はどこの国？", affiliate_click_url="https://af.moshimo.com/af/c/click?a_id=1&url=u",
+        raw_sections={"body_md": "## はじめに\n本文です。"},
+    )
+    prod = Product(brand="X", category="扇風機")
+    md = note_export.build_note_markdown(art, prod)
+    assert note_export.DISCLOSURE in md          # 広告表記
+    assert "# 【X】はどこの国？" in md            # タイトル見出し
+    assert "## はじめに" in md                    # 本文
+    assert "af.moshimo.com" in md                 # プレーン成果リンク
+    assert "<script" not in md and "msmaflink" not in md  # JSウィジェットは含めない
+
+
 def test_batch_load_queue_dispatches(monkeypatch, tmp_path):
     from core import batch
     # URL → sheet_queue.fetch_rows

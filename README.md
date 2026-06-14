@@ -67,6 +67,14 @@ cron例（毎朝6時に15件・サーバー常駐運用、Issue #21で整備）:
 0 6 * * *  cd /path/to/affiliate-automation && .venv/bin/python batch.py --limit 15 >> data/batch.log 2>&1
 ```
 
+### note用Markdownの出力（Issue #2）
+noteは公式投稿APIが無いため、note用に整形した本文（プレーン成果リンク＋広告表記）を生成し、
+noteエディタへ貼り付ける運用。`--note` で出力できる。
+```bash
+python cli.py --brand RANVOO --category ネッククーラー --no-wp --note
+```
+詳細: [docs/issue-02-note.md](./docs/issue-02-note.md)
+
 ### もしもリンクの自動生成（Issue #8）
 `.env` に `MOSHIMO_AID`（もしもの成果ID）と `RAKUTEN_APP_ID`/`RAKUTEN_ACCESS_KEY`
 （楽天ウェブサービス・無料）を設定すると、リンク未指定時にブランド+カテゴリで

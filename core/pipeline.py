@@ -73,7 +73,8 @@ def run(
     # D: アフィリエイトリンク取得（未指定なら楽天検索で自動生成 / Issue #8）
     link_html = affiliate_link_html
     if not link_html:
-        link_html = _auto_affiliate_link(product, result)
+        link_html, click_url = _auto_affiliate_link(product, result)
+        article.affiliate_click_url = click_url
 
     # D: アフィリエイトリンク埋め込み
     article.body_html = affiliate.insert_into_body(article.body_html, link_html)
@@ -95,22 +96,25 @@ def run(
     return result
 
 
-def _auto_affiliate_link(product: Product, result: PipelineResult) -> str:
-    """楽天検索＋もしもでリンクHTMLを自動生成。失敗時は空文字（プレースホルダ運用）。"""
+def _auto_affiliate_link(product: Product, result: PipelineResult) -> tuple[str, str]:
+    """楽天検索＋もしもでリンクを自動生成。 (カードHTML, プレーン成果URL) を返す。
+
+    失敗時は ("", "")（プレースホルダ運用にフォールバック）。
+    """
     s = get_settings()
     if not (s.moshimo_aid and s.rakuten_app_id and s.rakuten_access_key):
-        return ""  # 未設定ならプレースホルダ挿入にフォールバック
+        return "", ""  # 未設定ならプレースホルダ挿入にフォールバック
     keyword = " ".join(p for p in (product.brand, product.category) if p) or product.product_name
     if not keyword:
-        return ""
+        return "", ""
     try:
         res = moshimo_link.build_rakuten_link_by_keyword(keyword)
         if res:
-            return res["html"]
+            return res["html"], res.get("click_url", "")
         result.warnings.append(f"楽天で該当商品なし（リンク未生成）: {keyword}")
     except Exception as e:  # noqa: BLE001
         result.warnings.append(f"もしもリンク自動生成に失敗（プレースホルダで継続）: {e}")
-    return ""
+    return "", ""
 
 
 def _log(result: PipelineResult, *, wp_status: str) -> None:
