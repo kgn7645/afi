@@ -110,11 +110,14 @@ _LINK_BEFORE_H2 = {2, 4}
 
 
 def build_note_html(article: Article, product: Product,
-                    note_images: list[tuple[str, int, int]] | None = None) -> tuple[str, int]:
+                    note_images: list[tuple[str, int, int]] | None = None,
+                    amazon_card_url: str = "") -> tuple[str, int]:
     """note内部API投入用のHTML本文と本文文字数を返す。
 
     - アフィリエイトリンクを本文中の複数箇所(計3箇所)に配置（参考記事に合わせ）
-    - note_images（アップロード済みの(URL,幅,高さ)）があれば商品紹介セクションに画像を挿入
+    - amazon_card_url 指定時: 各箇所に「タグ付きAmazon URLの裸リンク」を置く
+      （noteエディタで末尾Enter→Amazonカード化。あなたのタグで収益化）
+    - それ以外: note_images（楽天画像）＋もしもリンクの誘導ブロック
     """
     body_md = article.raw_sections.get("body_md", "")
     note_images = note_images or []
@@ -130,11 +133,18 @@ def build_note_html(article: Article, product: Product,
         text_len += len(raw_text)
 
     def add_promo() -> None:
-        """商品画像＋リンクの『誘導ブロック』を1つ追加（画像→リンクでクリック誘導）。"""
+        """商品への誘導ブロックを1つ追加。"""
         nonlocal text_len, promo_idx
+        # Amazonカードモード: タグ付きURLを裸で置く（編集時にカード化）
+        if amazon_card_url:
+            uid = str(uuid.uuid4())
+            blocks.append(f'<p name="{uid}" id="{uid}">{_html.escape(amazon_card_url)}</p>')
+            text_len += len(amazon_card_url)
+            promo_idx += 1
+            return
         if not article.affiliate_click_url:
             return
-        # 画像（あれば巡回して使う・画像自体もリンク化）→ テキストリンクの順で誘導力を上げる
+        # 楽天画像（巡回・画像自体もリンク化）→ テキストリンク
         if note_images:
             url, w, h = note_images[promo_idx % len(note_images)]
             blocks.append(_image_figure(url, w, h, link=article.affiliate_click_url))

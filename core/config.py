@@ -42,6 +42,8 @@ class Settings:
 
         # note 非公式API用のセッションCookie（_note_session_v5 の値 / Issue #2）
         self.note_session = os.getenv("NOTE_SESSION", "").strip()
+        # Amazonアソシエイトのタグ（例 chance274-22）。note Amazonカード等に使用
+        self.amazon_associate_tag = os.getenv("AMAZON_ASSOCIATE_TAG", "").strip()
 
         # IndexNow（Bing/Yandex等への即時インデックス通知）用キー
         self.indexnow_key = os.getenv("INDEXNOW_KEY", "").strip()
