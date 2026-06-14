@@ -253,12 +253,15 @@ def test_note_html_amazon_card_mode():
     body = "\n".join(["## はじめに", "x", "## とは", "x", "## おすすめ商品レビュー",
                        "x", "## 他メーカー比較", "x", "## まとめ", "x"])
     art = Article(raw_sections={"body_md": body})
-    embed = {"url": "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22",
-             "key": "emb00xyz", "html": '<span><div class="external-article-widget">card</div></span>'}
-    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"), amazon_embed=embed)
-    assert html.count('embedded-content-key="emb00xyz"') == 3   # カード3箇所
-    assert html.count("external-article-widget") == 3           # カード本体3箇所
-    assert "af.moshimo.com" not in html                          # Amazonモードではもしもリンクなし
+    embeds = [{"url": "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22",
+               "key": f"emb{i}", "html": f'<span><div class="external-article-widget">c{i}</div></span>'}
+              for i in range(3)]
+    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"), amazon_embeds=embeds)
+    # 3箇所すべて固有キー
+    for i in range(3):
+        assert f'embedded-content-key="emb{i}"' in html
+    assert html.count("external-article-widget") == 3
+    assert "af.moshimo.com" not in html
 
 
 def test_get_image_size_png():

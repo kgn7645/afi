@@ -119,14 +119,15 @@ def _external_figure(url: str, emb_key: str, html_for_embed: str) -> str:
 
 def build_note_html(article: Article, product: Product,
                     note_images: list[tuple[str, int, int]] | None = None,
-                    amazon_embed: dict | None = None) -> tuple[str, int]:
+                    amazon_embeds: list[dict] | None = None) -> tuple[str, int]:
     """note内部API投入用のHTML本文と本文文字数を返す。
 
     - アフィリエイトリンクを本文中の複数箇所(計3箇所)に配置（参考記事に合わせ）
-    - amazon_embed={url,key,html} 指定時: 各箇所にAmazon商品カードを埋め込む
-      （embed_by_external_apiの結果。Enter不要・あなたのタグで収益化）
+    - amazon_embeds=[{url,key,html}...] 指定時: 各箇所にAmazon商品カードを埋め込む。
+      キーは箇所ごとに固有でないとnoteが画像表示に失敗するため、要素数だけ用意する。
     - それ以外: note_images（楽天画像）＋もしもリンクの誘導ブロック
     """
+    amazon_embeds = amazon_embeds or []
     body_md = article.raw_sections.get("body_md", "")
     note_images = note_images or []
     blocks: list[str] = []
@@ -143,10 +144,10 @@ def build_note_html(article: Article, product: Product,
     def add_promo() -> None:
         """商品への誘導ブロックを1つ追加。"""
         nonlocal text_len, promo_idx
-        # Amazonカードモード: 完成カード(figure)を埋め込む（Enter不要）
-        if amazon_embed:
-            blocks.append(_external_figure(amazon_embed["url"], amazon_embed["key"],
-                                           amazon_embed["html"]))
+        # Amazonカードモード: 箇所ごとに固有キーのカード(figure)を埋め込む（Enter不要）
+        if amazon_embeds:
+            emb = amazon_embeds[promo_idx % len(amazon_embeds)]
+            blocks.append(_external_figure(emb["url"], emb["key"], emb["html"]))
             promo_idx += 1
             return
         if not article.affiliate_click_url:

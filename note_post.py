@@ -81,10 +81,13 @@ def main() -> None:
         # Amazonカードモード: 空下書き作成→カード生成(自分のタグ)→本文に埋め込み（Enter不要）
         amazon_url = product_extractor.amazon_affiliate_url(args.url, s.amazon_associate_tag)
         note = note_client.create_empty_note()
-        emb = note_client.get_external_embed(note["key"], amazon_url)
-        amazon_embed = {"url": amazon_url, "key": emb["key"], "html": emb["html_for_embed"]}
+        # 3箇所それぞれに固有キーのカードが要る（同一キー使い回しは画像が出ない）
+        amazon_embeds = []
+        for _ in range(3):
+            emb = note_client.get_external_embed(note["key"], amazon_url)
+            amazon_embeds.append({"url": amazon_url, "key": emb["key"], "html": emb["html_for_embed"]})
         body_html, body_len = note_export.build_note_html(
-            result.article, result.product, amazon_embed=amazon_embed)
+            result.article, result.product, amazon_embeds=amazon_embeds)
         note_client.save_draft(note["id"], result.article.title, body_html, body_len)
         edit_url = f"https://editor.note.com/notes/{note['key']}/edit/"
         print(f"本文長: {body_len}文字 / Amazonカード(タグ={s.amazon_associate_tag}) 3箇所・自動埋め込み")
