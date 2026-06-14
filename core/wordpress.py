@@ -71,8 +71,53 @@ def upload_image_from_url(image_url: str, *, filename: str = "", timeout: int = 
     return {"id": d.get("id"), "source_url": d.get("source_url", "")}
 
 
+def list_categories(*, timeout: int = 30) -> list[dict]:
+    """カテゴリ一覧を返す。 [{id, name, slug}]。"""
+    s = get_settings()
+    resp = requests.get(
+        f"{s.wp_base_url}/wp-json/wp/v2/categories",
+        params={"per_page": 100, "_fields": "id,name,slug"},
+        headers=_auth_header(), timeout=timeout,
+    )
+    resp.raise_for_status()
+    return [{"id": c["id"], "name": c["name"], "slug": c["slug"]} for c in resp.json()]
+
+
+def get_page_by_slug(slug: str, *, timeout: int = 30) -> dict | None:
+    """スラッグで固定ページを取得（無ければNone）。"""
+    s = get_settings()
+    resp = requests.get(
+        f"{s.wp_base_url}/wp-json/wp/v2/pages",
+        params={"slug": slug, "status": "publish,draft", "_fields": "id,slug,status,link"},
+        headers=_auth_header(), timeout=timeout,
+    )
+    resp.raise_for_status()
+    items = resp.json()
+    return items[0] if items else None
+
+
+def create_page(title: str, content: str, *, slug: str = "", status: str = "draft",
+                timeout: int = 30) -> dict:
+    """固定ページを作成。 {id, link, status} を返す。"""
+    s = get_settings()
+    if not s.wordpress_ready:
+        raise RuntimeError("WordPress接続情報(.env)が未設定です。")
+    payload = {"title": title, "content": content, "status": status}
+    if slug:
+        payload["slug"] = slug
+    resp = requests.post(
+        f"{s.wp_base_url}/wp-json/wp/v2/pages",
+        json=payload, headers={**_auth_header(), "Content-Type": "application/json"},
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    d = resp.json()
+    return {"id": d.get("id"), "link": d.get("link", ""), "status": d.get("status", status)}
+
+
 def create_draft(article: Article, *, status: str | None = None,
-                 featured_media: int | None = None, timeout: int = 30) -> dict:
+                 featured_media: int | None = None,
+                 categories: list[int] | None = None, timeout: int = 30) -> dict:
     """記事を投稿（既定draft）。 {id, link, edit_link} 等を返す。"""
     s = get_settings()
     if not s.wordpress_ready:
@@ -89,8 +134,11 @@ def create_draft(article: Article, *, status: str | None = None,
     }
     if featured_media:
         payload["featured_media"] = featured_media   # アイキャッチ（Issue #42）
+    # カテゴリ: 明示指定 > config.category_id（Issue #44）
     cat_id = get_rules().get("wordpress", {}).get("category_id")
-    if cat_id:
+    if categories:
+        payload["categories"] = categories
+    elif cat_id:
         payload["categories"] = [cat_id]
 
     meta = _seo_meta(article)

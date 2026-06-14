@@ -154,6 +154,67 @@ def test_fetch_amazon_product_card(monkeypatch):
     assert pe.fetch_amazon_product_card("https://www.amazon.co.jp/dp/X") is None
 
 
+def test_author_box_and_category_prompt():
+    from core import site_setup, prompts
+    from core.models import Product
+
+    box = site_setup.author_box_html()
+    assert "この記事を書いた人" in box
+    assert "運営者情報" in box                       # プロフィールへの導線
+
+    cats = [{"id": 3, "name": "デスク・作業環境", "slug": "desk"},
+            {"id": 7, "name": "健康・運動不足", "slug": "health"}]
+    p = prompts.category_pick_prompt(Product(brand="RANVOO", category="ネッククーラー"),
+                                     cats, "在宅ワークメディア")
+    assert "desk" in p and "health" in p
+    assert "slug" in p
+
+
+def test_bootstrap_pages(monkeypatch):
+    from core import site_setup, wordpress as wp
+
+    # privacy-policyは既存、about/contactは無い想定
+    existing = {"privacy-policy": {"id": 10, "status": "draft"}}
+    monkeypatch.setattr(wp, "get_page_by_slug", lambda slug, **k: existing.get(slug))
+    created = []
+
+    def fake_create(title, content, *, slug="", status="draft", **k):
+        created.append(slug)
+        return {"id": 100 + len(created), "link": "", "status": status}
+
+    monkeypatch.setattr(wp, "create_page", fake_create)
+    res = site_setup.bootstrap_pages()
+    actions = {r["slug"]: r["action"] for r in res}
+    assert "created" in actions["about"] and "created" in actions["contact"]
+    assert "exists" in actions["privacy-policy"]      # 既存は再作成しない
+    assert created == ["about", "contact"]
+
+
+def test_pick_category_ids(monkeypatch):
+    from core import pipeline
+    from core.models import Product, PipelineResult
+
+    cats = [{"id": 1, "name": "未分類", "slug": "uncategorized"},
+            {"id": 3, "name": "デスク・作業環境", "slug": "desk"},
+            {"id": 4, "name": "作業ツール・効率化", "slug": "tools"}]
+    monkeypatch.setattr(pipeline.wordpress, "list_categories", lambda **k: cats)
+
+    class FakeGemini:
+        def __init__(self, out):
+            self.out = out
+
+        def generate(self, *a, **k):
+            return self.out
+
+    res = PipelineResult(product=Product())
+    # Geminiが有効slugを返す → そのID
+    ids = pipeline._pick_category_ids(Product(brand="X"), res, FakeGemini("desk"))
+    assert ids == [3]
+    # 不正な返答 → default_category_slug(tools)にフォールバック
+    ids = pipeline._pick_category_ids(Product(brand="X"), res, FakeGemini("???"))
+    assert ids == [4]
+
+
 def test_article_body_prompt_depth():
     from core import prompts
     from core.models import Product
