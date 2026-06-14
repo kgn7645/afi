@@ -37,6 +37,9 @@ class Settings:
         self.rakuten_access_key = os.getenv("RAKUTEN_ACCESS_KEY", "").strip()
         self.rakuten_affiliate_id = os.getenv("RAKUTEN_AFFILIATE_ID", "").strip()
 
+        # キュー: Googleスプレッドシートの「ウェブに公開(CSV)」URL（設定時はこちらを優先）
+        self.queue_sheet_csv_url = os.getenv("QUEUE_SHEET_CSV_URL", "").strip()
+
         # IndexNow（Bing/Yandex等への即時インデックス通知）用キー
         self.indexnow_key = os.getenv("INDEXNOW_KEY", "").strip()
         # キーファイルの設置URL（未指定なら https://<host>/<key>.txt を仮定）

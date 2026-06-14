@@ -58,6 +58,10 @@ python batch.py --no-wp                      # WP送らず確認のみ
 キューCSVの列: `brand,category,model_number,product_name,price,company_hint,url,affiliate_link_html`
 （`brand`+`category` か `url` があれば最小限でOK。リンクは未指定なら楽天検索で自動生成）
 
+**Googleスプレッドシートをキューにする（推奨・Issue #32）**：シートを「ウェブに公開（CSV）」し、
+そのURLを `.env` の `QUEUE_SHEET_CSV_URL` に設定すると、レビュー担当がブラウザで商品を追記するだけで
+バッチが拾う。設定・運用は [docs/issue-32-sheet-queue.md](./docs/issue-32-sheet-queue.md) 参照。
+
 cron例（毎朝6時に15件・サーバー常駐運用、Issue #21で整備）:
 ```
 0 6 * * *  cd /path/to/affiliate-automation && .venv/bin/python batch.py --limit 15 >> data/batch.log 2>&1

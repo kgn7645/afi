@@ -172,3 +172,34 @@ def test_indexnow_submit_payload(monkeypatch):
 def test_indexnow_submit_noop():
     from core import indexnow
     assert indexnow.submit([], key="x")["status"] == "noop"
+
+
+def test_sheet_queue_is_url():
+    from core import sheet_queue
+    assert sheet_queue.is_url("https://docs.google.com/x") is True
+    assert sheet_queue.is_url("data/queue.csv") is False
+
+
+def test_sheet_queue_fetch_rows(monkeypatch):
+    from core import sheet_queue
+
+    class FakeResp:
+        content = "brand,category\nKLOUDIC,除湿機\nRANVOO,ネッククーラー\n".encode("utf-8")
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(sheet_queue.requests, "get", lambda url, timeout: FakeResp())
+    rows = sheet_queue.fetch_rows("https://docs.google.com/x/pub?output=csv")
+    assert len(rows) == 2
+    assert rows[0]["brand"] == "KLOUDIC" and rows[1]["category"] == "ネッククーラー"
+
+
+def test_batch_load_queue_dispatches(monkeypatch, tmp_path):
+    from core import batch
+    # URL → sheet_queue.fetch_rows
+    monkeypatch.setattr(batch.sheet_queue, "fetch_rows", lambda url: [{"brand": "X"}])
+    assert batch.load_queue("https://docs.google.com/x")[0]["brand"] == "X"
+    # パス → ローカルCSV
+    q = tmp_path / "q.csv"
+    q.write_text("brand,category\nY,扇風機\n", encoding="utf-8")
+    assert batch.load_queue(str(q))[0]["brand"] == "Y"

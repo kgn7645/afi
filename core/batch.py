@@ -11,7 +11,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from . import pipeline
+from . import pipeline, sheet_queue
 from .config import ROOT
 from .gemini_client import GeminiClient
 
@@ -58,6 +58,13 @@ def read_queue(path: str | Path) -> list[dict]:
         return [dict(row) for row in csv.DictReader(f)]
 
 
+def load_queue(source: str | Path) -> list[dict]:
+    """キューを読み込む。URLならGoogleスプレッドシート公開CSV、それ以外はローカルCSV。"""
+    if sheet_queue.is_url(str(source)):
+        return sheet_queue.fetch_rows(str(source))
+    return read_queue(source)
+
+
 def run_batch(
     *,
     queue_path: str | Path,
@@ -67,7 +74,7 @@ def run_batch(
     skip_dedup: bool = False,
 ) -> dict:
     """キューを処理。 {generated, skipped_dup, failed, items[]} を返す。"""
-    rows = read_queue(queue_path)
+    rows = load_queue(queue_path)
     processed = set() if skip_dedup else load_processed_keys()
     seen: set[str] = set()
     gemini = GeminiClient()  # レート制御を共有するため使い回す
