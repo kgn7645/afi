@@ -84,9 +84,11 @@ def build_amazon_button(amazon_url: str, label: str = "Amazonで見る") -> str:
     href = html.escape(amazon_url, quote=True)
     return (
         '\n<div class="affiliate-link amazon-cta" style="text-align:center;margin:28px 0;">\n'
-        f'  <a href="{href}" target="_blank" rel="nofollow noopener sponsored" '
+        f'  <a class="amazon-cta-btn" href="{href}" target="_blank" '
+        'rel="nofollow noopener sponsored" '
         'style="display:inline-block;background:#ff9900;color:#111;font-weight:bold;'
-        'text-decoration:none;padding:14px 32px;border-radius:8px;font-size:1.1em;">'
+        "text-decoration:none;padding:14px 32px;border-radius:8px;font-size:1.1em;"
+        'box-shadow:0 2px 6px rgba(0,0,0,.15);">'
         f"{html.escape(label)}</a>\n"
         "</div>\n"
     )
@@ -100,18 +102,22 @@ def build_amazon_card(amazon_url: str, title: str, image_url: str,
     t = html.escape(title)
     rel = 'target="_blank" rel="nofollow noopener sponsored"'
     return (
-        '\n<div class="amazon-card" style="display:flex;gap:16px;align-items:center;'
-        "border:1px solid #e3e3e3;border-radius:12px;padding:16px;margin:28px 0;"
-        'max-width:640px;background:#fff;">\n'
+        '\n<div class="amazon-card" style="display:flex;flex-wrap:wrap;gap:16px;'
+        "align-items:center;border:1px solid #e3e3e3;border-radius:12px;padding:16px;"
+        "margin:28px 0;max-width:640px;background:#fff;"
+        'box-shadow:0 1px 5px rgba(0,0,0,.08);">\n'
         f'  <a href="{href}" {rel} style="flex:0 0 120px;">'
         f'<img src="{img}" alt="{t}" loading="lazy" '
         'style="width:120px;height:120px;object-fit:contain;"></a>\n'
-        '  <div style="flex:1;min-width:0;">\n'
-        f'    <a href="{href}" {rel} style="display:block;color:#0a58ca;font-weight:bold;'
+        '  <div style="flex:1 1 220px;min-width:0;">\n'
+        f'    <a class="amazon-card-title" href="{href}" {rel} '
+        'style="display:block;color:#0a58ca;font-weight:bold;'
         f'text-decoration:none;line-height:1.5;margin-bottom:12px;">{t}</a>\n'
-        f'    <a href="{href}" {rel} style="display:inline-block;background:#ff9900;'
+        f'    <a class="amazon-cta-btn" href="{href}" {rel} '
+        'style="display:inline-block;background:#ff9900;'
         "color:#111;font-weight:bold;text-decoration:none;padding:10px 24px;"
-        f'border-radius:8px;">{html.escape(label)}</a>\n'
+        'border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.15);">'
+        f"{html.escape(label)}</a>\n"
         "  </div>\n"
         "</div>\n"
     )
