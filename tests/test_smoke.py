@@ -294,6 +294,37 @@ def test_article_body_prompt_depth():
     assert "比喩" in p                             # 導入の引き込み
 
 
+def test_first_image_src():
+    from core import wordpress as wp
+    body = '<p>x</p><figure><img alt="a" src="https://x/img1.jpg" width="100"></figure><img src="https://x/2.jpg">'
+    assert wp.first_image_src(body) == "https://x/img1.jpg"
+    assert wp.first_image_src("<p>no image</p>") == ""
+
+
+def test_set_featured_media(monkeypatch):
+    from core import wordpress as wp
+    s = wp.get_settings()
+    monkeypatch.setattr(s, "wp_base_url", "https://example.test", raising=False)
+    monkeypatch.setattr(s, "wp_username", "u", raising=False)
+    monkeypatch.setattr(s, "wp_app_password", "p", raising=False)
+
+    captured = {}
+
+    class Resp:
+        def raise_for_status(self): pass
+        def json(self): return {"id": 30, "featured_media": captured.get("fm")}
+
+    def fake_post(url, **k):
+        captured["url"] = url
+        captured["fm"] = k["json"]["featured_media"]
+        return Resp()
+
+    monkeypatch.setattr(wp.requests, "post", fake_post)
+    out = wp.set_featured_media(30, 99)
+    assert captured["url"].endswith("/posts/30")
+    assert out["featured_media"] == 99
+
+
 def test_upload_image_and_featured_media(monkeypatch):
     from core import wordpress as wp
     from core.models import Article
