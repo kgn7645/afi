@@ -17,7 +17,8 @@ import uuid
 
 import requests
 
-from core import note_client, note_export, pipeline
+from core import note_client, note_export, pipeline, product_extractor
+from core.config import get_settings
 
 # 1記事に埋め込む商品画像の最大枚数
 MAX_NOTE_IMAGES = 3
@@ -70,17 +71,32 @@ def main() -> None:
         return
 
     print(f"タイトル: {result.article.title}")
-    # 商品画像をnoteへアップロード（任意）
-    note_images = _upload_product_images(result.article.product_image_urls)
 
-    body_html, body_len = note_export.build_note_html(result.article, result.product, note_images)
-    print(f"本文長: {body_len}文字 / リンク: {'あり' if result.article.affiliate_click_url else 'なし'} / 画像: {len(note_images)}枚")
+    # Amazonカードモード: Amazon URL＋自分のタグがあれば、タグ付きURLを本文に置く
+    #（noteで末尾Enter→Amazonカード化。あなたのタグで収益化／カードに画像も含まれる）
+    s = get_settings()
+    use_amazon = "amazon." in args.url and s.amazon_associate_tag
 
-    res = note_client.create_draft(result.article.title, body_html, body_len)
-    print("✅ note下書きを作成しました")
-    print(f"   下書きID: {res['id']}")
-    if res["edit_url"]:
-        print(f"   編集URL: {res['edit_url']}")
+    if use_amazon:
+        # Amazonカードモード: 空下書き作成→カード生成(自分のタグ)→本文に埋め込み（Enter不要）
+        amazon_url = product_extractor.amazon_affiliate_url(args.url, s.amazon_associate_tag)
+        note = note_client.create_empty_note()
+        emb = note_client.get_external_embed(note["key"], amazon_url)
+        amazon_embed = {"url": amazon_url, "key": emb["key"], "html": emb["html_for_embed"]}
+        body_html, body_len = note_export.build_note_html(
+            result.article, result.product, amazon_embed=amazon_embed)
+        note_client.save_draft(note["id"], result.article.title, body_html, body_len)
+        edit_url = f"https://editor.note.com/notes/{note['key']}/edit/"
+        print(f"本文長: {body_len}文字 / Amazonカード(タグ={s.amazon_associate_tag}) 3箇所・自動埋め込み")
+        print("✅ note下書きを作成しました")
+        print(f"   下書きID: {note['id']}  編集URL: {edit_url}")
+    else:
+        note_images = _upload_product_images(result.article.product_image_urls)
+        body_html, body_len = note_export.build_note_html(result.article, result.product, note_images)
+        print(f"本文長: {body_len}文字 / もしもリンク＋画像{len(note_images)}枚")
+        res = note_client.create_draft(result.article.title, body_html, body_len)
+        print("✅ note下書きを作成しました")
+        print(f"   下書きID: {res['id']}  編集URL: {res['edit_url']}")
     print("   → note の「下書き」一覧で確認し、問題なければnote側で公開してください。")
 
 

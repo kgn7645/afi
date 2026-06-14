@@ -29,6 +29,19 @@ def extract_asin(url: str) -> str:
     return m.group(1) if m else ""
 
 
+def amazon_affiliate_url(url: str, tag: str) -> str:
+    """Amazon商品URLを、アソシエイトタグ付きのクリーンなURLにする。
+
+    例: https://www.amazon.co.jp/dp/<ASIN>?tag=<tag>
+    ASINが取れない場合は元URLに ?tag= を付与してフォールバック。
+    """
+    asin = extract_asin(url)
+    if asin:
+        return f"https://www.amazon.co.jp/dp/{asin}?tag={tag}"
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}tag={tag}"
+
+
 def _price_to_int(text: str) -> int | None:
     digits = re.sub(r"[^\d]", "", text or "")
     return int(digits) if digits else None

@@ -241,6 +241,26 @@ def test_note_html_links_and_images():
     assert 'noopener" target="_blank"><img' in html           # 画像自体がクリック可能
 
 
+def test_amazon_affiliate_url():
+    from core import product_extractor as pe
+    u = pe.amazon_affiliate_url("https://www.amazon.co.jp/dp/B0GS1PQ22W/ref=xxx", "chance274-22")
+    assert u == "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22"
+
+
+def test_note_html_amazon_card_mode():
+    from core import note_export
+    from core.models import Article, Product
+    body = "\n".join(["## はじめに", "x", "## とは", "x", "## おすすめ商品レビュー",
+                       "x", "## 他メーカー比較", "x", "## まとめ", "x"])
+    art = Article(raw_sections={"body_md": body})
+    embed = {"url": "https://www.amazon.co.jp/dp/B0GS1PQ22W?tag=chance274-22",
+             "key": "emb00xyz", "html": '<span><div class="external-article-widget">card</div></span>'}
+    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"), amazon_embed=embed)
+    assert html.count('embedded-content-key="emb00xyz"') == 3   # カード3箇所
+    assert html.count("external-article-widget") == 3           # カード本体3箇所
+    assert "af.moshimo.com" not in html                          # Amazonモードではもしもリンクなし
+
+
 def test_get_image_size_png():
     from core import note_export
     # PNGヘッダ(幅=300,高さ=200)を最小構成で作る
