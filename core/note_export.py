@@ -69,39 +69,55 @@ def _bold(escaped: str) -> str:
     return escaped.replace("**", "")  # 対になっていない ** が文字列として残らないよう除去
 
 
+# アフィリエイトリンクを挿入するh2見出しの位置（1始まり）。
+# テンプレ構成: 1=はじめに 2=とは 3=おすすめ商品 4=他メーカー比較 5=まとめ
+# → 2番目(はじめに後)と4番目(商品紹介後)の見出し直前、および末尾(まとめ後)の計3箇所。
+_LINK_BEFORE_H2 = {2, 4}
+
+
 def build_note_html(article: Article, product: Product) -> tuple[str, int]:
-    """note内部API投入用のHTML本文と本文文字数を返す。"""
+    """note内部API投入用のHTML本文と本文文字数を返す。
+
+    参考記事に合わせ、アフィリエイトリンクを本文中の複数箇所(計3箇所)に配置する。
+    """
     body_md = article.raw_sections.get("body_md", "")
     blocks: list[str] = []
     text_len = 0
+
+    label = " ".join(p for p in (product.brand, product.category) if p) or "この商品"
 
     def add(tag: str, raw_text: str) -> None:
         nonlocal text_len
         blocks.append(_block(tag, _inline(raw_text)))
         text_len += len(raw_text)
 
-    add("p", DISCLOSURE)
+    def add_link() -> None:
+        nonlocal text_len
+        if not article.affiliate_click_url:
+            return
+        uid = str(uuid.uuid4())
+        inner = f'▼ <a href="{_html.escape(article.affiliate_click_url)}">{_html.escape(label)}をチェックする</a>'
+        blocks.append(f'<p name="{uid}" id="{uid}">{inner}</p>')
+        text_len += len(label) + 10
 
+    h2_count = 0
     for line in body_md.splitlines():
         s = line.strip()
         if not s:
             continue
         if s.startswith("### "):
             add("h3", s[4:])
-        elif s.startswith("## "):
-            add("h2", s[3:])
-        elif s.startswith("# "):
-            add("h2", s[2:])
+        elif s.startswith("## ") or s.startswith("# "):
+            h2_count += 1
+            if h2_count in _LINK_BEFORE_H2:
+                add_link()  # 直前のセクション末尾にリンク
+            add("h2", s[3:] if s.startswith("## ") else s[2:])
         elif s.startswith(("- ", "* ", "・")):
             add("p", "・" + s.lstrip("-*・ ").strip())
         else:
             add("p", s)
 
-    if article.affiliate_click_url:
-        label = " ".join(p for p in (product.brand, product.category) if p) or "この商品"
-        link = f'▼ <a href="{_html.escape(article.affiliate_click_url)}">{_html.escape(label)}をチェック</a>'
-        uid = str(uuid.uuid4())
-        blocks.append(f'<p name="{uid}" id="{uid}">{link}</p>')
-        text_len += len(label) + 8
+    add_link()           # まとめ後（末尾）
+    add("p", DISCLOSURE)  # PR表記は末尾（参考記事に合わせる）
 
     return "".join(blocks), text_len
