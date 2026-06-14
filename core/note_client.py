@@ -17,8 +17,9 @@ import requests
 from .config import get_settings
 
 _BASE = "https://note.com/api/v1/text_notes"
+_PRESIGN = "https://note.com/api/v3/images/upload/presigned_post"
+# content-type は付けない（json= / files= で requests が自動設定する）
 _HEADERS = {
-    "content-type": "application/json",
     "origin": "https://editor.note.com",
     "referer": "https://editor.note.com/",
     "x-requested-with": "XMLHttpRequest",
@@ -38,6 +39,31 @@ def _session() -> requests.Session:
     sess.headers.update(_HEADERS)
     sess.cookies.set("_note_session_v5", s.note_session, domain=".note.com")
     return sess
+
+
+def upload_image(image_bytes: bytes, filename: str, content_type: str = "image/jpeg",
+                 *, timeout: int = 30) -> str:
+    """画像をnoteにアップロードし、公開URL(assets.st-note.com/...)を返す。
+
+    note方式: ①presigned_postで署名付きS3 POST情報を取得 → ②S3へ実ファイルをPOST。
+    """
+    sess = _session()
+    # ① 署名付きPOST情報を取得（multipartで filename を送る）
+    r = sess.post(_PRESIGN, files={"filename": (None, filename)}, timeout=timeout)
+    r.raise_for_status()
+    d = r.json()["data"]
+    action, post_fields, final_url = d["action"], d["post"], d["url"]
+
+    # ② S3 へ実ファイルをアップロード（noteのCookieは送らない）
+    s3 = requests.post(
+        action,
+        data=post_fields,
+        files={"file": (filename, image_bytes, content_type)},
+        timeout=timeout,
+    )
+    if s3.status_code not in (200, 201, 204):
+        raise RuntimeError(f"画像アップロード(S3)失敗 {s3.status_code}: {s3.text[:200]}")
+    return final_url
 
 
 def create_draft(title: str, body_html: str, body_length: int, *, timeout: int = 30) -> dict:

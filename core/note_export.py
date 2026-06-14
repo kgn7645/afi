@@ -69,18 +69,54 @@ def _bold(escaped: str) -> str:
     return escaped.replace("**", "")  # 対になっていない ** が文字列として残らないよう除去
 
 
+def get_image_size(data: bytes) -> tuple[int, int]:
+    """PNG/JPEGのバイト列から (幅, 高さ) を読む。失敗時は (620, 620)。"""
+    try:
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
+            return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+        if data[:2] == b"\xff\xd8":  # JPEG
+            i = 2
+            while i + 9 < len(data):
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = data[i + 1]
+                if marker in (0xC0, 0xC1, 0xC2, 0xC3):
+                    h = int.from_bytes(data[i + 5:i + 7], "big")
+                    w = int.from_bytes(data[i + 7:i + 9], "big")
+                    return w, h
+                i += 2 + int.from_bytes(data[i + 2:i + 4], "big")
+    except Exception:  # noqa: BLE001
+        pass
+    return 620, 620
+
+
+def _image_figure(url: str, width: int, height: int) -> str:
+    uid = str(uuid.uuid4())
+    # note本文の表示幅(約620px)に合わせて縮小
+    if width > 620:
+        height = max(1, round(height * 620 / width))
+        width = 620
+    return (f'<figure name="{uid}" id="{uid}">'
+            f'<img src="{_html.escape(url)}" alt="" width="{width}" height="{height}">'
+            f"<figcaption></figcaption></figure>")
+
+
 # アフィリエイトリンクを挿入するh2見出しの位置（1始まり）。
 # テンプレ構成: 1=はじめに 2=とは 3=おすすめ商品 4=他メーカー比較 5=まとめ
 # → 2番目(はじめに後)と4番目(商品紹介後)の見出し直前、および末尾(まとめ後)の計3箇所。
 _LINK_BEFORE_H2 = {2, 4}
 
 
-def build_note_html(article: Article, product: Product) -> tuple[str, int]:
+def build_note_html(article: Article, product: Product,
+                    note_images: list[tuple[str, int, int]] | None = None) -> tuple[str, int]:
     """note内部API投入用のHTML本文と本文文字数を返す。
 
-    参考記事に合わせ、アフィリエイトリンクを本文中の複数箇所(計3箇所)に配置する。
+    - アフィリエイトリンクを本文中の複数箇所(計3箇所)に配置（参考記事に合わせ）
+    - note_images（アップロード済みの(URL,幅,高さ)）があれば商品紹介セクションに画像を挿入
     """
     body_md = article.raw_sections.get("body_md", "")
+    note_images = note_images or []
     blocks: list[str] = []
     text_len = 0
 
@@ -112,6 +148,9 @@ def build_note_html(article: Article, product: Product) -> tuple[str, int]:
             if h2_count in _LINK_BEFORE_H2:
                 add_link()  # 直前のセクション末尾にリンク
             add("h2", s[3:] if s.startswith("## ") else s[2:])
+            if h2_count == 3:  # おすすめ商品レビューの直後に商品画像
+                for url, w, h in note_images:
+                    blocks.append(_image_figure(url, w, h))
         elif s.startswith(("- ", "* ", "・")):
             add("p", "・" + s.lstrip("-*・ ").strip())
         else:

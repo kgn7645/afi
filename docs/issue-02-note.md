@@ -57,3 +57,15 @@ python note_post.py --brand SOUNDPEATS --category ワイヤレスイヤホン   
 ```
 作成後、noteの「下書き」一覧に入る → 内容を確認して**note側で公開**する。
 （cronでの無人投稿はCookie失効リスクのため非推奨。投稿したい時に手動実行する運用を推奨）
+
+### 記事の構成（参考記事 amaviser に準拠）
+- **アフィリエイトリンクを3箇所**配置（はじめに後／商品紹介後／まとめ後）。
+  もしも経由の収益を維持するため、noteのリンクカード（note独自Amazonタグ）ではなく
+  `af.moshimo.com` のプレーンリンクを使う。
+- **商品画像を最大3枚**、商品紹介セクションに埋め込み。
+  楽天APIで得た商品画像を note のCDN(assets.st-note.com)へアップロードして使用。
+  - 画像アップロードは note の presigned POST 方式（`/api/v3/images/upload/presigned_post`
+    → S3へPOST）。`core/note_client.py:upload_image`。
+- PR表記は末尾。
+
+> 見出し画像(eyecatch)は未対応（本文の先頭画像がサムネイルに使われることが多い）。必要なら別途対応。

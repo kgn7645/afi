@@ -225,6 +225,27 @@ def test_note_export_html():
     assert length > 0
 
 
+def test_note_html_links_and_images():
+    from core import note_export
+    from core.models import Article, Product
+    body = "\n".join(["## はじめに", "x", "## とは", "x", "## おすすめ商品レビュー",
+                       "x", "## 他メーカー比較", "x", "## まとめ", "x"])
+    art = Article(affiliate_click_url="https://af.moshimo.com/af/c/click?a_id=1&url=u",
+                  raw_sections={"body_md": body})
+    imgs = [("https://assets.st-note.com/img/a.png", 1240, 826)]
+    html, _ = note_export.build_note_html(art, Product(brand="X", category="Y"), imgs)
+    assert html.count("af.moshimo.com") == 3                  # リンク3箇所
+    assert 'src="https://assets.st-note.com/img/a.png"' in html  # 画像埋め込み
+    assert 'width="620"' in html                              # 620pxへ縮小
+
+
+def test_get_image_size_png():
+    from core import note_export
+    # PNGヘッダ(幅=300,高さ=200)を最小構成で作る
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (300).to_bytes(4, "big") + (200).to_bytes(4, "big")
+    assert note_export.get_image_size(png) == (300, 200)
+
+
 def test_no_stray_bold_markers():
     """対になっていない ** が文字列として残らない（note/WP両方）。"""
     from core import note_export
