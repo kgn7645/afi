@@ -62,6 +62,36 @@ def amazon_url_alive(url: str, *, timeout: int = 15) -> bool:
     return True
 
 
+def fetch_amazon_product_card(url: str, *, timeout: int = 15) -> dict | None:
+    """商品ページから商品名とメイン画像URLを取得し {title, image} を返す。
+
+    noteのような自前カードHTMLを組むための材料。
+    無効ASIN(404/「何かお探し」)・bot対策ブロック・画像/商品名欠落時は None。
+    """
+    try:
+        r = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
+    except requests.RequestException:
+        return None
+    if r.status_code != 200 or "何かお探し" in r.text:
+        return None
+    text = r.text
+
+    m = re.search(r'id="productTitle"[^>]*>\s*([^<]+)', text)
+    title = m.group(1).strip() if m else ""
+    if not title:
+        m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)', text)
+        title = m.group(1).strip() if m else ""
+
+    m = (re.search(r'"hiRes":"(https://[^"]+\.jpg)"', text)
+         or re.search(r'data-old-hires="(https://[^"]+\.jpg)"', text)
+         or re.search(r'"large":"(https://[^"]+\.jpg)"', text))
+    image = m.group(1) if m else ""
+
+    if not (title and image):
+        return None
+    return {"title": title, "image": image}
+
+
 def _price_to_int(text: str) -> int | None:
     digits = re.sub(r"[^\d]", "", text or "")
     return int(digits) if digits else None

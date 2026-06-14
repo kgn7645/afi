@@ -92,17 +92,37 @@ def build_amazon_button(amazon_url: str, label: str = "Amazonで見る") -> str:
     )
 
 
-# Amazonボタンを差し込む見出しアンカー（この直前に挿入）。+末尾に1つ＝計3箇所。
+def build_amazon_card(amazon_url: str, title: str, image_url: str,
+                      *, label: str = "Amazonで見る") -> str:
+    """商品画像＋商品名＋CTAボタンの自前カード（noteのカード相当）を返す。"""
+    href = html.escape(amazon_url, quote=True)
+    img = html.escape(image_url, quote=True)
+    t = html.escape(title)
+    rel = 'target="_blank" rel="nofollow noopener sponsored"'
+    return (
+        '\n<div class="amazon-card" style="display:flex;gap:16px;align-items:center;'
+        "border:1px solid #e3e3e3;border-radius:12px;padding:16px;margin:28px 0;"
+        'max-width:640px;background:#fff;">\n'
+        f'  <a href="{href}" {rel} style="flex:0 0 120px;">'
+        f'<img src="{img}" alt="{t}" loading="lazy" '
+        'style="width:120px;height:120px;object-fit:contain;"></a>\n'
+        '  <div style="flex:1;min-width:0;">\n'
+        f'    <a href="{href}" {rel} style="display:block;color:#0a58ca;font-weight:bold;'
+        f'text-decoration:none;line-height:1.5;margin-bottom:12px;">{t}</a>\n'
+        f'    <a href="{href}" {rel} style="display:inline-block;background:#ff9900;'
+        "color:#111;font-weight:bold;text-decoration:none;padding:10px 24px;"
+        f'border-radius:8px;">{html.escape(label)}</a>\n'
+        "  </div>\n"
+        "</div>\n"
+    )
+
+
+# Amazonカード/ボタンを差し込む見出しアンカー（この直前に挿入）。+末尾＝計3箇所。
 _AMAZON_ANCHORS = ["<h2>おすすめ商品", "<h2>他メーカー"]
 
 
-def insert_amazon_buttons(body_html: str, amazon_url: str,
-                          *, label: str = "Amazonで見る") -> str:
-    """Amazon CTAボタンを本文の複数箇所（レビュー前・比較前・末尾）に差し込む。
-
-    note の3箇所配置と統一。アンカーが無い場合でも末尾に最低1つは入る。
-    """
-    block = build_amazon_button(amazon_url, label)
+def _insert_block_at_spots(body_html: str, block: str) -> str:
+    """note同様の3箇所（レビュー前・比較前・末尾）に block を差し込む。"""
     out = body_html
     # 後ろのアンカーから挿入してインデックスのズレを防ぐ
     positions = sorted(
@@ -110,4 +130,15 @@ def insert_amazon_buttons(body_html: str, amazon_url: str,
     )
     for idx in positions:
         out = out[:idx] + block + out[idx:]
-    return out + block  # 末尾CTA
+    return out + block  # 末尾
+
+
+def insert_amazon_buttons(body_html: str, amazon_url: str,
+                          *, label: str = "Amazonで見る") -> str:
+    """Amazon CTAボタンを本文3箇所に差し込む（画像が取れない時のフォールバック）。"""
+    return _insert_block_at_spots(body_html, build_amazon_button(amazon_url, label))
+
+
+def insert_amazon_cards(body_html: str, card_html: str) -> str:
+    """Amazon商品カードを本文3箇所に差し込む。"""
+    return _insert_block_at_spots(body_html, card_html)
