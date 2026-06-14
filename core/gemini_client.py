@@ -51,3 +51,33 @@ class GeminiClient:
                 if attempt < max_retries - 1:
                     time.sleep(wait)
         raise RuntimeError(f"Gemini生成に失敗しました: {last_err}")
+
+    def generate_grounded(self, prompt: str, *, temperature: float = 0.4,
+                          max_retries: int = 2) -> str:
+        """Google検索グラウンディング付き生成（Issue #15: 誤生成対策）。
+
+        グラウンディング不可（SDK/モデル非対応・レート等）の場合は
+        通常生成にフォールバックする。
+        """
+        client = self._ensure_client()
+        try:
+            from google.genai import types
+
+            tool = types.Tool(google_search=types.GoogleSearch())
+            config = types.GenerateContentConfig(temperature=temperature, tools=[tool])
+            last_err: Exception | None = None
+            for attempt in range(max_retries):
+                self._throttle()
+                try:
+                    resp = client.models.generate_content(
+                        model=self.settings.gemini_model, contents=prompt, config=config,
+                    )
+                    return (resp.text or "").strip()
+                except Exception as e:  # noqa: BLE001
+                    last_err = e
+                    if attempt < max_retries - 1:
+                        time.sleep(10 * (attempt + 1))
+            raise last_err if last_err else RuntimeError("grounding失敗")
+        except Exception:  # noqa: BLE001
+            # 検索グラウンディングが使えない環境では通常生成にフォールバック
+            return self.generate(prompt, temperature=temperature)

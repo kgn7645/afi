@@ -68,6 +68,13 @@ def run(
         _log(result, wp_status="")
         return result
 
+    gemini = gemini or GeminiClient()
+
+    # B+: 企業情報グラウンディング（Issue #15: どこの国の誤生成対策）
+    if (get_rules().get("article", {}).get("ground_company", True)
+            and product.brand and not product.company_hint):
+        product.company_hint = _ground_company(product, gemini, result)
+
     # C: 記事生成
     article = content_generator.generate_article(product, gemini=gemini)
 
@@ -117,6 +124,24 @@ def run(
         _log(result, wp_status="not_posted")
 
     return result
+
+
+def _ground_company(product: Product, gemini: GeminiClient,
+                    result: PipelineResult) -> str:
+    """ブランドの企業情報をWeb検索で裏付けてcompany_hintを返す（Issue #15）。
+
+    失敗時は空文字（ヒント無しで継続）。
+    """
+    try:
+        info = gemini.generate_grounded(
+            prompts.company_grounding_prompt(product.brand, product.category))
+        info = (info or "").strip()
+        if info:
+            result.warnings.append("企業情報をWeb検索でグラウンディングしました")
+            return info
+    except Exception as e:  # noqa: BLE001
+        result.warnings.append(f"企業情報グラウンディングに失敗（ヒント無しで継続）: {e}")
+    return ""
 
 
 def _pick_category_ids(product: Product, result: PipelineResult,
