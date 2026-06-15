@@ -104,9 +104,19 @@ candidates:
   # 売れ筋ランキングのノード（kitchen/<nodeId> 形式 or フルURL）
   ranking_nodes:
     - kitchen/4083001          # 除湿機
+    - "https://www.amazon.co.jp/gp/bestsellers/?ref_=nav_em_cs_bestsellers_0_1_1_2"  # 総合売れ筋
+    - "https://www.amazon.co.jp/ranking?tag=googhydr-22&ref=pd_sl_4e56zly8mi_e"      # ランキングハブ
   # 参照元URL（選定シートのリサーチソース）。各ページからAmazonリンク(/dp/ASIN,
-  # amzn.to)を抽出して候補化する。マイベスト/360LIFE/LDK/GET NAVI/トレンド記事など。
-  source_urls: []
+  # amzn.to)を抽出して候補化する。マイベスト/360LIFE/LDK/GET NAVI など。
+  # ※ページ単体を読むだけ（記事内リンクまでは辿らない）。一覧/記事URLほど有効。
+  source_urls:
+    - "https://my-best.com/"
+    - "https://360life.shinyusha.co.jp/list/amazon-sale"   # Amazonセール速報
+    - "https://360life.shinyusha.co.jp/list/ldk"           # LDK ベストバイ
+    - "https://360life.shinyusha.co.jp/"
+    - "https://getnavi.jp/"
+  # Googleトレンド(trends.google.co.jp)はJSアプリでAmazonリンクが無く自動抽出不可。
+  # 手動のキーワード発掘に使い、見つけた語は candidates.keywords に追加してください。
 
 # --- プロンプト（Web管理画面/オーバーライドで上書き可能） ---
 prompts:
