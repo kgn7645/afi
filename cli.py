@@ -61,6 +61,8 @@ def main() -> None:
         print(f"KW      : {', '.join(result.article.meta_keywords)}")
     if result.wp_post_id:
         print(f"WP投稿ID: {result.wp_post_id}  編集: {result.wp_edit_link}")
+    if result.note_id:
+        print(f"note下書き: {result.note_id}  編集: {result.note_edit_url}")
 
     # 本文プレビューをHTMLファイルに保存（ブラウザで全文確認用）
     if result.article and result.article.body_html:

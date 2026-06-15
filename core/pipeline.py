@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import (affiliate, canva, content_generator, eyecatch, internal_links,
-               moshimo_link, product_extractor, product_selector, prompts, qa,
-               sheet_log, site_setup, wordpress)
+               moshimo_link, note_publish, product_extractor, product_selector,
+               prompts, qa, sheet_log, site_setup, wordpress)
 from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
 from .models import PipelineResult, Product
@@ -127,6 +127,13 @@ def run(
                                         featured_media=featured_id, categories=category_ids)
             result.wp_post_id = wp["id"]
             result.wp_edit_link = wp["edit_link"]
+            # note 同時下書き（Issue #2拡張・NOTE_SESSION設定時のみ）
+            if get_rules().get("note", {}).get("enabled", True):
+                nd = note_publish.create_note_draft(
+                    article, product, source_url=product.source_url, result=result)
+                if nd:
+                    result.note_id = nd["id"]
+                    result.note_edit_url = nd["edit_url"]
             _log(result, wp_status=wp.get("status", ""))
         except Exception as e:  # noqa: BLE001
             result.warnings.append(f"WordPress投稿に失敗: {e}")
