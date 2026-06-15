@@ -56,6 +56,9 @@
     <textarea name="keywords" rows="4" placeholder="ネッククーラー&#10;卓上扇風機">{{ d.keywords }}</textarea>
     <label>売れ筋ランキング（カテゴリのノード。kitchen/4083001 形式 or フルURL。1行に1つ）</label>
     <textarea name="ranking_nodes" rows="3" placeholder="kitchen/4083001">{{ d.ranking_nodes }}</textarea>
+    <label>参照元URL（まとめ/ランキング/トレンド記事。1行に1つ）</label>
+    <textarea name="source_urls" rows="3" placeholder="https://my-best.com/...&#10;https://the360.life/...">{{ d.source_urls }}</textarea>
+    <p class="hint">マイベスト・360LIFE・LDK・GET NAVI 等の記事URLを貼ると、ページ内のAmazonリンク（商品）を自動で候補化します。</p>
     <label>1ソースあたりの取得数（per_source）</label>
     <input type="number" name="per_source" value="{{ d.per_source }}">
     <label>1回の上限（max_total）</label>
@@ -74,6 +77,10 @@
     <input type="number" name="min_price" value="{{ d.min_price }}">
     <label>除外キーワード（1行に1つ。商品名/カテゴリに含むと除外）</label>
     <textarea name="exclude_keywords" rows="4">{{ d.exclude_keywords }}</textarea>
+    <label>除外する大手ブランド（1行に1つ。無名・中華・マイナー優先のため大手を弾く）</label>
+    <textarea name="exclude_brands" rows="4" placeholder="パナソニック&#10;アイリスオーヤマ&#10;Anker">{{ d.exclude_brands }}</textarea>
+    <div class="chk"><input type="checkbox" name="seasonal_boost" {{ 'checked' if d.seasonal_boost }}>
+      季節物を優先（今の季節のキーワードを自動追加・上位表示）</div>
   </div>
 
   <div class="sec">

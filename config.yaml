@@ -21,6 +21,38 @@ selection:
     - スキンケア
   # 優先したい傾向（スコアリング用）。中華系・無名メーカーを優遇
   prefer_minor_maker: true
+  # 大手・有名メーカーは除外（無名・中華・マイナー優先という選定シート方針 ③）。
+  # 商品名/ブランド名にこれらを含む候補はクロール時点で足切りする
+  exclude_brands:
+    - パナソニック
+    - Panasonic
+    - シャープ
+    - SHARP
+    - アイリスオーヤマ
+    - ソニー
+    - SONY
+    - 象印
+    - タイガー魔法瓶
+    - 山善
+    - YAMAZEN
+    - ダイソン
+    - Dyson
+    - Anker
+    - アンカー
+    - 東芝
+    - 日立
+    - 三菱電機
+    - バルミューダ
+    - BALMUDA
+    - 無印良品
+    - siroca
+    - シロカ
+    - iRobot
+    - アイロボット
+    - ニトリ
+  # 季節物を優先（選定シート「季節物は優先的に取り上げる」）。今の月の季節
+  # キーワードをクロールに自動追加し、該当候補をプールの上位に並べる
+  seasonal_boost: true
   # 参考にするリサーチソース（A作業の手動リサーチ用メモ。自動取得はしない）
   research_sources:
     - "Amazon 売れ筋ランキング / 欲しい物ランキング"
@@ -72,6 +104,9 @@ candidates:
   # 売れ筋ランキングのノード（kitchen/<nodeId> 形式 or フルURL）
   ranking_nodes:
     - kitchen/4083001          # 除湿機
+  # 参照元URL（選定シートのリサーチソース）。各ページからAmazonリンク(/dp/ASIN,
+  # amzn.to)を抽出して候補化する。マイベスト/360LIFE/LDK/GET NAVI/トレンド記事など。
+  source_urls: []
 
 # --- プロンプト（Web管理画面/オーバーライドで上書き可能） ---
 prompts:

@@ -51,20 +51,28 @@ def main() -> None:
         print("[crawl] 手動クロール要求なし。終了")
         return
 
-    cfg = get_rules().get("candidates", {})
+    rules = get_rules()
+    cfg = rules.get("candidates", {})
+    sel = rules.get("selection", {})
     keywords = cfg.get("keywords", [])
     nodes = cfg.get("ranking_nodes", [])
+    source_urls = cfg.get("source_urls", []) or []
     per_source = cfg.get("per_source", 10)
     max_total = args.limit or cfg.get("max_total", 40)
+    season = bool(sel.get("seasonal_boost", True))
 
     exclude = set() if args.dry else candidates.known_asins()
-    print(f"[crawl] keywords={len(keywords)} nodes={len(nodes)} "
-          f"既存除外={len(exclude)}件 …収集中")
+    sk = amazon_rank.seasonal_keywords() if season else []
+    print(f"[crawl] keywords={len(keywords)} nodes={len(nodes)} urls={len(source_urls)} "
+          f"季節={','.join(sk) or '無'} 既存除外={len(exclude)}件 …収集中")
 
-    found = amazon_rank.collect(keywords=keywords, nodes=nodes,
+    report: list[dict] = []
+    found = amazon_rank.collect(keywords=keywords, nodes=nodes, source_urls=source_urls,
                                 per_source=per_source, max_total=max_total,
-                                exclude_asins=exclude)
-    print(f"[crawl] 新規候補 {len(found)} 件")
+                                exclude_asins=exclude, season=season, report=report)
+    print(f"[crawl] 採用 {len(found)} 件 / 選定基準で足切り {len(report)} 件")
+    for r in report[:12]:
+        print(f"   ⛔ {r['reason']}: {r['title']}")
 
     if args.dry or not candidates.enabled():
         if not candidates.enabled() and not args.dry:
