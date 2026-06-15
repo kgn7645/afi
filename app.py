@@ -104,20 +104,24 @@ def generate(
 # 承認Webアプリ（Issue #12）: スマホ/PCで下書きを確認→公開/却下
 # ============================================================
 @app.get("/review", response_class=HTMLResponse)
-def review_list(request: Request, msg: str = ""):
+def review_list(request: Request, status: str = "draft", msg: str = ""):
     if not review.enabled():
         return templates.TemplateResponse(
-            "review.html", {"request": request, "disabled": True, "items": [], "msg": ""})
+            "review.html", {"request": request, "disabled": True, "items": [], "msg": "",
+                            "status": "draft"})
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
+    if status not in review.STATUS_LABELS:
+        status = "draft"
     try:
-        items = review.list_review_items()
+        items = review.list_review_items(status)
         err = ""
     except Exception as e:  # noqa: BLE001
-        items, err = [], f"下書きの取得に失敗: {e}"
+        items, err = [], f"記事の取得に失敗: {e}"
     return templates.TemplateResponse(
         "review.html",
-        {"request": request, "disabled": False, "items": items, "msg": msg, "error": err},
+        {"request": request, "disabled": False, "items": items, "msg": msg,
+         "error": err, "status": status},
     )
 
 
@@ -178,6 +182,19 @@ def review_reject(request: Request, post_id: int):
         msg = f"記事ID {post_id} を却下（ゴミ箱）しました。"
     except Exception as e:  # noqa: BLE001
         msg = f"却下に失敗: {e}"
+    return RedirectResponse(f"/review?msg={msg}", status_code=303)
+
+
+@app.post("/review/{post_id}/to_draft")
+def review_to_draft(request: Request, post_id: int):
+    """公開済みを下書きに戻す / ゴミ箱から復元（承認待ちへ）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    try:
+        wordpress.set_post_status(post_id, "draft")
+        msg = f"記事ID {post_id} を承認待ち（下書き）に戻しました。"
+    except Exception as e:  # noqa: BLE001
+        msg = f"操作に失敗: {e}"
     return RedirectResponse(f"/review?msg={msg}", status_code=303)
 
 

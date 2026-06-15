@@ -57,11 +57,16 @@ def _strip(html_text: str) -> str:
     return re.sub(r"<[^>]+>", "", html_text or "").strip()
 
 
-def list_review_items() -> list[dict]:
-    """承認待ち（下書き）一覧。各件にQAの件数を付与。"""
+STATUS_LABELS = {"draft": "承認待ち", "publish": "公開済み", "trash": "却下"}
+
+
+def list_review_items(status: str = "draft") -> list[dict]:
+    """指定ステータスの記事一覧（draft/publish/trash）。各件にQA件数を付与。"""
+    if status not in STATUS_LABELS:
+        status = "draft"
     items: list[dict] = []
     for d in wordpress.list_posts(
-        statuses="draft", fields="id,title,excerpt,link,featured_media,content"
+        statuses=status, fields="id,title,excerpt,link,featured_media,content"
     ):
         title = (d.get("title", {}) or {}).get("rendered") \
             or (d.get("title", {}) or {}).get("raw", "")
@@ -76,6 +81,7 @@ def list_review_items() -> list[dict]:
             "warns": sum(1 for i in issues if i["level"] == "warn"),
             "qa": issues,
             "link": d.get("link", ""),
+            "status": status,
         })
     return items
 
