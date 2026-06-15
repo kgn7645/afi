@@ -92,6 +92,30 @@ def fetch_amazon_product_card(url: str, *, timeout: int = 15) -> dict | None:
     return {"title": title, "image": image}
 
 
+def fetch_amazon_product_images(url: str, *, max_n: int = 4, timeout: int = 15) -> list[str]:
+    """商品ページのギャラリーから高解像度画像URLを最大 max_n 枚（重複除去）取得。
+
+    本文中に実写真を差し込む用途（Issue #90）。取得不可なら []。
+    """
+    try:
+        r = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
+    except requests.RequestException:
+        return []
+    if r.status_code != 200 or "何かお探し" in r.text:
+        return []
+    text = r.text
+    urls = re.findall(r'"hiRes":"(https://[^"]+\.jpg)"', text)
+    if len(urls) < max_n:
+        urls += re.findall(r'"large":"(https://[^"]+\.jpg)"', text)
+    seen: set[str] = set()
+    out: list[str] = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out[:max_n]
+
+
 def _price_to_int(text: str) -> int | None:
     digits = re.sub(r"[^\d]", "", text or "")
     return int(digits) if digits else None

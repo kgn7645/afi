@@ -166,6 +166,12 @@ eyecatch:
   accent_color: "#ff9900"
   text_color: "#ffffff"
 
+# --- 本文への画像差し込み（Issue #90: amaviser風） ---
+body_images:
+  enabled: true                # 本文に商品実写真ギャラリー＋ブランドバナーを挿入
+  max_photos: 3                # レビュー節に差し込む商品実写真の最大枚数（Amazonギャラリー）
+  brand_header: true           # 「メーカーの正体」節の前にPillow製ブランドバナーを挿入
+
 # Canva Connect API（任意・有料プラン＋OAuth設定が必要。docs/canva-setup.md）
 canva:
   enabled: false               # trueかつ.env/テンプレ設定が揃えばCanvaを優先

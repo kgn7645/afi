@@ -157,6 +157,49 @@ def build_eyecatch(catch_copy: str, product_image: bytes,
         return None
 
 
+def build_brand_header(brand: str, *, subtitle: str = "", site_name: str = "") -> bytes | None:
+    """本文の「メーカーの正体」節用の横長バナー(1200x340)をPillowで生成（Issue #90）。
+
+    背景はアイキャッチと同じ bg 画像（無ければ淡いグラデ）。ブランド名を大きく中央に、
+    任意でサブタイトルを下に焼き込む。フォント無し/失敗時は None。
+    """
+    font_path = _find_font_path()
+    if not font_path or not (brand or "").strip():
+        return None
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+
+        W, H = 1200, 340
+        cfg = get_rules().get("eyecatch", {})
+        bg_path = cfg.get("bg_image", "")
+        p = Path(bg_path) if os.path.isabs(bg_path) else (ROOT / bg_path)
+        if bg_path and p.exists():
+            canvas = Image.open(p).convert("RGB").resize((W, H))
+        else:
+            canvas = _vertical_gradient(cfg.get("amaviser_bg", "#ffffff"),
+                                        cfg.get("amaviser_bg2", "#ece9ff"), W, H).convert("RGB")
+        draw = ImageDraw.Draw(canvas)
+        color = cfg.get("bg_text_color", "#3a2a10")
+
+        bf, _ = _fit_single(font_path, brand, W - 160, draw, max_size=120, min_size=52)
+        bw = draw.textlength(brand, font=bf)
+        bbox = draw.textbbox((0, 0), brand, font=bf)
+        bh = bbox[3] - bbox[1]
+        cy = (H - bh) // 2 - (26 if subtitle else 0)
+        draw.text(((W - bw) / 2, cy), brand, font=bf, fill=color,
+                  stroke_width=6, stroke_fill="#ffffff")
+        if subtitle:
+            sf = ImageFont.truetype(font_path, 40)
+            sw = draw.textlength(subtitle, font=sf)
+            draw.text(((W - sw) / 2, cy + bh + 22), subtitle, font=sf, fill=color,
+                      stroke_width=3, stroke_fill="#ffffff")
+        out = io.BytesIO()
+        canvas.save(out, format="PNG")
+        return out.getvalue()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _white_bg_to_transparent(img, thresh: int = 40):
     """商品画像の外周（白背景）を透明化。角からの塗りつぶしなので商品内部の白は保持。
 
