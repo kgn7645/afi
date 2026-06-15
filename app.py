@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,6 +46,34 @@ def _ago(ts: int) -> str:
     if d < 86400:
         return f"{d // 3600}時間前"
     return f"{d // 86400}日前"
+
+
+def _public_base(request: Request) -> str:
+    """ブックマークレットに焼き込む公開URL（Render等はhttpsに正規化）。"""
+    b = str(request.base_url).rstrip("/")
+    if b.startswith("http://") and "localhost" not in b and "127.0.0.1" not in b:
+        b = "https://" + b[len("http://"):]
+    return b
+
+
+def _bookmarklet(base: str) -> str:
+    """Amazon商品ページでASIN/商品名/価格/画像/ブランドを抽出し /select/add を開くJS。"""
+    js = (
+        "javascript:(function(){"
+        "var h=location.href;var m=h.match(/\\/(?:dp|gp\\/product)\\/([A-Z0-9]{10})/);"
+        "var a=m?m[1]:'';if(!a){var e=document.querySelector('[data-asin]');if(e)a=e.getAttribute('data-asin');}"
+        "if(!a){alert('ASINが見つかりません。Amazon商品ページで実行してください');return;}"
+        "var t=(document.getElementById('productTitle')||{}).textContent||document.title;"
+        "var p='';var pe=document.querySelector('.a-price .a-price-whole');if(pe)p=pe.textContent.replace(/[^0-9]/g,'');"
+        "var im=document.getElementById('landingImage')||document.querySelector('#imgTagWrapperId img');"
+        "var ig=im?(im.getAttribute('data-old-hires')||im.src||''):'';"
+        "var be=document.getElementById('bylineInfo');"
+        "var br=be?be.textContent.replace(/ブランド:|のストアを表示|Visit the| Store/g,'').trim():'';"
+        "var u='" + base + "/select/add?asin='+a+'&title='+encodeURIComponent((t||'').trim().slice(0,200))"
+        "+'&price='+p+'&image='+encodeURIComponent(ig)+'&brand='+encodeURIComponent(br.slice(0,60));"
+        "window.open(u,'_blank');})();"
+    )
+    return js
 
 
 def _crawl_status() -> dict:
@@ -269,6 +299,83 @@ def crawl_status_json(request: Request):
     except Exception:  # noqa: BLE001
         pass
     return JSONResponse({"ok": True, "crawl": st})
+
+
+@app.get("/manual", response_class=HTMLResponse)
+def manual_select(request: Request, added: str = "", msg: str = ""):
+    """手動選定: ブックマークレットの導入＋URL/ASIN貼り付け＋選定済みリスト。"""
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    try:
+        approved = candidates.list_by_status("approved", limit=50)
+    except Exception:  # noqa: BLE001
+        approved = []
+    return templates.TemplateResponse(
+        "manual.html",
+        {"request": request, "bookmarklet": _bookmarklet(_public_base(request)),
+         "approved": approved, "added": added, "msg": msg,
+         "configured": candidates.enabled()})
+
+
+@app.get("/select/add", response_class=HTMLResponse)
+def select_add(request: Request, asin: str = "", title: str = "", price: str = "",
+               image: str = "", brand: str = "", src: str = ""):
+    """ブックマークレットからの1件追加（選定済み=approvedで候補プールへ）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    asin = (asin or "").strip().upper()
+    ok = False
+    if re.fullmatch(r"[A-Z0-9]{10}", asin):
+        try:
+            pr = int(re.sub(r"[^0-9]", "", price)) if price else None
+        except ValueError:
+            pr = None
+        cand = {"asin": asin, "title": (title or "")[:200], "price": pr,
+                "image": image or "", "brand": (brand or "")[:60],
+                "url": src or f"https://www.amazon.co.jp/dp/{asin}", "source": "manual"}
+        candidates.push([cand])
+        ok = candidates.set_status(asin, "approved")
+    body = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>選定追加</title><style>body{{font-family:-apple-system,sans-serif;background:#f1eef6;
+margin:0;display:grid;place-items:center;min-height:100dvh;padding:20px;text-align:center;color:#2b2b3a}}
+.box{{background:#fff;border-radius:16px;padding:28px 22px;box-shadow:0 6px 20px rgba(40,30,70,.1);max-width:420px}}
+.ic{{font-size:46px}}.t{{font-weight:800;margin:8px 0}}.s{{font-size:13px;color:#888;word-break:break-all}}
+a{{display:inline-block;margin-top:16px;background:#ff9f1c;color:#fff;text-decoration:none;
+padding:11px 22px;border-radius:11px;font-weight:800}}</style></head><body><div class="box">
+<div class="ic">{'✅' if ok else '⚠️'}</div>
+<div class="t">{'選定リストに追加しました' if ok else '追加できませんでした'}</div>
+<div class="s">{(title or asin) if ok else 'ASINが不正、または候補プール未設定です'}</div>
+<a href="javascript:window.close()">閉じる</a> &nbsp;
+<a href="{_public_base(request)}/manual" style="background:#6b6b8a">選定リストを見る</a>
+</div></body></html>"""
+    return HTMLResponse(body)
+
+
+@app.post("/manual/paste")
+def manual_paste(request: Request, bulk: str = Form("")):
+    """URL/ASINを複数貼り付け→まとめて選定済みへ。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    asins: list[str] = []
+    for line in (bulk or "").splitlines():
+        m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", line) or \
+            re.search(r"\b([A-Z0-9]{10})\b", line.strip())
+        if m:
+            asins.append(m.group(1))
+    seen: set[str] = set()
+    n = 0
+    for a in asins:
+        if a in seen:
+            continue
+        seen.add(a)
+        candidates.push([{"asin": a, "url": f"https://www.amazon.co.jp/dp/{a}",
+                          "source": "manual"}])
+        if candidates.set_status(a, "approved"):
+            n += 1
+    return RedirectResponse(f"/manual?added={n}", status_code=303)
 
 
 @app.post("/select/{asin}/approve")
