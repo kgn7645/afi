@@ -302,7 +302,7 @@ def crawl_status_json(request: Request):
 
 
 @app.get("/manual", response_class=HTMLResponse)
-def manual_select(request: Request, added: str = "", msg: str = ""):
+def manual_select(request: Request, added: str = "", pending: str = "", msg: str = ""):
     """手動選定: ブックマークレットの導入＋URL/ASIN貼り付け＋選定済みリスト。"""
     if not review.enabled():
         return RedirectResponse("/review", status_code=303)
@@ -315,7 +315,7 @@ def manual_select(request: Request, added: str = "", msg: str = ""):
     return templates.TemplateResponse(
         "manual.html",
         {"request": request, "bookmarklet": _bookmarklet(_public_base(request)),
-         "approved": approved, "added": added, "msg": msg,
+         "approved": approved, "added": added, "pending": pending, "msg": msg,
          "configured": candidates.enabled()})
 
 
@@ -354,17 +354,32 @@ padding:11px 22px;border-radius:11px;font-weight:800}}</style></head><body><div 
     return HTMLResponse(body)
 
 
+_SHORT_RE = re.compile(r"https?://(?:amzn\.asia|amzn\.to|a\.co)/\S+")
+
+
 @app.post("/manual/paste")
 def manual_paste(request: Request, bulk: str = Form("")):
-    """URL/ASINを複数貼り付け→まとめて選定済みへ。"""
+    """URL/ASINを複数貼り付け→まとめて選定済みへ。短縮リンクはXserverで展開予約。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     asins: list[str] = []
-    for line in (bulk or "").splitlines():
-        m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", line) or \
-            re.search(r"\b([A-Z0-9]{10})\b", line.strip())
+    shorts: list[str] = []
+    for raw in (bulk or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", line)
         if m:
             asins.append(m.group(1))
+            continue
+        sm = _SHORT_RE.search(line)
+        if sm:                      # 短縮リンク（Amazonアプリの共有等）はXserverで解決
+            shorts.append(sm.group(0))
+            continue
+        bm = re.fullmatch(r"[A-Z0-9]{10}", line)
+        if bm:
+            asins.append(line)
+
     seen: set[str] = set()
     n = 0
     for a in asins:
@@ -375,9 +390,20 @@ def manual_paste(request: Request, bulk: str = Form("")):
                           "source": "manual"}])
         if candidates.set_status(a, "approved"):
             n += 1
-    if n == 0:
+
+    q = 0
+    if shorts:
+        try:
+            cur = overrides.load(force=True).get("_manual_pending", []) or []
+            merged = list(dict.fromkeys([*cur, *shorts]))
+            overrides.update({"_manual_pending": merged})
+            q = len(shorts)
+        except Exception:  # noqa: BLE001
+            q = 0
+
+    if n == 0 and q == 0:
         return RedirectResponse("/manual?msg=no_asin", status_code=303)
-    return RedirectResponse(f"/manual?added={n}", status_code=303)
+    return RedirectResponse(f"/manual?added={n}&pending={q}", status_code=303)
 
 
 @app.post("/select/{asin}/approve")

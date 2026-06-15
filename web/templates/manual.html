@@ -51,8 +51,9 @@
 </div>
 
 <div class="wrap">
-  {% if added %}<div class="flash">✓ {{ added }}件を選定リストに追加しました</div>{% endif %}
-  {% if msg=='no_asin' %}<div class="ro">⚠️ Amazon商品リンク/ASINが見つかりませんでした。<b>商品ページの完全なURL（…/dp/… を含む）</b>か<b>10桁のASIN</b>を貼ってください。Amazonアプリの短縮リンク（amzn.asia/…）は、ブラウザで開いて完全URLをコピーしてください。</div>{% endif %}
+  {% if added and added!='0' %}<div class="flash">✓ {{ added }}件を選定リストに追加しました</div>{% endif %}
+  {% if pending and pending!='0' %}<div class="flash" style="background:#fff4d6;color:#8a6d1a;">⏳ 短縮リンク {{ pending }}件を受付（Xserverが数分以内にASIN解決して選定リストへ）</div>{% endif %}
+  {% if msg=='no_asin' %}<div class="ro">⚠️ Amazon商品リンク/ASINが見つかりませんでした。<b>商品ページのURL（…/dp/…）</b>・<b>短縮リンク（amzn.asia/amzn.to）</b>・<b>10桁のASIN</b>のいずれかを貼ってください。</div>{% endif %}
   {% if not configured %}<div class="ro">⚠️ 候補プール未設定（<code>CANDIDATES_WEBHOOK_URL</code>）。追加は保存されません。</div>{% endif %}
 
   <div class="sec" style="border:2px solid var(--orange);">
@@ -112,7 +113,7 @@ async function pasteAdd(){
     if(ta){ ta.focus(); }
     return;
   }
-  if(!/\/(?:dp|gp\/product)\/[A-Z0-9]{10}|\b[A-Z0-9]{10}\b/.test(txt)){
+  if(!/\/(?:dp|gp\/product)\/[A-Z0-9]{10}|\b[A-Z0-9]{10}\b|(?:amzn\.asia|amzn\.to|a\.co)\//.test(txt)){
     hint.textContent='コピー内容にAmazon商品リンク/ASINが見つかりません: '+txt.slice(0,50);
     return;
   }
