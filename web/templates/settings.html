@@ -91,6 +91,16 @@
   </div>
 
   <div class="sec">
+    <h2>⏱ 生成のペース（承認→記事化）</h2>
+    <p class="hint">スワイプ承認した商品を何分おきに何件ずつ記事化するか。間隔は5分以上。</p>
+    <label>実行間隔（分）</label>
+    <input type="number" name="interval_minutes" min="5" value="{{ d.interval_minutes }}">
+    <label>1回の生成数</label>
+    <input type="number" name="per_run" min="1" value="{{ d.per_run }}">
+    <p class="hint">※ 1日の総数はGemini枠（無料＋フォールバックで約8記事）が上限です。</p>
+  </div>
+
+  <div class="sec">
     <h2>🎨 文体ガイド（プロンプト）</h2>
     <p class="hint">記事の世界観・語り口・禁止事項。AIへの基本指示です</p>
     <label>スタイルガイド</label>
