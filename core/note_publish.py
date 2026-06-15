@@ -72,27 +72,45 @@ def create_note_draft(article, product, *, source_url: str = "",
     if not s.note_ready:
         return None
     try:
+        # カード化するアフィリURLを決める:
+        #  Amazon = 自タグ付きの商品URL / それ以外 = もしものクリックURL（楽天等・収益化）
         use_amazon = "amazon." in (source_url or "") and bool(s.amazon_associate_tag)
         if use_amazon:
-            amazon_url = product_extractor.amazon_affiliate_url(source_url, s.amazon_associate_tag)
-            note = note_client.create_empty_note()
-            embeds = []
-            for _ in range(3):  # 3箇所それぞれ固有キーのAmazonカードでEnter不要・自タグ収益化
-                emb = note_client.get_external_embed(note["key"], amazon_url)
-                embeds.append({"url": amazon_url, "key": emb["key"],
+            card_url = product_extractor.amazon_affiliate_url(source_url, s.amazon_associate_tag)
+        else:
+            card_url = article.affiliate_click_url or ""
+
+        note = note_client.create_empty_note()
+        nid, nkey = note["id"], note.get("key", "")
+
+        # noteのネイティブ商品カードを3箇所ぶん生成（Amazon/楽天/もしも共通）。
+        # 各箇所で固有キーが要るため3回呼ぶ。空/失敗が出たら打ち切り、画像にフォールバック。
+        embeds: list[dict] = []
+        if card_url:
+            for _ in range(3):
+                try:
+                    emb = note_client.get_external_embed(nkey, card_url)
+                except Exception:  # noqa: BLE001
+                    break
+                if not emb.get("html_for_embed"):
+                    break
+                embeds.append({"url": card_url, "key": emb["key"],
                                "html": emb["html_for_embed"]})
+
+        if embeds:
             body_html, body_len = note_export.build_note_html(
                 article, product, amazon_embeds=embeds)
-            note_client.save_draft(note["id"], article.title, body_html, body_len)
-            _attach_eyecatch(note["id"], article, product)
-            return {"id": note["id"],
-                    "edit_url": f"https://editor.note.com/notes/{note['key']}/edit/"}
-        # もしも/楽天モード: 商品画像をnoteへ上げて本文に
-        images = _upload_product_images(article.product_image_urls)
-        body_html, body_len = note_export.build_note_html(article, product, images)
-        res = note_client.create_draft(article.title, body_html, body_len)
-        _attach_eyecatch(res["id"], article, product)
-        return {"id": res["id"], "edit_url": res["edit_url"]}
+        else:
+            # カード化できない時は商品画像を本文に貼る（従来のもしも/楽天挙動）
+            images = _upload_product_images(article.product_image_urls)
+            body_html, body_len = note_export.build_note_html(article, product, images)
+            if not use_amazon and result is not None:
+                result.warnings.append("note: 楽天/もしものカード化に失敗し画像で代替")
+
+        note_client.save_draft(nid, article.title, body_html, body_len)
+        _attach_eyecatch(nid, article, product)
+        return {"id": nid,
+                "edit_url": f"https://editor.note.com/notes/{nkey}/edit/" if nkey else ""}
     except Exception as e:  # noqa: BLE001
         if result is not None:
             result.warnings.append(f"note下書き作成に失敗（WPは継続）: {e}")
