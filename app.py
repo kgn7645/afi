@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core import (candidates, internal_links, overrides, pipeline, prompts,
@@ -15,6 +16,7 @@ from core import (candidates, internal_links, overrides, pipeline, prompts,
 from core.config import ROOT, get_rules, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
+app.mount("/static", StaticFiles(directory=str(ROOT / "web" / "static")), name="static")
 templates = Jinja2Templates(directory=str(ROOT / "web" / "templates"))
 
 _COOKIE = "review_auth"
