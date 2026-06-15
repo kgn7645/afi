@@ -81,6 +81,7 @@ eyecatch:
   style: "bg"                  # bg(背景画像に差込) | amaviser | card
   bg_image: "assets/eyecatch_bg.png"   # bg styleの背景画像（リポジトリ相対）
   bg_text_color: "#3a2a10"     # bg styleの文字色（クリーム地に映える濃色）
+  remove_bg: true              # 商品画像の白背景を透明化して背景に馴染ませる
   font_path: ""                # 日本語フォント(.ttf/.ttc)パス。空なら自動探索(mac/Linux)
   amaviser_bg: "#ffffff"       # amaviser風の背景（上）
   amaviser_bg2: "#ece9ff"      # amaviser風の背景（下・淡い紫）

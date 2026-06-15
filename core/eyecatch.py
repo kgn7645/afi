@@ -155,6 +155,34 @@ def build_eyecatch(catch_copy: str, product_image: bytes,
         return None
 
 
+def _white_bg_to_transparent(img, thresh: int = 40):
+    """商品画像の外周（白背景）を透明化。角からの塗りつぶしなので商品内部の白は保持。
+
+    rembg等のMLは使わず軽量。Amazonの白背景画像を背景に馴染ませる用途。
+    """
+    from PIL import Image, ImageDraw
+
+    rgb = img.convert("RGB")
+    w, h = rgb.size
+    sentinel = (255, 0, 254)
+    filled = False
+    for seed in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
+        r, g, b = rgb.getpixel(seed)
+        if r > 235 and g > 235 and b > 235:  # 角が白っぽい時だけ実行
+            ImageDraw.floodfill(rgb, seed, sentinel, thresh=thresh)
+            filled = True
+    if not filled:
+        return img.convert("RGBA")
+    out = img.convert("RGBA")
+    src, dst = rgb.load(), out.load()
+    for y in range(h):
+        for x in range(w):
+            if src[x, y] == sentinel:
+                r, g, b, _ = dst[x, y]
+                dst[x, y] = (r, g, b, 0)
+    return out
+
+
 def _render_bg(font_path, cfg, catch_copy, product_image, brand, site_name):
     """背景画像（中央にコンテンツ枠）の上に、ブランド名＋商品＋コピーを差し込む。
 
@@ -183,6 +211,8 @@ def _render_bg(font_path, cfg, catch_copy, product_image, brand, site_name):
         try:
             prod = Image.open(io.BytesIO(product_image)).convert("RGBA")
             prod.thumbnail((300, 250))
+            if cfg.get("remove_bg", True):
+                prod = _white_bg_to_transparent(prod)
             canvas.paste(prod, (cx - prod.width // 2, 175), prod)
         except Exception:  # noqa: BLE001
             pass
