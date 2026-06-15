@@ -10,7 +10,9 @@ from __future__ import annotations
 import io
 import os
 
-from .config import get_rules
+from pathlib import Path
+
+from .config import ROOT, get_rules
 
 # 日本語対応フォント候補（mac / 主要Linux）。configで明示も可。
 _FONT_CANDIDATES = [
@@ -138,8 +140,10 @@ def build_eyecatch(catch_copy: str, product_image: bytes,
         return None
     try:
         cfg = get_rules().get("eyecatch", {})
-        style = cfg.get("style", "amaviser")
-        if style == "amaviser":
+        style = cfg.get("style", "bg")
+        if style == "bg":
+            canvas = _render_bg(font_path, cfg, catch_copy, product_image, brand, site_name)
+        elif style == "amaviser":
             canvas = _render_amaviser(font_path, cfg, catch_copy, product_image, brand, site_name)
         else:
             canvas = _render_card(font_path, cfg, catch_copy, product_image,
@@ -149,6 +153,49 @@ def build_eyecatch(catch_copy: str, product_image: bytes,
         return out.getvalue()
     except Exception:  # noqa: BLE001
         return None
+
+
+def _render_bg(font_path, cfg, catch_copy, product_image, brand, site_name):
+    """背景画像（中央にコンテンツ枠）の上に、ブランド名＋商品＋コピーを差し込む。
+
+    背景画像が見つからない場合は amaviser スタイルにフォールバック。
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    bg_path = cfg.get("bg_image", "")
+    p = Path(bg_path) if os.path.isabs(bg_path) else (ROOT / bg_path)
+    if not (bg_path and p.exists()):
+        return _render_amaviser(font_path, cfg, catch_copy, product_image, brand, site_name)
+
+    canvas = Image.open(p).convert("RGB").resize((CANVAS_W, CANVAS_H))
+    draw = ImageDraw.Draw(canvas)
+    text_color = cfg.get("bg_text_color", "#3a2a10")
+    cx = CANVAS_W // 2
+
+    # ブランド名（中央枠の上部）
+    if brand:
+        bf, _ = _fit_single(font_path, brand, 600, draw, max_size=66, min_size=40)
+        bw = draw.textlength(brand, font=bf)
+        draw.text((cx - bw / 2, 80), brand, font=bf, fill=text_color)
+
+    # 商品画像（中央）
+    if product_image:
+        try:
+            prod = Image.open(io.BytesIO(product_image)).convert("RGBA")
+            prod.thumbnail((300, 250))
+            canvas.paste(prod, (cx - prod.width // 2, 175), prod)
+        except Exception:  # noqa: BLE001
+            pass
+
+    # キャッチコピー（中央枠の下部・複数行中央寄せ）
+    cf, lines, line_h = _fit_font(font_path, catch_copy, 600, 150, draw,
+                                  max_size=38, min_size=26)
+    cy = CANVAS_H - len(lines) * line_h - 70
+    for ln in lines:
+        lw = draw.textlength(ln, font=cf)
+        draw.text((cx - lw / 2, cy), ln, font=cf, fill=text_color)
+        cy += line_h
+    return canvas
 
 
 def _render_amaviser(font_path, cfg, catch_copy, product_image, brand, site_name):
