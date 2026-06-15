@@ -326,6 +326,38 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_review_token_and_password(monkeypatch):
+    from core import review
+    s = review.get_settings()
+    monkeypatch.setattr(s, "review_password", "secret", raising=False)
+    monkeypatch.setattr(s, "session_secret", "sess", raising=False)
+    t = review.make_token(ttl=100, now=1000)
+    assert review.valid_token(t, now=1050)              # 有効
+    assert not review.valid_token(t, now=2000)          # 期限切れ
+    assert not review.valid_token("1100.deadbeef", now=1050)  # 署名不一致
+    assert not review.valid_token("", now=1050)
+    assert review.enabled()
+    assert review.check_password("secret")
+    assert not review.check_password("wrong")
+
+
+def test_list_review_items(monkeypatch):
+    from core import review, wordpress
+    monkeypatch.setattr(wordpress, "list_posts", lambda **k: [{
+        "id": 7, "title": {"rendered": "テスト記事"},
+        "excerpt": {"rendered": "<p>抜粋テキスト</p>"}, "link": "http://x/7",
+        "featured_media": 3,
+        "content": {"raw": '<h2>はじめに</h2><a class="amazon-cta-btn">x</a>'},
+    }])
+    monkeypatch.setattr(wordpress, "get_media_url",
+                        lambda mid, **k: "http://x/img.jpg" if mid else "")
+    items = review.list_review_items()
+    assert items[0]["id"] == 7
+    assert items[0]["thumb"] == "http://x/img.jpg"
+    assert items[0]["excerpt"] == "抜粋テキスト"
+    assert "errors" in items[0] and "warns" in items[0]
+
+
 def test_canva_available_and_fallback(monkeypatch):
     from core import canva
     s = canva.get_settings()
