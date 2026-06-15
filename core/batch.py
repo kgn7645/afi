@@ -154,6 +154,8 @@ def run_candidates_batch(
                 post_to_wp=post_to_wp, wp_status=wp_status, gemini=gemini,
             )
             if not result.selection_ok:
+                # 選定NGは決定論的（毎回必ず失敗）。rejectedにして無限リトライを防ぐ
+                candidates.set_status(asin, "rejected")
                 summary["failed"] += 1
                 summary["items"].append(
                     {"key": asin, "status": "selection_ng", "reason": result.selection_reason})
