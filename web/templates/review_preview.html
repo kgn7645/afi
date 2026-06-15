@@ -6,62 +6,57 @@
 <meta name="robots" content="noindex,nofollow">
 <title>{{ post.title }}｜プレビュー</title>
 <style>
-  body{ font-family:-apple-system,"Hiragino Sans",sans-serif; margin:0; background:#fff; color:#222; }
-  header{ position:sticky; top:0; background:#f5a623; color:#fff; padding:12px 16px;
-          display:flex; align-items:center; gap:12px; }
-  header a{ color:#fff; text-decoration:none; font-size:20px; }
-  header span{ font-size:14px; font-weight:bold; }
-  .wrap{ max-width:720px; margin:0 auto; padding:16px; line-height:1.85; }
-  h1.t{ font-size:20px; line-height:1.5; }
-  .qa{ background:#fff8ef; border:1px solid #ffe1b0; border-radius:10px; padding:10px 12px;
-       font-size:13px; margin:12px 0; }
-  .qa b{ color:#b8780b; }
-  .body img{ max-width:100%; height:auto; }
-  .body h2{ border-left:4px solid #f5a623; padding-left:8px; font-size:18px; }
-  .body h3{ font-size:15px; }
-  body{ padding-bottom:96px; }
-  .bar{ position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid #eee;
-        padding:12px 12px calc(12px + env(safe-area-inset-bottom));
+  :root{ --orange:#ff9f1c; --green:#21c17a; --red:#ff5a5f; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; background:#fff;
+        color:#2b2b3a; padding-bottom:104px; }
+  header{ position:sticky; top:0; z-index:5; background:rgba(255,255,255,.86); backdrop-filter:blur(10px);
+          border-bottom:1px solid #f0eef4; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+  header a.back{ color:var(--ink); text-decoration:none; font-size:24px; line-height:1; }
+  header span{ font-size:14px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wrap{ max-width:720px; margin:0 auto; padding:18px 16px; line-height:1.9; }
+  h1.t{ font-size:21px; line-height:1.5; }
+  .qa{ border-radius:14px; padding:12px 14px; font-size:13px; margin:14px 0; }
+  .qa.warn{ background:#fff5e6; border:1px solid #ffe1b0; } .qa.warn b{ color:#c8810a; }
+  .qa.ok{ background:#e3f8ee; color:#149a5e; font-weight:800; }
+  .qa ul{ margin:6px 0 0; padding-left:18px; }
+  .body img{ max-width:100%; height:auto; border-radius:10px; }
+  .body h2{ border-left:4px solid var(--orange); padding-left:10px; font-size:19px; margin-top:1.6em; }
+  .body h3{ font-size:15.5px; }
+  .bar{ position:fixed; left:0; right:0; bottom:0; background:rgba(255,255,255,.94); backdrop-filter:blur(10px);
+        border-top:1px solid #f0eef4; padding:12px 14px calc(12px + env(safe-area-inset-bottom));
         display:flex; gap:10px; max-width:720px; margin:0 auto; }
   .bar form{ flex:1; margin:0; }
-  .btn{ width:100%; padding:14px; border-radius:10px; font-size:15px; font-weight:bold; border:none; }
-  .pub{ background:#2e9b57; color:#fff; }
-  .rej{ background:#fff; color:#d9534f; border:1.5px solid #d9534f; }
+  .btn{ width:100%; padding:15px; border-radius:14px; font-size:15px; font-weight:800; border:none; transition:transform .12s; }
+  .btn:active{ transform:scale(.96); } .btn[disabled]{ filter:opacity(.7); }
+  .pub{ background:var(--green); color:#fff; box-shadow:0 6px 16px rgba(33,193,122,.32); }
+  .rej{ background:#fff; color:var(--red); border:2px solid var(--red); }
 </style>
 </head>
 <body>
-<header>
-  <a href="/review">‹</a><span>{{ post.title[:24] }}</span>
-</header>
+<header><a class="back" href="/review">‹</a><span>{{ post.title[:26] }}</span></header>
 <div class="wrap">
   <h1 class="t">{{ post.title }}</h1>
   {% if post.qa %}
-    <div class="qa">
-      <b>⚠ QAの指摘（{{ post.qa|length }}件）:</b>
-      <ul>{% for i in post.qa %}<li>{{ i.message }}</li>{% endfor %}</ul>
-    </div>
+    <div class="qa warn"><b>⚠ QAの指摘（{{ post.qa|length }}件）</b>
+      <ul>{% for i in post.qa %}<li>{{ i.message }}</li>{% endfor %}</ul></div>
   {% else %}
-    <div class="qa"><b style="color:#2e9b57;">✓ QA問題なし</b></div>
+    <div class="qa ok">✓ QA問題なし</div>
   {% endif %}
   <div class="body">{{ post.body | safe }}</div>
 </div>
 <div class="bar">
   <form method="post" action="/review/{{ post.id }}/publish"
         onsubmit="return go(this,'この記事を公開しますか？','公開中…');">
-    <button class="btn pub" type="submit">公開する</button>
-  </form>
+    <button class="btn pub" type="submit">公開する</button></form>
   <form method="post" action="/review/{{ post.id }}/reject"
-        onsubmit="return go(this,'この記事を却下（ゴミ箱）しますか？','却下中…');">
-    <button class="btn rej" type="submit">却下</button>
-  </form>
+        onsubmit="return go(this,'この記事を却下しますか？','却下中…');">
+    <button class="btn rej" type="submit">却下</button></form>
 </div>
 <script>
-  function go(form, msg, busy){
-    if(!confirm(msg)) return false;
-    var b = form.querySelector('button');
-    b.disabled = true; b.textContent = busy; b.style.opacity = .6;
-    return true;
-  }
+  function go(form,msg,busy){ if(!confirm(msg)) return false;
+    var b=form.querySelector('button'); b.disabled=true; b.textContent=busy;
+    if(navigator.vibrate) try{navigator.vibrate(15);}catch(e){} return true; }
 </script>
 </body>
 </html>

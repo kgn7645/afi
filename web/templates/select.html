@@ -2,155 +2,220 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="robots" content="noindex,nofollow">
 <title>商品選定｜おうちベース</title>
 <style>
-  :root{ --orange:#f5a623; --green:#2e9b57; --red:#e0524e; --ink:#23204a; }
-  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  body{ font-family:-apple-system,"Hiragino Sans",sans-serif; margin:0; background:#f6f6f8;
-        color:#222; overflow:hidden; height:100vh; }
-  header{ background:var(--orange); color:#fff; padding:13px 16px; display:flex;
-          align-items:center; justify-content:space-between; }
-  header h1{ font-size:16px; margin:0; }
-  header a{ color:#fff; font-size:13px; text-decoration:underline; }
-  .stage{ position:relative; height:calc(100vh - 200px); margin:14px auto 0; max-width:460px; }
-  .card{ position:absolute; inset:0; background:#fff; border-radius:18px; overflow:hidden;
-         box-shadow:0 6px 20px rgba(0,0,0,.12); display:flex; flex-direction:column;
-         will-change:transform; touch-action:none; }
-  .card img{ width:100%; flex:1; object-fit:contain; background:#faf7f0; min-height:0; padding:10px; }
-  .card .info{ padding:12px 16px 16px; }
-  .card .price{ font-size:20px; font-weight:bold; color:var(--ink); }
-  .card .price small{ font-size:12px; color:#888; font-weight:normal; }
-  .card .title{ font-size:13.5px; line-height:1.5; margin-top:6px; max-height:4.5em; overflow:hidden; }
-  .stamp{ position:absolute; top:24px; font-size:30px; font-weight:900; padding:6px 14px;
-          border:4px solid; border-radius:10px; opacity:0; transform:rotate(-18deg); }
-  .stamp.like{ left:18px; color:var(--green); border-color:var(--green); }
-  .stamp.nope{ right:18px; color:var(--red); border-color:var(--red); transform:rotate(18deg); }
-  .controls{ display:flex; justify-content:center; gap:22px; margin-top:16px; }
-  .btn{ width:64px; height:64px; border-radius:50%; border:none; font-size:26px; color:#fff;
-        box-shadow:0 4px 12px rgba(0,0,0,.18); }
-  .btn.no{ background:var(--red); } .btn.info{ background:#7a7a90; width:52px; height:52px; font-size:20px; align-self:center; }
-  .btn.yes{ background:var(--green); }
-  .count{ text-align:center; color:#999; font-size:12px; margin-top:10px; }
-  .empty{ text-align:center; color:#888; padding:60px 20px; }
-  .empty .big{ font-size:40px; }
-  /* 詳細モーダル */
-  .modal{ position:fixed; inset:0; background:rgba(0,0,0,.5); display:none;
-          align-items:flex-end; z-index:20; }
-  .modal.on{ display:flex; }
-  .sheet{ background:#fff; width:100%; max-height:86vh; overflow:auto; border-radius:16px 16px 0 0;
-          padding:18px 18px calc(18px + env(safe-area-inset-bottom)); }
+  :root{
+    --orange:#ff9f1c; --green:#21c17a; --red:#ff5a5f; --ink:#2b2b3a; --bg:#f3f1f7;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body{ height:100%; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0;
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); color:var(--ink); overflow:hidden;
+        display:flex; flex-direction:column; height:100dvh; }
+
+  /* 上部ナビ（セグメント） */
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:420px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:14px;
+          font-weight:700; color:#8a86a0; text-decoration:none; transition:.25s; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+
+  .wrap{ flex:1; display:flex; flex-direction:column; min-height:0; padding:6px 14px 10px; }
+  .deck{ position:relative; flex:1; max-width:420px; width:100%; margin:6px auto 0; min-height:0; }
+
+  .card{ position:absolute; inset:0; background:#fff; border-radius:22px; overflow:hidden;
+         box-shadow:0 14px 40px rgba(40,30,70,.16); display:flex; flex-direction:column;
+         will-change:transform,opacity; touch-action:none; }
+  .card .photo{ flex:1; min-height:0; background:#faf7f0; position:relative; }
+  .card .photo img{ width:100%; height:100%; object-fit:contain; padding:14px; }
+  .card .grad{ position:absolute; left:0; right:0; bottom:0; height:46%;
+               background:linear-gradient(transparent,rgba(0,0,0,.72)); pointer-events:none; }
+  .card .info{ position:absolute; left:0; right:0; bottom:0; padding:16px 18px; color:#fff; }
+  .card .price{ font-size:26px; font-weight:800; letter-spacing:.2px; }
+  .card .price small{ font-size:12px; font-weight:600; opacity:.8; margin-left:6px; }
+  .card .title{ font-size:13px; line-height:1.55; margin-top:5px; opacity:.95;
+                display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+  /* スワイプ方向のオーバーレイ */
+  .ov{ position:absolute; inset:0; opacity:0; pointer-events:none; transition:opacity .05s; }
+  .ov.like{ background:linear-gradient(120deg,rgba(33,193,122,.0),rgba(33,193,122,.45)); }
+  .ov.nope{ background:linear-gradient(240deg,rgba(255,90,95,.0),rgba(255,90,95,.45)); }
+  .stamp{ position:absolute; top:30px; padding:6px 16px; border:5px solid; border-radius:14px;
+          font-size:34px; font-weight:900; letter-spacing:1px; opacity:0; }
+  .stamp.like{ left:22px; color:var(--green); border-color:var(--green); transform:rotate(-16deg) scale(.8); }
+  .stamp.nope{ right:22px; color:var(--red); border-color:var(--red); transform:rotate(16deg) scale(.8); }
+
+  @keyframes pop{ 0%{ transform:translateY(18px) scale(.96); opacity:0; } 100%{ transform:none; opacity:1; } }
+  .enter{ animation:pop .32s cubic-bezier(.2,.8,.2,1); }
+
+  /* 操作ボタン */
+  .controls{ display:flex; justify-content:center; align-items:center; gap:20px; padding:16px 0 4px; }
+  .fab{ border:none; border-radius:50%; background:#fff; display:grid; place-items:center;
+        box-shadow:0 8px 22px rgba(40,30,70,.16); transition:transform .12s, box-shadow .12s; }
+  .fab:active{ transform:scale(.88); }
+  .fab.lg{ width:70px; height:70px; } .fab.sm{ width:54px; height:54px; }
+  .fab svg{ width:30px; height:30px; } .fab.sm svg{ width:22px; height:22px; }
+  .fab.no svg{ stroke:var(--red); } .fab.yes svg{ stroke:var(--green); } .fab.info svg{ stroke:#9a96ad; }
+  .count{ text-align:center; color:#9a96ad; font-size:12px; font-weight:600; padding:2px 0 6px; }
+
+  .empty{ flex:1; display:grid; place-content:center; text-align:center; color:#8a86a0; gap:10px; }
+  .empty .big{ font-size:54px; } .empty a{ color:var(--orange); font-weight:700; }
+
+  /* トースト */
+  .toast{ position:fixed; left:50%; bottom:26px; transform:translate(-50%,40px); opacity:0;
+          background:rgba(43,43,58,.96); color:#fff; padding:11px 20px; border-radius:999px;
+          font-size:14px; font-weight:700; z-index:40; transition:.3s; box-shadow:0 8px 24px rgba(0,0,0,.2); }
+  .toast.on{ transform:translate(-50%,0); opacity:1; }
+
+  /* 詳細シート */
+  .modal{ position:fixed; inset:0; background:rgba(20,16,30,.55); display:flex; align-items:flex-end;
+          opacity:0; pointer-events:none; transition:.25s; z-index:30; backdrop-filter:blur(2px); }
+  .modal.on{ opacity:1; pointer-events:auto; }
+  .sheet{ background:#fff; width:100%; max-height:88vh; overflow:auto; border-radius:22px 22px 0 0;
+          padding:20px 20px calc(22px + env(safe-area-inset-bottom)); transform:translateY(40px); transition:.28s; }
+  .modal.on .sheet{ transform:none; }
+  .sheet .bar{ width:40px; height:5px; background:#e3e0ea; border-radius:3px; margin:0 auto 14px; }
   .sheet img{ width:100%; max-height:300px; object-fit:contain; }
-  .sheet .price{ font-size:22px; font-weight:bold; }
-  .sheet a.amz{ display:block; text-align:center; background:var(--orange); color:#111;
-                font-weight:bold; text-decoration:none; padding:13px; border-radius:10px; margin-top:14px; }
-  .sheet .close{ float:right; font-size:22px; color:#888; text-decoration:none; }
+  .sheet .price{ font-size:24px; font-weight:800; margin-top:6px; }
+  .sheet a.amz{ display:block; text-align:center; background:var(--orange); color:#fff; font-weight:800;
+                text-decoration:none; padding:14px; border-radius:14px; margin-top:16px;
+                box-shadow:0 6px 18px rgba(255,159,28,.4); }
 </style>
 </head>
 <body>
-<header>
-  <h1>🛍 商品選定（スワイプ）</h1>
-  <a href="/review">記事承認 →</a>
-</header>
+<div class="nav">
+  <div class="seg">
+    <a href="/select" class="on">🛍 商品選定</a>
+    <a href="/review">📝 記事承認</a>
+  </div>
+</div>
 
 {% if disabled %}
-  <div class="empty">承認画面は無効です（<b>REVIEW_PASSWORD</b> 未設定）。</div>
+  <div class="empty"><div class="big">🔒</div>承認画面は無効です（<b>REVIEW_PASSWORD</b> 未設定）</div>
 {% elif not configured %}
-  <div class="empty">候補プールが未設定です。<br><code>CANDIDATES_WEBHOOK_URL</code> を設定してください（docs/candidates.md）。</div>
+  <div class="empty"><div class="big">⚙️</div>候補プールが未設定です<br><code>CANDIDATES_WEBHOOK_URL</code> を設定してください</div>
 {% else %}
-  <div class="stage" id="stage"></div>
+<div class="wrap">
+  <div class="deck" id="deck"></div>
   <div class="controls" id="controls">
-    <button class="btn no" id="bNo" title="却下">✕</button>
-    <button class="btn info" id="bInfo" title="詳細">ⓘ</button>
-    <button class="btn yes" id="bYes" title="承認">♥</button>
+    <button class="fab lg no" id="bNo" aria-label="却下">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <button class="fab sm info" id="bInfo" aria-label="詳細">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M12 16v-5M12 8h.01"/><circle cx="12" cy="12" r="9"/></svg></button>
+    <button class="fab lg yes" id="bYes" aria-label="承認">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 6.6a5 5 0 00-8.8-1.6A5 5 0 003.2 6.6c-1 2.3-.2 5 2 7.2l6.8 6 6.8-6c2.2-2.2 3-4.9 2-7.2z"/></svg></button>
   </div>
   <div class="count" id="count"></div>
+</div>
 {% endif %}
 
-<div class="modal" id="modal">
-  <div class="sheet" id="sheet"></div>
-</div>
+<div class="toast" id="toast"></div>
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 
 <script>
   var ITEMS = {{ items | tojson }};
-  var idx = 0;
-  var stage = document.getElementById('stage');
-  var modal = document.getElementById('modal');
+  var i = 0, deck = document.getElementById('deck'), busy = false;
 
   function yen(p){ return (p===null||p===undefined||p==='') ? '価格情報なし'
     : '¥' + Number(p).toLocaleString('ja-JP'); }
+  function esc(s){ return (s||'').replace(/</g,'&lt;'); }
+
+  function toast(msg, color){
+    var t=document.getElementById('toast'); t.textContent=msg;
+    t.style.background = color || 'rgba(43,43,58,.96)';
+    t.classList.add('on'); clearTimeout(t._t);
+    t._t=setTimeout(function(){ t.classList.remove('on'); }, 1100);
+  }
+  function buzz(ms){ if(navigator.vibrate) try{ navigator.vibrate(ms); }catch(e){} }
+
+  function cardEl(it, depth){
+    var c=document.createElement('div'); c.className='card';
+    c.style.zIndex = 10 - depth;
+    c.style.transform = 'scale('+(1-depth*0.05)+') translateY('+(depth*14)+'px)';
+    c.style.opacity = depth>2 ? 0 : 1;
+    c.innerHTML =
+      '<div class="photo"><img src="'+(it.image||'')+'" alt=""><div class="grad"></div>'+
+      '<div class="ov like"></div><div class="ov nope"></div>'+
+      '<div class="stamp like">いいね</div><div class="stamp nope">パス</div></div>'+
+      '<div class="info"><div class="price">'+yen(it.price)+'<small>'+(it.asin||'')+'</small></div>'+
+      '<div class="title">'+esc(it.title)+'</div></div>';
+    return c;
+  }
 
   function render(){
-    if(!stage) return;
-    stage.innerHTML = '';
-    var remain = ITEMS.slice(idx, idx+3).reverse();  // 後ろから重ねる
-    if(remain.length === 0){
-      stage.innerHTML = '<div class="empty"><div class="big">🎉</div>候補をすべて確認しました</div>';
-      document.getElementById('controls').style.display = 'none';
+    if(!deck) return;
+    deck.innerHTML='';
+    var slice = ITEMS.slice(i, i+3);
+    if(slice.length===0){
+      document.getElementById('controls').style.display='none';
+      deck.innerHTML='<div class="empty"><div class="big">🎉</div>すべて確認しました！<br>'+
+        '<a href="/review">記事承認へ →</a></div>';
+      document.getElementById('count').textContent=''; return;
     }
-    remain.forEach(function(it, i){
-      var top = (i === remain.length-1);
-      var c = document.createElement('div');
-      c.className = 'card';
-      c.style.transform = 'scale(' + (1 - (remain.length-1-i)*0.04) + ') translateY(' + ((remain.length-1-i)*-8) + 'px)';
-      c.innerHTML =
-        '<div class="stamp like">承認</div><div class="stamp nope">却下</div>' +
-        '<img src="' + (it.image||'') + '" alt="">' +
-        '<div class="info"><div class="price">' + yen(it.price) +
-        ' <small>'+(it.asin||'')+'</small></div><div class="title">' +
-        (it.title||'').replace(/</g,'&lt;') + '</div></div>';
-      stage.appendChild(c);
-      if(top) attachDrag(c, it);
-    });
-    var cnt = document.getElementById('count');
-    if(cnt) cnt.textContent = (ITEMS.length - idx) > 0 ? ('残り ' + (ITEMS.length - idx) + ' 件') : '';
+    // 後ろから重ねて、最後に追加した top を最前面に
+    for(var d=slice.length-1; d>=0; d--){
+      var c=cardEl(slice[d], d); deck.appendChild(c);
+      if(d===0){ c.classList.add('enter'); attach(c, slice[0]); }
+    }
+    document.getElementById('count').textContent='残り '+(ITEMS.length-i)+' 件';
   }
 
-  function decide(it, approve, dir){
-    fetch('/select/' + it.asin + '/' + (approve?'approve':'reject'), {method:'POST'})
-      .catch(function(){});
-    idx++;
-    setTimeout(render, 180);
+  function fly(card, it, like){
+    if(busy) return; busy=true;
+    buzz(18);
+    card.style.transition='transform .42s cubic-bezier(.3,.7,.3,1), opacity .42s';
+    card.style.transform='translate('+(like?1:-1)*520+'px,'+(like?-40:40)+'px) rotate('+(like?32:-32)+'deg)';
+    card.style.opacity='0';
+    toast(like?'いいね！ 承認しました':'パスしました', like?'rgba(33,193,122,.97)':'rgba(255,90,95,.97)');
+    fetch('/select/'+it.asin+'/'+(like?'approve':'reject'),{method:'POST'}).catch(function(){});
+    setTimeout(function(){ i++; busy=false; render(); }, 300);
   }
 
-  function attachDrag(card, it){
-    var sx=0, sy=0, dx=0, dy=0, drag=false;
-    var like=card.querySelector('.like'), nope=card.querySelector('.nope');
-    function down(e){ drag=true; var p=pt(e); sx=p.x; sy=p.y; card.style.transition='none'; }
-    function move(e){ if(!drag) return; var p=pt(e); dx=p.x-sx; dy=p.y-sy;
-      card.style.transform='translate('+dx+'px,'+dy+'px) rotate('+(dx/18)+'deg)';
-      like.style.opacity = dx>0 ? Math.min(dx/100,1) : 0;
-      nope.style.opacity = dx<0 ? Math.min(-dx/100,1) : 0; }
-    function up(){ if(!drag) return; drag=false; card.style.transition='transform .3s';
-      if(Math.abs(dx)>110){ var ap=dx>0;
-        card.style.transform='translate('+(ap?600:-600)+'px,'+dy+'px) rotate('+(ap?40:-40)+'deg)';
-        decide(it, ap, ap?'r':'l');
-      } else { card.style.transform=''; like.style.opacity=0; nope.style.opacity=0; } }
-    function pt(e){ return e.touches ? {x:e.touches[0].clientX,y:e.touches[0].clientY}
-                                     : {x:e.clientX,y:e.clientY}; }
+  function attach(card, it){
+    var sx=0,sy=0,dx=0,dy=0,drag=false;
+    var ovL=card.querySelector('.ov.like'), ovN=card.querySelector('.ov.nope');
+    var stL=card.querySelector('.stamp.like'), stN=card.querySelector('.stamp.nope');
+    function set(x){ var k=Math.min(Math.abs(x)/110,1);
+      ovL.style.opacity = x>0?k:0; ovN.style.opacity = x<0?k:0;
+      stL.style.opacity = x>0?k:0; stL.style.transform='rotate(-16deg) scale('+(.8+0.2*k)+')';
+      stN.style.opacity = x<0?k:0; stN.style.transform='rotate(16deg) scale('+(.8+0.2*k)+')'; }
+    function P(e){ return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY}; }
+    function down(e){ if(busy) return; drag=true; var p=P(e); sx=p.x; sy=p.y; card.style.transition='none'; }
+    function move(e){ if(!drag) return; var p=P(e); dx=p.x-sx; dy=p.y-sy;
+      card.style.transform='translate('+dx+'px,'+dy+'px) rotate('+(dx*0.06)+'deg)'; set(dx); }
+    function up(){ if(!drag) return; drag=false;
+      if(Math.abs(dx)>105){ fly(card, it, dx>0); }
+      else { card.style.transition='transform .45s cubic-bezier(.2,1.3,.4,1)'; card.style.transform=''; set(0); } }
     card.addEventListener('mousedown',down); card.addEventListener('touchstart',down,{passive:true});
-    window.addEventListener('mousemove',move); window.addEventListener('touchmove',move,{passive:true});
+    window.addEventListener('mousemove',move,{passive:true}); window.addEventListener('touchmove',move,{passive:true});
     window.addEventListener('mouseup',up); window.addEventListener('touchend',up);
   }
 
-  function openDetail(){
-    var it = ITEMS[idx]; if(!it) return;
-    document.getElementById('sheet').innerHTML =
-      '<a class="close" href="#" onclick="closeDetail();return false;">✕</a>' +
-      '<img src="'+(it.image||'')+'">' +
-      '<div class="price" style="margin-top:8px;">'+yen(it.price)+'</div>' +
-      '<div style="font-size:14px;line-height:1.7;margin-top:8px;">'+(it.title||'').replace(/</g,'&lt;')+'</div>' +
+  function topCard(){ return deck.querySelector('.card:last-child'); }
+  var bYes=document.getElementById('bYes'), bNo=document.getElementById('bNo'), bInfo=document.getElementById('bInfo');
+  bYes&&bYes.addEventListener('click',function(){ var it=ITEMS[i]; if(it) fly(topCard(),it,true); });
+  bNo&&bNo.addEventListener('click',function(){ var it=ITEMS[i]; if(it) fly(topCard(),it,false); });
+
+  var modal=document.getElementById('modal');
+  bInfo&&bInfo.addEventListener('click',function(){
+    var it=ITEMS[i]; if(!it) return;
+    document.getElementById('sheet').innerHTML='<div class="bar"></div>'+
+      '<img src="'+(it.image||'')+'"><div class="price">'+yen(it.price)+'</div>'+
+      '<div style="font-size:14px;line-height:1.75;margin-top:8px;">'+esc(it.title)+'</div>'+
       '<a class="amz" href="'+it.url+'" target="_blank" rel="nofollow noopener">Amazonで見る ↗</a>';
     modal.classList.add('on');
-  }
-  function closeDetail(){ modal.classList.remove('on'); }
-  modal && modal.addEventListener('click', function(e){ if(e.target===modal) closeDetail(); });
+  });
+  modal&&modal.addEventListener('click',function(e){ if(e.target===modal) modal.classList.remove('on'); });
 
-  var bYes=document.getElementById('bYes'), bNo=document.getElementById('bNo'), bInfo=document.getElementById('bInfo');
-  bYes && bYes.addEventListener('click', function(){ var it=ITEMS[idx]; if(it) decide(it,true); });
-  bNo && bNo.addEventListener('click', function(){ var it=ITEMS[idx]; if(it) decide(it,false); });
-  bInfo && bInfo.addEventListener('click', openDetail);
+  // キーボード（PC）: ←却下 →承認 ↑詳細
+  window.addEventListener('keydown',function(e){
+    var it=ITEMS[i]; if(!it) return;
+    if(e.key==='ArrowRight') fly(topCard(),it,true);
+    else if(e.key==='ArrowLeft') fly(topCard(),it,false);
+    else if(e.key==='ArrowUp') bInfo.click();
+  });
 
   render();
 </script>
