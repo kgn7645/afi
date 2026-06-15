@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>{{ post.title }}｜プレビュー</title>
+<style>
+  body{ font-family:-apple-system,"Hiragino Sans",sans-serif; margin:0; background:#fff; color:#222; }
+  header{ position:sticky; top:0; background:#f5a623; color:#fff; padding:12px 16px;
+          display:flex; align-items:center; gap:12px; }
+  header a{ color:#fff; text-decoration:none; font-size:20px; }
+  header span{ font-size:14px; font-weight:bold; }
+  .wrap{ max-width:720px; margin:0 auto; padding:16px; line-height:1.85; }
+  h1.t{ font-size:20px; line-height:1.5; }
+  .qa{ background:#fff8ef; border:1px solid #ffe1b0; border-radius:10px; padding:10px 12px;
+       font-size:13px; margin:12px 0; }
+  .qa b{ color:#b8780b; }
+  .body img{ max-width:100%; height:auto; }
+  .body h2{ border-left:4px solid #f5a623; padding-left:8px; font-size:18px; }
+  .body h3{ font-size:15px; }
+  .bar{ position:sticky; bottom:0; background:#fff; border-top:1px solid #eee; padding:12px;
+        display:flex; gap:10px; max-width:720px; margin:0 auto; }
+  .bar form{ flex:1; margin:0; }
+  .btn{ width:100%; padding:14px; border-radius:10px; font-size:15px; font-weight:bold; border:none; }
+  .pub{ background:#2e9b57; color:#fff; }
+  .rej{ background:#fff; color:#d9534f; border:1.5px solid #d9534f; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/review">‹</a><span>{{ post.title[:24] }}</span>
+</header>
+<div class="wrap">
+  <h1 class="t">{{ post.title }}</h1>
+  {% if post.qa %}
+    <div class="qa">
+      <b>⚠ QAの指摘（{{ post.qa|length }}件）:</b>
+      <ul>{% for i in post.qa %}<li>{{ i.message }}</li>{% endfor %}</ul>
+    </div>
+  {% else %}
+    <div class="qa"><b style="color:#2e9b57;">✓ QA問題なし</b></div>
+  {% endif %}
+  <div class="body">{{ post.body | safe }}</div>
+</div>
+<div class="bar">
+  <form method="post" action="/review/{{ post.id }}/publish">
+    <button class="btn pub" type="submit">公開する</button>
+  </form>
+  <form method="post" action="/review/{{ post.id }}/reject"
+        onsubmit="return confirm('この記事を却下（ゴミ箱）しますか？');">
+    <button class="btn rej" type="submit">却下</button>
+  </form>
+</div>
+</body>
+</html>

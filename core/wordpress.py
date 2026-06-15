@@ -97,6 +97,39 @@ def list_posts(*, statuses: str = "publish,draft", per_page: int = 100,
     return resp.json()
 
 
+def get_media_url(media_id: int, *, timeout: int = 30) -> str:
+    """メディアIDから画像URLを取得（承認画面のサムネ用）。"""
+    if not media_id:
+        return ""
+    s = get_settings()
+    r = requests.get(
+        f"{s.wp_base_url}/wp-json/wp/v2/media/{media_id}",
+        params={"_fields": "source_url"}, headers=_auth_header(), timeout=timeout,
+    )
+    return r.json().get("source_url", "") if r.status_code == 200 else ""
+
+
+def set_post_status(post_id: int, status: str, *, timeout: int = 30) -> dict:
+    """投稿のステータスを変更（publish/draft 等）。"""
+    s = get_settings()
+    r = requests.post(
+        f"{s.wp_base_url}/wp-json/wp/v2/posts/{post_id}", json={"status": status},
+        headers={**_auth_header(), "Content-Type": "application/json"}, timeout=timeout,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def trash_post(post_id: int, *, timeout: int = 30) -> dict:
+    """投稿をゴミ箱へ（却下用・force無しなので復元可能）。"""
+    s = get_settings()
+    r = requests.delete(
+        f"{s.wp_base_url}/wp-json/wp/v2/posts/{post_id}", headers=_auth_header(), timeout=timeout,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
 def set_featured_media(post_id: int, media_id: int, *, timeout: int = 30) -> dict:
     """既存投稿のアイキャッチ(featured_media)を更新。"""
     s = get_settings()
@@ -253,3 +286,15 @@ def test_connection(timeout: int = 15) -> tuple[bool, str]:
         return False, f"認証失敗 HTTP {r.status_code}: {r.text[:200]}"
     except Exception as e:  # noqa: BLE001
         return False, f"接続エラー: {e}"
+
+
+def get_post(post_id: int, *, fields: str = "id,title,content,link",
+             timeout: int = 30) -> dict:
+    """単一投稿を取得（承認画面のプレビュー用・raw本文）。"""
+    s = get_settings()
+    r = requests.get(
+        f"{s.wp_base_url}/wp-json/wp/v2/posts/{post_id}",
+        params={"context": "edit", "_fields": fields}, headers=_auth_header(), timeout=timeout,
+    )
+    r.raise_for_status()
+    return r.json()

@@ -1,0 +1,19 @@
+# Render 無料Webサービス用の設定（承認アプリ / Issue #12）
+services:
+  - type: web
+    name: ouchibase-review
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: WP_BASE_URL
+        sync: false
+      - key: WP_USERNAME
+        sync: false
+      - key: WP_APP_PASSWORD
+        sync: false
+      - key: REVIEW_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true

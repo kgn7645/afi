@@ -58,6 +58,10 @@ class Settings:
         self.app_host = os.getenv("APP_HOST", "127.0.0.1")
         self.app_port = int(os.getenv("APP_PORT", "8000"))
 
+        # 承認Webアプリ（Issue #12）。REVIEW_PASSWORD未設定なら承認画面は無効。
+        self.review_password = os.getenv("REVIEW_PASSWORD", "").strip()
+        self.session_secret = os.getenv("SESSION_SECRET", "").strip()
+
     @property
     def gemini_ready(self) -> bool:
         return bool(self.gemini_api_key)
