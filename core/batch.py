@@ -168,6 +168,13 @@ def run_candidates_batch(
         except Exception as e:  # noqa: BLE001
             summary["failed"] += 1
             summary["items"].append({"key": asin, "status": "error", "error": str(e)})
+            # Gemini無料枠切れ(429)なら、以降も確実に失敗するので早期打ち切り
+            # （承認分はapprovedのまま残り、次回ポーリングで再試行される）
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                summary["items"].append(
+                    {"key": "-", "status": "quota_exhausted",
+                     "error": "Geminiの枠切れのため中断（次回再試行）"})
+                break
 
     return summary
 
