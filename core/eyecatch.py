@@ -25,6 +25,8 @@ _FONT_CANDIDATES = [
     "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Bold.otf",
     "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
     "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",
+    "/usr/share/fonts/vlgothic/VL-Gothic-Regular.ttf",   # エックスサーバー等
+    "/usr/share/fonts/vlgothic/VL-PGothic-Regular.ttf",
 ]
 
 CANVAS_W, CANVAS_H = 1200, 630
