@@ -9,8 +9,8 @@ import json
 
 from .models import Product
 
-# --- 共通の世界観・文体ガイド ---
-STYLE_GUIDE = """\
+# --- 共通の世界観・文体ガイド（config.yaml > prompts.style_guide で上書き可） ---
+STYLE_GUIDE_DEFAULT = """\
 あなたは日本語のアフィリエイトブログ「アマバイザー」の記事ライターです。
 扱うのはAmazonで見つかる無名・新興・中華系メーカーのガジェットや季節家電です。
 読者の「このブランド、どこの国の会社？怪しくない？」という不安を解消し、
@@ -25,9 +25,19 @@ STYLE_GUIDE = """\
 """
 
 
+def _style_guide() -> str:
+    from .config import get_rules
+    return (get_rules().get("prompts", {}) or {}).get("style_guide") or STYLE_GUIDE_DEFAULT
+
+
+def _extra_instructions() -> str:
+    from .config import get_rules
+    return (get_rules().get("prompts", {}) or {}).get("extra_instructions", "").strip()
+
+
 def title_and_meta_prompt(product: Product) -> str:
     """タイトル・キャッチコピー・メタ情報を一括生成（JSON出力）。"""
-    return f"""{STYLE_GUIDE}
+    return f"""{_style_guide()}
 
 # 商品情報
 - ブランド名: {product.brand}
@@ -54,7 +64,7 @@ def trust_rating_prompt(product: Product, rules: dict) -> str:
         "trust_axes",
         ["企業の安定性・規模", "製品の品質・技術力", "日本市場でのサポート体制", "価格競争力"],
     )
-    return f"""{STYLE_GUIDE}
+    return f"""{_style_guide()}
 
 # 商品情報
 - ブランド名: {product.brand}
@@ -84,9 +94,11 @@ def article_body_prompt(product: Product, rules: dict, trust_block_md: str) -> s
     )
     min_chars = rules.get("article", {}).get("min_chars", 6000)
     reviews_each = rules.get("article", {}).get("reviews_each", 5)
+    extra = _extra_instructions()
+    extra_block = f"\n# 追加の指示（編集者より）\n{extra}\n" if extra else ""
     specs_md = "\n".join(f"  - {s}" for s in product.specs) if product.specs else "  - （スペックは商品名から妥当に推定。断定しすぎない）"
 
-    return f"""{STYLE_GUIDE}
+    return f"""{_style_guide()}
 
 # 商品情報
 - ブランド名: {product.brand}
@@ -142,7 +154,7 @@ def article_body_prompt(product: Product, rules: dict, trust_block_md: str) -> s
 
 # 出力
 Markdown本文のみ。先頭にタイトル行は不要（h2から始める）。コードフェンス禁止。
-"""
+{extra_block}"""
 
 
 def company_grounding_prompt(brand: str, category: str) -> str:

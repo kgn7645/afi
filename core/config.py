@@ -1,6 +1,7 @@
 """設定の読み込み（.env と config.yaml を統合）。"""
 from __future__ import annotations
 
+import copy
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -72,6 +73,8 @@ class Settings:
         # 承認Webアプリ（Issue #12）。REVIEW_PASSWORD未設定なら承認画面は無効。
         self.review_password = os.getenv("REVIEW_PASSWORD", "").strip()
         self.session_secret = os.getenv("SESSION_SECRET", "").strip()
+        # 設定/プロンプトの外部オーバーライド（WP保存）。CONFIG_OVERRIDES=0 で無効。
+        self.config_overrides = os.getenv("CONFIG_OVERRIDES", "1").lower() not in ("0", "false", "no")
 
     @property
     def gemini_ready(self) -> bool:
@@ -92,10 +95,35 @@ def get_settings() -> Settings:
 
 
 @lru_cache
-def get_rules() -> dict:
-    """config.yaml の生成ルールを読む。"""
+def _yaml_rules() -> dict:
+    """config.yaml の生成ルール（プロセス内キャッシュ）。"""
     path = ROOT / "config.yaml"
     if not path.exists():
         return {}
     with path.open(encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
+
+
+def _deep_merge(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for k, v in (over or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def get_rules() -> dict:
+    """config.yaml（デフォルト）＋ Web編集のオーバーライドを deep-merge して返す。
+
+    オーバーライドはWP非公開ページに保存（core/overrides.py・60秒キャッシュ）。
+    未設定/取得失敗時は config.yaml のみ。
+    """
+    base = copy.deepcopy(_yaml_rules())
+    try:
+        from . import overrides  # 遅延import（循環回避）
+        ov = overrides.load()
+    except Exception:  # noqa: BLE001
+        ov = {}
+    return _deep_merge(base, ov) if ov else base

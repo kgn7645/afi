@@ -1,6 +1,10 @@
 """APIキー無しでも動く部分のスモークテスト。 python -m pytest tests/ で実行。"""
+import os
 import sys
 from pathlib import Path
+
+# テストでは設定の外部オーバーライド（WP通信）を無効化
+os.environ["CONFIG_OVERRIDES"] = "0"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -324,6 +328,28 @@ def test_eyecatch_build():
     assert png and png[:8] == b"\x89PNG\r\n\x1a\n"   # PNGシグネチャ
     im = Image.open(io.BytesIO(png))
     assert im.size == (1200, 630)                      # OGPサイズ
+
+
+def test_config_deep_merge_and_prompt_override(monkeypatch):
+    from core import config, prompts
+    from core.models import Product
+
+    base = {"selection": {"min_price": 3000, "require_in_stock": True},
+            "prompts": {"style_guide": ""}}
+    over = {"selection": {"min_price": 5000}, "prompts": {"style_guide": "独自ガイド"}}
+    merged = config._deep_merge(base, over)
+    assert merged["selection"]["min_price"] == 5000          # 上書き
+    assert merged["selection"]["require_in_stock"] is True   # 既存は保持
+    assert merged["prompts"]["style_guide"] == "独自ガイド"
+
+    # プロンプトのstyle_guideがオーバーライドで差し替わる
+    monkeypatch.setattr(config, "get_rules",
+                        lambda: {"prompts": {"style_guide": "★カスタム文体★", "extra_instructions": "追加ルール"},
+                                 "article": {"min_chars": 6000, "competitor_brands": ["X"]}})
+    p = prompts.article_body_prompt(Product(brand="B", category="C"),
+                                    config.get_rules(), "（評価）")
+    assert "★カスタム文体★" in p          # 文体ガイド差し替え
+    assert "追加ルール" in p               # 追加指示が反映
 
 
 def test_internal_links(monkeypatch):

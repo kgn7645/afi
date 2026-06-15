@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>設定｜おうちベース</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:30px; }
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:460px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:14px; font-weight:700;
+          color:#8a86a0; text-decoration:none; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .flash{ background:#e3f8ee; color:#149a5e; border-radius:12px; padding:12px 14px; font-weight:800;
+          font-size:14px; margin:10px 0; }
+  .flash.warn{ background:#ffe7e7; color:#e0433f; }
+  .sec{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:16px 16px 6px;
+        margin:14px 0; }
+  .sec h2{ font-size:15px; margin:0 0 4px; } .sec .hint{ font-size:12px; color:#9a96ad; margin:0 0 12px; }
+  label{ display:block; font-size:13px; font-weight:700; margin:12px 0 5px; }
+  input[type=number],input[type=text],textarea{ width:100%; padding:11px 12px; border:1.5px solid #ece9f1;
+    border-radius:10px; font-size:15px; font-family:inherit; outline:none; transition:.15s; }
+  input:focus,textarea:focus{ border-color:var(--orange); }
+  textarea{ resize:vertical; line-height:1.6; }
+  .chk{ display:flex; align-items:center; gap:9px; margin:14px 0 6px; font-weight:700; font-size:14px; }
+  .chk input{ width:20px; height:20px; }
+  .save{ position:sticky; bottom:0; padding:14px 0 calc(14px + env(safe-area-inset-bottom)); background:linear-gradient(transparent,#f1eef6 30%); }
+  .save button{ width:100%; padding:16px; border:none; border-radius:14px; font-size:16px; font-weight:800;
+    color:#fff; background:linear-gradient(135deg,var(--orange),#ff7e5f); box-shadow:0 8px 20px rgba(255,126,95,.4);
+    transition:transform .12s; }
+  .save button:active{ transform:scale(.98); }
+  .ro{ background:#fff3cd; color:#8a6d1a; border-radius:12px; padding:12px 14px; font-size:13px; margin:10px 0; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="seg">
+    <a href="/select">🛍 選定</a><a href="/review">📝 承認</a><a href="/settings" class="on">⚙️ 設定</a>
+  </div>
+</div>
+<form class="wrap" method="post" action="/settings">
+  {% if saved=='1' %}<div class="flash">✓ 保存しました（生成に最大1分で反映）</div>{% endif %}
+  {% if saved=='fail' %}<div class="flash warn">保存に失敗しました（WP接続を確認）</div>{% endif %}
+  {% if not can_save %}<div class="ro">⚠️ 保存は無効です。サーバーの環境変数 <code>CONFIG_OVERRIDES=1</code> とWP接続が必要です（閲覧のみ可）。</div>{% endif %}
+
+  <div class="sec">
+    <h2>🛒 商品選定の基準</h2>
+    <p class="hint">クロール候補やバッチ生成の足切りに使われます</p>
+    <label>最低価格（円）これ未満は除外</label>
+    <input type="number" name="min_price" value="{{ d.min_price }}">
+    <label>除外キーワード（1行に1つ。商品名/カテゴリに含むと除外）</label>
+    <textarea name="exclude_keywords" rows="4">{{ d.exclude_keywords }}</textarea>
+  </div>
+
+  <div class="sec">
+    <h2>📝 記事の生成パラメータ</h2>
+    <label>本文の最低文字数</label>
+    <input type="number" name="min_chars" value="{{ d.min_chars }}">
+    <label>口コミの件数（良い/気になる 各）</label>
+    <input type="number" name="reviews_each" value="{{ d.reviews_each }}">
+    <label>口調（トーン）</label>
+    <input type="text" name="tone" value="{{ d.tone }}">
+    <label>比較で挙げる大手メーカー（1行に1つ）</label>
+    <textarea name="competitor_brands" rows="4">{{ d.competitor_brands }}</textarea>
+    <div class="chk"><input type="checkbox" name="ground_company" {{ 'checked' if d.ground_company }}>
+      企業情報をWeb検索で裏付ける（どこの国の誤生成対策）</div>
+  </div>
+
+  <div class="sec">
+    <h2>🎨 文体ガイド（プロンプト）</h2>
+    <p class="hint">記事の世界観・語り口・禁止事項。AIへの基本指示です</p>
+    <label>スタイルガイド</label>
+    <textarea name="style_guide" rows="12">{{ d.style_guide }}</textarea>
+    <label>追加の指示（任意・本文生成に上乗せ）</label>
+    <textarea name="extra_instructions" rows="4" placeholder="例：必ず実体験風のエピソードを1つ入れる／専門用語は必ず注釈をつける 等">{{ d.extra_instructions }}</textarea>
+  </div>
+
+  <div class="save"><button type="submit">設定を保存</button></div>
+</form>
+</body>
+</html>
