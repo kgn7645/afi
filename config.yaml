@@ -78,9 +78,12 @@ wordpress:
 # 優先順位: Canva(設定時) → Pillow合成 → 商品画像そのまま
 eyecatch:
   enabled: true
+  style: "amaviser"            # amaviser(ブランド名大＋商品＋下にコピー) | card(左コピー＋右カード)
   font_path: ""                # 日本語フォント(.ttf/.ttc)パス。空なら自動探索(mac/Linux)
-  bg_color: "#0d1b2a"
-  bg_color2: "#16324f"         # グラデ下端色
+  amaviser_bg: "#ffffff"       # amaviser風の背景（上）
+  amaviser_bg2: "#ece9ff"      # amaviser風の背景（下・淡い紫）
+  bg_color: "#0d1b2a"          # card風の背景（上）
+  bg_color2: "#16324f"         # card風の背景（下）
   accent_color: "#ff9900"
   text_color: "#ffffff"
 
