@@ -73,6 +73,11 @@ candidates:
   ranking_nodes:
     - kitchen/4083001          # 除湿機
 
+# --- プロンプト（Web管理画面/オーバーライドで上書き可能） ---
+prompts:
+  style_guide: ""              # 空ならコード内デフォルト(STYLE_GUIDE_DEFAULT)を使用
+  extra_instructions: ""       # 本文生成に追加する指示（任意）
+
 # --- 内部リンク（Issue #18: 関連記事の相互リンク） ---
 internal_links:
   enabled: true

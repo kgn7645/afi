@@ -10,8 +10,9 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from core import candidates, internal_links, pipeline, review, sheet_log, wordpress
-from core.config import ROOT, get_settings
+from core import (candidates, internal_links, overrides, pipeline, prompts,
+                  review, sheet_log, wordpress)
+from core.config import ROOT, get_rules, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
 templates = Jinja2Templates(directory=str(ROOT / "web" / "templates"))
@@ -239,6 +240,68 @@ def select_reject(request: Request, asin: str):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     ok = candidates.set_status(asin, "rejected")
     return JSONResponse({"ok": bool(ok)})
+
+
+# ============================================================
+# 設定/プロンプトのWeb編集（外部編集）
+# ============================================================
+@app.get("/settings", response_class=HTMLResponse)
+def settings_form(request: Request, saved: str = ""):
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    r = get_rules()
+    sel = r.get("selection", {}) or {}
+    art = r.get("article", {}) or {}
+    pr = r.get("prompts", {}) or {}
+    d = {
+        "min_price": sel.get("min_price", 3000),
+        "exclude_keywords": "\n".join(sel.get("exclude_keywords", []) or []),
+        "min_chars": art.get("min_chars", 6000),
+        "reviews_each": art.get("reviews_each", 5),
+        "tone": art.get("tone", ""),
+        "competitor_brands": "\n".join(art.get("competitor_brands", []) or []),
+        "ground_company": bool(art.get("ground_company", True)),
+        "style_guide": pr.get("style_guide") or prompts.STYLE_GUIDE_DEFAULT,
+        "extra_instructions": pr.get("extra_instructions", ""),
+    }
+    return templates.TemplateResponse(
+        "settings.html",
+        {"request": request, "d": d, "saved": saved, "can_save": overrides.enabled()})
+
+
+@app.post("/settings")
+def settings_save(
+    request: Request,
+    min_price: str = Form("3000"), exclude_keywords: str = Form(""),
+    min_chars: str = Form("6000"), reviews_each: str = Form("5"), tone: str = Form(""),
+    competitor_brands: str = Form(""), ground_company: str = Form(""),
+    style_guide: str = Form(""), extra_instructions: str = Form(""),
+):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+
+    def _int(v, dflt):
+        try:
+            return int(str(v).strip())
+        except ValueError:
+            return dflt
+
+    def _lines(v):
+        return [ln.strip() for ln in v.splitlines() if ln.strip()]
+
+    ov = {
+        "selection": {"min_price": _int(min_price, 3000),
+                      "exclude_keywords": _lines(exclude_keywords)},
+        "article": {"min_chars": _int(min_chars, 6000), "reviews_each": _int(reviews_each, 5),
+                    "tone": tone.strip(), "competitor_brands": _lines(competitor_brands),
+                    "ground_company": ground_company == "on"},
+        "prompts": {"style_guide": style_guide.strip(),
+                    "extra_instructions": extra_instructions.strip()},
+    }
+    ok = overrides.save(ov)
+    return RedirectResponse("/settings?saved=" + ("1" if ok else "fail"), status_code=303)
 
 
 if __name__ == "__main__":
