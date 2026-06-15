@@ -81,6 +81,12 @@ def load(force: bool = False) -> dict:
     return data
 
 
+def update(partial: dict) -> bool:
+    """既存のオーバーライドに partial を deep-merge して保存（他項目を壊さない）。"""
+    from .config import _deep_merge
+    return save(_deep_merge(load(force=True), partial))
+
+
 def save(data: dict) -> bool:
     """オーバーライド設定を保存（WP非公開ページにbase64 JSON）。"""
     if not get_settings().wordpress_ready:

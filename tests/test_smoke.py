@@ -330,6 +330,19 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_overrides_update(monkeypatch):
+    from core import overrides
+    # 既存に candidates があり、_crawl_request は維持しつつ candidates を差し替え
+    monkeypatch.setattr(overrides, "load",
+                        lambda force=False: {"_crawl_request": 111, "selection": {"min_price": 3000}})
+    saved = {}
+    monkeypatch.setattr(overrides, "save", lambda data: saved.update(d=data) or True)
+    overrides.update({"candidates": {"keywords": ["A", "B"]}})
+    assert saved["d"]["_crawl_request"] == 111                  # 既存を保持
+    assert saved["d"]["candidates"]["keywords"] == ["A", "B"]   # 追加
+    assert saved["d"]["selection"]["min_price"] == 3000         # 既存を保持
+
+
 def test_config_deep_merge_and_prompt_override(monkeypatch):
     from core import config, prompts
     from core.models import Product

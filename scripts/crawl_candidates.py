@@ -15,15 +15,41 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import amazon_rank, candidates  # noqa: E402
-from core.config import get_rules  # noqa: E402
+from core import amazon_rank, candidates, overrides  # noqa: E402
+from core.config import ROOT, get_rules  # noqa: E402
+
+_MARKER = ROOT / "data" / ".crawl_request"
+
+
+def _crawl_requested() -> bool:
+    """Web設定からの手動クロール要求が前回処理時刻より新しければ True（処理済みに更新）。"""
+    req = int(overrides.load(force=True).get("_crawl_request", 0) or 0)
+    last = 0
+    try:
+        last = int(_MARKER.read_text().strip())
+    except Exception:  # noqa: BLE001
+        last = 0
+    if req <= last:
+        return False
+    try:
+        _MARKER.parent.mkdir(parents=True, exist_ok=True)
+        _MARKER.write_text(str(req))
+    except Exception:  # noqa: BLE001
+        pass
+    return True
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="商品候補のクロール→候補プール投入")
     p.add_argument("--print", action="store_true", dest="dry", help="投入せずJSON表示")
     p.add_argument("--limit", type=int, default=0, help="max_totalを上書き")
+    p.add_argument("--if-requested", action="store_true", dest="if_requested",
+                   help="Web設定から手動クロール要求があった時のみ実行（cron用）")
     args = p.parse_args()
+
+    if args.if_requested and not _crawl_requested():
+        print("[crawl] 手動クロール要求なし。終了")
+        return
 
     cfg = get_rules().get("candidates", {})
     keywords = cfg.get("keywords", [])
@@ -46,6 +72,9 @@ def main() -> None:
         print(json.dumps(found, ensure_ascii=False, indent=2))
         return
 
+    if not found:
+        print("[crawl] 新規候補はありませんでした（既出のみ）。")
+        return
     ok = candidates.push(found)
     print(f"[crawl] 候補プールへ投入: {'OK' if ok else '失敗'}（{len(found)}件）")
 

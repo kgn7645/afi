@@ -45,8 +45,27 @@
 </div>
 <form class="wrap" method="post" action="/settings">
   {% if saved=='1' %}<div class="flash">✓ 保存しました（生成に最大1分で反映）</div>{% endif %}
+  {% if saved=='crawl' %}<div class="flash">🔎 クロールを予約しました（Xserverが数分以内に実行）</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">保存に失敗しました（WP接続を確認）</div>{% endif %}
   {% if not can_save %}<div class="ro">⚠️ 保存は無効です。サーバーの環境変数 <code>CONFIG_OVERRIDES=1</code> とWP接続が必要です（閲覧のみ可）。</div>{% endif %}
+
+  <div class="sec">
+    <h2>🔎 クロール（候補の自動収集）</h2>
+    <p class="hint">Amazon検索＋売れ筋ランキングから候補を集めます。変更後は「設定を保存」を先に。</p>
+    <label>検索キーワード（1行に1つ）</label>
+    <textarea name="keywords" rows="4" placeholder="ネッククーラー&#10;卓上扇風機">{{ d.keywords }}</textarea>
+    <label>売れ筋ランキング（カテゴリのノード。kitchen/4083001 形式 or フルURL。1行に1つ）</label>
+    <textarea name="ranking_nodes" rows="3" placeholder="kitchen/4083001">{{ d.ranking_nodes }}</textarea>
+    <label>1ソースあたりの取得数（per_source）</label>
+    <input type="number" name="per_source" value="{{ d.per_source }}">
+    <label>1回の上限（max_total）</label>
+    <input type="number" name="max_total" value="{{ d.max_total }}">
+    <button type="submit" formaction="/crawl/request" formnovalidate
+            style="width:100%;margin-top:14px;padding:14px;border:2px solid #ff9f1c;background:#fff;
+                   color:#c8810a;border-radius:13px;font-weight:800;font-size:15px;">
+      🔎 今すぐクロール（保存済みの設定で実行）
+    </button>
+  </div>
 
   <div class="sec">
     <h2>🛒 商品選定の基準</h2>

@@ -257,6 +257,7 @@ def settings_form(request: Request, saved: str = ""):
     sel = r.get("selection", {}) or {}
     art = r.get("article", {}) or {}
     pr = r.get("prompts", {}) or {}
+    cand = r.get("candidates", {}) or {}
     d = {
         "min_price": sel.get("min_price", 3000),
         "exclude_keywords": "\n".join(sel.get("exclude_keywords", []) or []),
@@ -267,6 +268,10 @@ def settings_form(request: Request, saved: str = ""):
         "ground_company": bool(art.get("ground_company", True)),
         "style_guide": pr.get("style_guide") or prompts.STYLE_GUIDE_DEFAULT,
         "extra_instructions": pr.get("extra_instructions", ""),
+        "keywords": "\n".join(cand.get("keywords", []) or []),
+        "ranking_nodes": "\n".join(cand.get("ranking_nodes", []) or []),
+        "per_source": cand.get("per_source", 10),
+        "max_total": cand.get("max_total", 40),
     }
     return templates.TemplateResponse(
         "settings.html",
@@ -280,6 +285,8 @@ def settings_save(
     min_chars: str = Form("6000"), reviews_each: str = Form("5"), tone: str = Form(""),
     competitor_brands: str = Form(""), ground_company: str = Form(""),
     style_guide: str = Form(""), extra_instructions: str = Form(""),
+    keywords: str = Form(""), ranking_nodes: str = Form(""),
+    per_source: str = Form("10"), max_total: str = Form("40"),
 ):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
@@ -301,9 +308,21 @@ def settings_save(
                     "ground_company": ground_company == "on"},
         "prompts": {"style_guide": style_guide.strip(),
                     "extra_instructions": extra_instructions.strip()},
+        "candidates": {"keywords": _lines(keywords), "ranking_nodes": _lines(ranking_nodes),
+                       "per_source": _int(per_source, 10), "max_total": _int(max_total, 40)},
     }
-    ok = overrides.save(ov)
+    ok = overrides.update(ov)   # 他項目(_crawl_request等)を壊さず部分更新
     return RedirectResponse("/settings?saved=" + ("1" if ok else "fail"), status_code=303)
+
+
+@app.post("/crawl/request")
+def crawl_request(request: Request):
+    """手動クロールを予約（Xserverが数分以内に実行）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    import time
+    ok = overrides.update({"_crawl_request": int(time.time())})
+    return RedirectResponse("/settings?saved=" + ("crawl" if ok else "fail"), status_code=303)
 
 
 if __name__ == "__main__":
