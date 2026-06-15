@@ -10,7 +10,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from core import pipeline, review, wordpress
+from core import pipeline, review, sheet_log, wordpress
 from core.config import ROOT, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -167,6 +167,7 @@ def review_publish(request: Request, post_id: int):
         return RedirectResponse("/review/login", status_code=303)
     try:
         wordpress.set_post_status(post_id, "publish")
+        sheet_log.log_status(post_id, "publish")
         msg = f"記事ID {post_id} を公開しました。"
     except Exception as e:  # noqa: BLE001
         msg = f"公開に失敗: {e}"
@@ -179,6 +180,7 @@ def review_reject(request: Request, post_id: int):
         return RedirectResponse("/review/login", status_code=303)
     try:
         wordpress.trash_post(post_id)
+        sheet_log.log_status(post_id, "trash")
         msg = f"記事ID {post_id} を却下（ゴミ箱）しました。"
     except Exception as e:  # noqa: BLE001
         msg = f"却下に失敗: {e}"
@@ -192,6 +194,7 @@ def review_to_draft(request: Request, post_id: int):
         return RedirectResponse("/review/login", status_code=303)
     try:
         wordpress.set_post_status(post_id, "draft")
+        sheet_log.log_status(post_id, "draft")
         msg = f"記事ID {post_id} を承認待ち（下書き）に戻しました。"
     except Exception as e:  # noqa: BLE001
         msg = f"操作に失敗: {e}"
