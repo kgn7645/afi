@@ -16,7 +16,11 @@ class Settings:
     """環境変数（.env）由来の設定。"""
 
     def __init__(self) -> None:
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        # 枠切れ(429)時のフォールバック用 追加キー（別プロジェクト=別の無料枠）
+        _extra = [os.getenv("GEMINI_API_KEY_2", "").strip(),
+                  os.getenv("GEMINI_API_KEY_3", "").strip()]
+        self.gemini_api_keys = [k for k in [self.gemini_api_key, *_extra] if k]
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
         self.wp_base_url = os.getenv("WP_BASE_URL", "").rstrip("/")
@@ -71,7 +75,7 @@ class Settings:
 
     @property
     def gemini_ready(self) -> bool:
-        return bool(self.gemini_api_key)
+        return bool(self.gemini_api_keys)
 
     @property
     def wordpress_ready(self) -> bool:
