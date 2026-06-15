@@ -7,10 +7,10 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from core import pipeline, review, sheet_log, wordpress
+from core import candidates, pipeline, review, sheet_log, wordpress
 from core.config import ROOT, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -199,6 +199,44 @@ def review_to_draft(request: Request, post_id: int):
     except Exception as e:  # noqa: BLE001
         msg = f"操作に失敗: {e}"
     return RedirectResponse(f"/review?msg={msg}", status_code=303)
+
+
+# ============================================================
+# 商品選定スワイプUI（Issue #3/#12）: 候補をスワイプで承認/却下
+# ============================================================
+@app.get("/select", response_class=HTMLResponse)
+def select_list(request: Request):
+    if not review.enabled():
+        return templates.TemplateResponse(
+            "select.html", {"request": request, "disabled": True, "items": []})
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    try:
+        items = candidates.list_by_status("pending", limit=50)
+        err = ""
+    except Exception as e:  # noqa: BLE001
+        items, err = [], f"候補の取得に失敗: {e}"
+    return templates.TemplateResponse(
+        "select.html",
+        {"request": request, "disabled": False, "items": items, "error": err,
+         "configured": candidates.enabled()},
+    )
+
+
+@app.post("/select/{asin}/approve")
+def select_approve(request: Request, asin: str):
+    if not _authed(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    ok = candidates.set_status(asin, "approved")
+    return JSONResponse({"ok": bool(ok)})
+
+
+@app.post("/select/{asin}/reject")
+def select_reject(request: Request, asin: str):
+    if not _authed(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    ok = candidates.set_status(asin, "rejected")
+    return JSONResponse({"ok": bool(ok)})
 
 
 if __name__ == "__main__":

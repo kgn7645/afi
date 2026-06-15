@@ -50,7 +50,10 @@
 <body>
 <header>
   <h1>📝 記事の承認</h1>
-  {% if not disabled %}<a href="/review/logout">ログアウト</a>{% endif %}
+  <span>
+    {% if not disabled %}<a href="/select" style="margin-right:12px;">🛍 商品選定</a>
+    <a href="/review/logout">ログアウト</a>{% endif %}
+  </span>
 </header>
 <div class="wrap">
   {% if disabled %}
