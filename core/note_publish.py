@@ -11,10 +11,38 @@ import uuid
 
 import requests
 
-from . import note_client, note_export, product_extractor
-from .config import get_settings
+from . import eyecatch, note_client, note_export, product_extractor
+from .config import get_rules, get_settings
 
 MAX_NOTE_IMAGES = 3
+
+
+def _attach_eyecatch(note_id: int, article, product) -> None:
+    """WPと同じアイキャッチをnote下書きの見出し画像に設定する（失敗は無視）。
+
+    eyecatch有効＋フォント有＋キャッチコピー有＋商品画像有のときだけ生成する。
+    pipeline._make_featured_media と同じ素材・同じ Pillow 合成を流用。
+    """
+    rules = get_rules()
+    if not rules.get("eyecatch", {}).get("enabled", True):
+        return
+    if not (article.catch_copy or "").strip() or not article.product_image_urls:
+        return
+    try:
+        r = requests.get(article.product_image_urls[0],
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+        r.raise_for_status()
+        png = eyecatch.build_eyecatch(
+            article.catch_copy, r.content,
+            brand=getattr(product, "brand", ""),
+            site_name=rules.get("eeat", {}).get("site_name", ""),
+            stars=getattr(article, "trust_total", None))
+        if not png:
+            return
+        w, h = note_export.get_image_size(png)
+        note_client.set_eyecatch(note_id, png, width=w, height=h)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _upload_product_images(image_urls: list[str]) -> list[tuple[str, int, int]]:
@@ -56,12 +84,14 @@ def create_note_draft(article, product, *, source_url: str = "",
             body_html, body_len = note_export.build_note_html(
                 article, product, amazon_embeds=embeds)
             note_client.save_draft(note["id"], article.title, body_html, body_len)
+            _attach_eyecatch(note["id"], article, product)
             return {"id": note["id"],
                     "edit_url": f"https://editor.note.com/notes/{note['key']}/edit/"}
         # もしも/楽天モード: 商品画像をnoteへ上げて本文に
         images = _upload_product_images(article.product_image_urls)
         body_html, body_len = note_export.build_note_html(article, product, images)
         res = note_client.create_draft(article.title, body_html, body_len)
+        _attach_eyecatch(res["id"], article, product)
         return {"id": res["id"], "edit_url": res["edit_url"]}
     except Exception as e:  # noqa: BLE001
         if result is not None:

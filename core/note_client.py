@@ -100,6 +100,27 @@ def save_draft(note_id: int, title: str, body_html: str, body_length: int, *, ti
     r.raise_for_status()
 
 
+def set_eyecatch(note_id: int, image_bytes: bytes, *, width: int, height: int,
+                 filename: str = "eyecatch.png", content_type: str = "image/png",
+                 timeout: int = 30) -> bool:
+    """下書きの見出し画像（アイキャッチ）を設定する。
+
+    ブラウザのキャプチャから判明した内部API:
+      POST /api/v1/image_upload/note_eyecatch
+      multipart: note_id / file(画像) / width / height
+    サーバ側で note_id の下書きに直接ひも付くため、draft_save の前後どちらでもよい。
+    成功時 True。失敗してもWP/note本文は止めない想定で例外は投げない。
+    """
+    sess = _session()
+    r = sess.post(
+        "https://note.com/api/v1/image_upload/note_eyecatch",
+        data={"note_id": str(note_id), "width": str(width), "height": str(height)},
+        files={"file": (filename, image_bytes, content_type)},
+        timeout=timeout,
+    )
+    return r.status_code in (200, 201)
+
+
 def get_external_embed(note_key: str, url: str, *, timeout: int = 25) -> dict:
     """外部URLのカード（リンクカード）情報を生成し {key, html_for_embed} を返す。
 
