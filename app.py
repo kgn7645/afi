@@ -31,6 +31,34 @@ def _set_auth_cookie(resp: RedirectResponse, request: Request) -> None:
                     samesite="lax", secure=(request.url.scheme == "https"))
 
 
+def _ago(ts: int) -> str:
+    """epoch秒 → 「3分前」等の相対表記。"""
+    import time
+    if not ts:
+        return ""
+    d = int(time.time()) - int(ts)
+    if d < 60:
+        return f"{d}秒前"
+    if d < 3600:
+        return f"{d // 60}分前"
+    if d < 86400:
+        return f"{d // 3600}時間前"
+    return f"{d // 86400}日前"
+
+
+def _crawl_status() -> dict:
+    """クロール状況（Xserverが書いた _crawl_status）＋相対時刻を返す。"""
+    st = {}
+    try:
+        if overrides.enabled():
+            st = dict(overrides.load(force=True).get("_crawl_status") or {})
+    except Exception:  # noqa: BLE001
+        st = {}
+    st["started_ago"] = _ago(st.get("started_at", 0))
+    st["finished_ago"] = _ago(st.get("finished_at", 0))
+    return st
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     s = get_settings()
@@ -224,8 +252,23 @@ def select_list(request: Request):
     return templates.TemplateResponse(
         "select.html",
         {"request": request, "disabled": False, "items": items, "error": err,
-         "configured": candidates.enabled()},
+         "configured": candidates.enabled(),
+         "crawl": _crawl_status(), "pending": len(items)},
     )
+
+
+@app.get("/crawl/status")
+def crawl_status_json(request: Request):
+    """クロール状況＋候補プール件数をJSONで返す（UIのポーリング用）。"""
+    if not _authed(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    st = _crawl_status()
+    try:
+        st["pending"] = len(candidates.list_by_status("pending", limit=200))
+        st["approved"] = len(candidates.list_by_status("approved", limit=200))
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({"ok": True, "crawl": st})
 
 
 @app.post("/select/{asin}/approve")
@@ -282,7 +325,8 @@ def settings_form(request: Request, saved: str = ""):
     }
     return templates.TemplateResponse(
         "settings.html",
-        {"request": request, "d": d, "saved": saved, "can_save": overrides.enabled()})
+        {"request": request, "d": d, "saved": saved, "can_save": overrides.enabled(),
+         "crawl": _crawl_status()})
 
 
 @app.post("/settings")
@@ -337,7 +381,12 @@ def crawl_request(request: Request):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     import time
-    ok = overrides.update({"_crawl_request": int(time.time())})
+    now = int(time.time())
+    # 予約状態を即座に表示できるよう _crawl_status も requested に（Xserverが拾うと running→done）
+    ok = overrides.update({"_crawl_request": now,
+                           "_crawl_status": {"state": "requested", "started_at": 0,
+                                             "finished_at": 0, "requested_at": now,
+                                             "message": "クロールを予約しました（数分以内に実行）"}})
     return RedirectResponse("/settings?saved=" + ("crawl" if ok else "fail"), status_code=303)
 
 

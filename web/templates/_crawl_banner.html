@@ -1,0 +1,19 @@
+{% if crawl is defined and crawl and crawl.state %}
+<div id="crawlBanner" style="max-width:680px;margin:8px auto;border-radius:12px;padding:11px 13px;font-size:13px;font-weight:700;line-height:1.5;
+  {% if crawl.state=='running' or crawl.state=='requested' %}background:#fff4d6;color:#8a6d1a;
+  {% elif crawl.state=='done' %}background:#e3f8ee;color:#149a5e;
+  {% elif crawl.state=='error' %}background:#ffe7e7;color:#e0433f;
+  {% else %}background:#eef0f6;color:#5b5b72;{% endif %}">
+  {% if crawl.state=='requested' %}🟡 クロール予約済み — 数分以内にXserverが実行します（このページを更新で最新に）
+  {% elif crawl.state=='running' %}🔵 クロール実行中…（{{ crawl.started_ago }}開始）
+  {% elif crawl.state=='done' %}🟢 クロール完了（{{ crawl.finished_ago }}）— 採用 <b>{{ crawl.pushed }}件</b> / 足切り {{ crawl.screened }}件
+  {% elif crawl.state=='empty' %}⚪ クロール完了（{{ crawl.finished_ago }}）— 新規 <b>0件</b>（足切り {{ crawl.screened }}件）{% if crawl.top_reasons %}<br><span style="font-weight:400">理由: {{ crawl.top_reasons|join(' / ') }}</span>{% endif %}
+  {% elif crawl.state=='error' %}🔴 クロール失敗（{{ crawl.finished_ago }}）— {{ crawl.message }}
+  {% endif %}
+  {% if pending is defined %}<span style="opacity:.8">　｜　承認待ち {{ pending }}件</span>{% endif %}
+  <a href="" onclick="location.reload();return false;" style="float:right;color:inherit;opacity:.7;text-decoration:underline">🔄更新</a>
+</div>
+{% if crawl.state=='running' or crawl.state=='requested' %}
+<script>setTimeout(function(){location.reload();}, 15000);</script>
+{% endif %}
+{% endif %}
