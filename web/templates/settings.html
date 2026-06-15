@@ -52,6 +52,7 @@
   <div class="sec">
     <h2>🔎 クロール（候補の自動収集）</h2>
     <p class="hint">Amazon検索＋売れ筋ランキングから候補を集めます。変更後は「設定を保存」を先に。</p>
+    {% include "_crawl_banner.html" %}
     <label>検索キーワード（1行に1つ）</label>
     <textarea name="keywords" rows="4" placeholder="ネッククーラー&#10;卓上扇風機">{{ d.keywords }}</textarea>
     <label>売れ筋ランキング（カテゴリのノード。kitchen/4083001 形式 or フルURL。1行に1つ）</label>

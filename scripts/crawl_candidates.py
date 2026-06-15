@@ -2,6 +2,9 @@
 Issue #3: Amazon売れ筋/検索から商品候補をクロールし、候補プール(スプレッドシート)へ投入。
 Xserverのcronで定期実行する想定（日本IPでないとAmazonにブロックされやすい）。
 
+実行状況は設定オーバーライド(WP)の `_crawl_status` に書き出し、Web UI(Render)から
+「実行中／完了(採用N件)／失敗」が見えるようにする（Issue: クロール状況の見える化）。
+
 使い方:
   python scripts/crawl_candidates.py            # config.yaml の keywords/nodes をクロール→投入
   python scripts/crawl_candidates.py --print    # 投入せず候補をJSON表示（動作確認）
@@ -11,6 +14,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -39,6 +44,21 @@ def _crawl_requested() -> bool:
     return True
 
 
+def _set_status(**kw) -> None:
+    """クロール状況を共有ストア(WP)へ記録。Web UIが /crawl/status で読む。失敗は無視。"""
+    try:
+        overrides.update({"_crawl_status": kw})
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _reason_label(reason: str) -> str:
+    for key in ("価格", "在庫切れ", "大手ブランド", "除外カテゴリ"):
+        if key in reason[:8]:
+            return key
+    return (reason.split(" ")[0] or reason)[:10]
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="商品候補のクロール→候補プール投入")
     p.add_argument("--print", action="store_true", dest="dry", help="投入せずJSON表示")
@@ -63,14 +83,32 @@ def main() -> None:
 
     exclude = set() if args.dry else candidates.known_asins()
     sk = amazon_rank.seasonal_keywords() if season else []
+    started = int(time.time())
     print(f"[crawl] keywords={len(keywords)} nodes={len(nodes)} urls={len(source_urls)} "
           f"季節={','.join(sk) or '無'} 既存除外={len(exclude)}件 …収集中")
 
+    if not args.dry:
+        _set_status(state="running", started_at=started, finished_at=0,
+                    keywords=len(keywords), nodes=len(nodes), urls=len(source_urls),
+                    kept=0, screened=0, pushed=0, message="収集中…")
+
     report: list[dict] = []
-    found = amazon_rank.collect(keywords=keywords, nodes=nodes, source_urls=source_urls,
-                                per_source=per_source, max_total=max_total,
-                                exclude_asins=exclude, season=season, report=report)
-    print(f"[crawl] 採用 {len(found)} 件 / 選定基準で足切り {len(report)} 件")
+    try:
+        found = amazon_rank.collect(
+            keywords=keywords, nodes=nodes, source_urls=source_urls,
+            per_source=per_source, max_total=max_total,
+            exclude_asins=exclude, season=season, report=report)
+    except Exception as e:  # noqa: BLE001
+        print(f"[crawl] 🔥 失敗: {e}")
+        if not args.dry:
+            _set_status(state="error", started_at=started, finished_at=int(time.time()),
+                        keywords=len(keywords), nodes=len(nodes), urls=len(source_urls),
+                        kept=0, screened=len(report), pushed=0, message=str(e)[:200])
+        raise
+
+    tally = Counter(_reason_label(r["reason"]) for r in report)
+    top_reasons = [f"{k}×{v}" for k, v in tally.most_common(5)]
+    print(f"[crawl] 採用 {len(found)} 件 / 選定基準で足切り {len(report)} 件 {top_reasons}")
     for r in report[:12]:
         print(f"   ⛔ {r['reason']}: {r['title']}")
 
@@ -80,11 +118,22 @@ def main() -> None:
         print(json.dumps(found, ensure_ascii=False, indent=2))
         return
 
-    if not found:
+    pushed = 0
+    if found:
+        ok = candidates.push(found)
+        pushed = len(found) if ok else 0
+        print(f"[crawl] 候補プールへ投入: {'OK' if ok else '失敗'}（{len(found)}件）")
+    else:
         print("[crawl] 新規候補はありませんでした（既出のみ）。")
-        return
-    ok = candidates.push(found)
-    print(f"[crawl] 候補プールへ投入: {'OK' if ok else '失敗'}（{len(found)}件）")
+
+    _set_status(
+        state="done" if pushed else "empty",
+        started_at=started, finished_at=int(time.time()),
+        keywords=len(keywords), nodes=len(nodes), urls=len(source_urls),
+        kept=len(found), screened=len(report), pushed=pushed,
+        top_reasons=top_reasons,
+        message=(f"{pushed}件を候補プールへ追加" if pushed
+                 else "新規候補なし（既出または全て足切り）"))
 
 
 if __name__ == "__main__":
