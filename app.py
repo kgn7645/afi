@@ -264,6 +264,8 @@ def settings_form(request: Request, saved: str = ""):
         "per_run": gen.get("per_run", 2),
         "min_price": sel.get("min_price", 3000),
         "exclude_keywords": "\n".join(sel.get("exclude_keywords", []) or []),
+        "exclude_brands": "\n".join(sel.get("exclude_brands", []) or []),
+        "seasonal_boost": bool(sel.get("seasonal_boost", True)),
         "min_chars": art.get("min_chars", 6000),
         "reviews_each": art.get("reviews_each", 5),
         "tone": art.get("tone", ""),
@@ -274,6 +276,7 @@ def settings_form(request: Request, saved: str = ""):
         "title_format": pr.get("title_format") or prompts.DEFAULT_TITLE_FORMAT,
         "keywords": "\n".join(cand.get("keywords", []) or []),
         "ranking_nodes": "\n".join(cand.get("ranking_nodes", []) or []),
+        "source_urls": "\n".join(cand.get("source_urls", []) or []),
         "per_source": cand.get("per_source", 10),
         "max_total": cand.get("max_total", 40),
     }
@@ -286,11 +289,12 @@ def settings_form(request: Request, saved: str = ""):
 def settings_save(
     request: Request,
     min_price: str = Form("3000"), exclude_keywords: str = Form(""),
+    exclude_brands: str = Form(""), seasonal_boost: str = Form(""),
     min_chars: str = Form("6000"), reviews_each: str = Form("5"), tone: str = Form(""),
     competitor_brands: str = Form(""), ground_company: str = Form(""),
     style_guide: str = Form(""), extra_instructions: str = Form(""),
     title_format: str = Form(""),
-    keywords: str = Form(""), ranking_nodes: str = Form(""),
+    keywords: str = Form(""), ranking_nodes: str = Form(""), source_urls: str = Form(""),
     per_source: str = Form("10"), max_total: str = Form("40"),
     interval_minutes: str = Form("20"), per_run: str = Form("2"),
 ):
@@ -308,7 +312,9 @@ def settings_save(
 
     ov = {
         "selection": {"min_price": _int(min_price, 3000),
-                      "exclude_keywords": _lines(exclude_keywords)},
+                      "exclude_keywords": _lines(exclude_keywords),
+                      "exclude_brands": _lines(exclude_brands),
+                      "seasonal_boost": seasonal_boost == "on"},
         "article": {"min_chars": _int(min_chars, 6000), "reviews_each": _int(reviews_each, 5),
                     "tone": tone.strip(), "competitor_brands": _lines(competitor_brands),
                     "ground_company": ground_company == "on"},
@@ -316,6 +322,7 @@ def settings_save(
                     "extra_instructions": extra_instructions.strip(),
                     "title_format": title_format.strip()},
         "candidates": {"keywords": _lines(keywords), "ranking_nodes": _lines(ranking_nodes),
+                       "source_urls": _lines(source_urls),
                        "per_source": _int(per_source, 10), "max_total": _int(max_total, 40)},
         "generation": {"interval_minutes": max(5, _int(interval_minutes, 20)),
                        "per_run": _int(per_run, 2)},
