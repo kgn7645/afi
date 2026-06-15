@@ -7,9 +7,18 @@
 
 ## 1. 連携アプリを作成
 1. https://www.canva.com/developers/ で Integration を作成
-2. スコープを付与: `design:content:write`, `asset:write`, `design:meta:read`（Autofill/Export用）
-3. Client ID / Client Secret を控える
-4. OAuth2.0 でアカウント連携し、**リフレッシュトークン**を取得（リフレッシュトークンは利用ごとに回転＝自動で `data/canva_token.json` に保存される）
+2. スコープを付与: `asset:write`, `design:content:write`, `design:content:read`,
+   `design:meta:read`, `brandtemplate:meta:read`, `brandtemplate:content:read`
+3. **Redirect URL** に `http://127.0.0.1:8080/callback` を登録（下記ヘルパーと一致させる）
+4. Client ID / Client Secret を控える
+
+## 1.5 リフレッシュトークンを取得（ヘルパーで自動）
+`.env` に `CANVA_CLIENT_ID` / `CANVA_CLIENT_SECRET` を設定してから、**手元の（ブラウザが開ける）ターミナル**で:
+```
+python scripts/canva_auth.py
+```
+ブラウザでCanvaの認可画面 → 「許可」→ 自動でトークン取得し `data/canva_token.json` に保存。
+表示された `CANVA_REFRESH_TOKEN=...` を `.env` に貼ってもよい（トークンは利用ごとに回転し、最新が自動保存される）。
 
 ## 2. ブランドテンプレートを用意
 1. Canvaで 1200×630 のデザインを作成し、**ブランドテンプレート**として保存
