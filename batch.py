@@ -84,8 +84,10 @@ def main() -> None:
             print(f"  ❌ 失敗: {it['key']} - {it.get('error', it.get('status'))}")
     print("=" * 60)
 
-    # 通知（Issue #21）: 失敗があれば必ず、成功時はNOTIFY_ON_SUCCESSに従う
-    if notify.enabled() and (s["failed"] > 0 or get_settings().notify_on_success):
+    # 通知（Issue #21）: 生成があった時だけ通知（短間隔ポーリングのスパム回避）。
+    # 空振り/枠切れの連続失敗では通知しない。異常終了は上のexceptで別途通知。
+    # NOTIFY_ON_SUCCESS=false なら成功時も黙る（失敗のみ運用にしたい場合）。
+    if notify.enabled() and s["generated"] > 0 and get_settings().notify_on_success:
         notify.send(notify.summarize_batch(s))
 
 
