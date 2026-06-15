@@ -73,6 +73,11 @@ candidates:
   ranking_nodes:
     - kitchen/4083001          # 除湿機
 
+# --- 内部リンク（Issue #18: 関連記事の相互リンク） ---
+internal_links:
+  enabled: true
+  count: 4                     # 「あわせて読みたい」に出す関連記事の数
+
 # --- 自動QA（Issue #16: 薬機法/誇大・構成・整形の検査） ---
 qa:
   enabled: true

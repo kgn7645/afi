@@ -10,7 +10,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from core import candidates, pipeline, review, sheet_log, wordpress
+from core import candidates, internal_links, pipeline, review, sheet_log, wordpress
 from core.config import ROOT, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -168,6 +168,8 @@ def review_publish(request: Request, post_id: int):
     try:
         wordpress.set_post_status(post_id, "publish")
         sheet_log.log_status(post_id, "publish")
+        # 内部リンク（#18）: 同カテゴリ記事を相互リンク更新（被リンク付与）
+        internal_links.refresh_after_publish(post_id)
         msg = f"記事ID {post_id} を公開しました。"
     except Exception as e:  # noqa: BLE001
         msg = f"公開に失敗: {e}"
