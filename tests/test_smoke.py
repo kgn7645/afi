@@ -326,6 +326,57 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_amazon_rank(monkeypatch):
+    from core import amazon_rank as ar
+
+    class Resp:
+        def __init__(self, code, text):
+            self.status_code = code
+            self.text = text
+
+    # 検索: data-asin から抽出（重複除去・limit）
+    search_html = '<div data-asin="B0AAAAAAA1"></div><div data-asin="B0AAAAAAA1"></div>' \
+                  '<div data-asin="B0BBBBBBB2"></div>'
+    monkeypatch.setattr(ar.requests, "get", lambda *a, **k: Resp(200, search_html))
+    assert ar.search_asins("x", limit=5) == ["B0AAAAAAA1", "B0BBBBBBB2"]
+
+    # ランキング: /dp/ から抽出
+    rank_html = 'a href="/dp/B0CCCCCCC3" b /dp/B0CCCCCCC3 /dp/B0DDDDDDD4'
+    monkeypatch.setattr(ar.requests, "get", lambda *a, **k: Resp(200, rank_html))
+    assert ar.ranking_asins("kitchen/1", limit=5) == ["B0CCCCCCC3", "B0DDDDDDD4"]
+
+    # build_candidate: タイトル/画像/価格を抽出
+    prod = ('<span id="productTitle"> RANVOO AICE3 </span>'
+            '..."hiRes":"https://m.media-amazon.com/images/I/x.jpg"...'
+            '"priceAmount": 6980.0')
+    monkeypatch.setattr(ar.requests, "get", lambda *a, **k: Resp(200, prod))
+    c = ar.build_candidate("B0CCCCCCC3")
+    assert c["title"] == "RANVOO AICE3" and c["price"] == 6980
+    assert c["image"].endswith("x.jpg") and c["asin"] == "B0CCCCCCC3"
+    # 無効ページ → None
+    monkeypatch.setattr(ar.requests, "get", lambda *a, **k: Resp(200, "何かお探し"))
+    assert ar.build_candidate("B0DEAD0000") is None
+
+
+def test_candidates_client(monkeypatch):
+    from core import candidates
+    s = candidates.get_settings()
+    monkeypatch.setattr(s, "candidates_webhook_url", "", raising=False)
+    assert candidates.enabled() is False
+    assert candidates.push([{"asin": "x"}]) is False
+    assert candidates.list_by_status("pending") == []
+
+    monkeypatch.setattr(s, "candidates_webhook_url", "https://cand.test/exec", raising=False)
+    sent = {}
+    monkeypatch.setattr(candidates.requests, "post",
+                        lambda url, **k: sent.update(json=k.get("json")) or type("R", (), {})())
+    assert candidates.enabled() is True
+    candidates.push([{"asin": "B01"}])
+    assert sent["json"]["action"] == "append" and sent["json"]["candidates"][0]["asin"] == "B01"
+    candidates.set_status("B01", "approved")
+    assert sent["json"] == {"action": "status", "asin": "B01", "status": "approved"}
+
+
 def test_notify(monkeypatch):
     from core import notify
     s = notify.get_settings()

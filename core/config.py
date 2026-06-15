@@ -44,6 +44,8 @@ class Settings:
         # 運用通知（Slack/Discord等のIncoming Webhook）。失敗/完了を通知（Issue #21）
         self.notify_webhook_url = os.getenv("NOTIFY_WEBHOOK_URL", "").strip()
         self.notify_on_success = os.getenv("NOTIFY_ON_SUCCESS", "true").lower() != "false"
+        # 商品候補プール（クローラ書込＋スワイプUI読み書きの共有先 / Issue #3/#12）
+        self.candidates_webhook_url = os.getenv("CANDIDATES_WEBHOOK_URL", "").strip()
 
         # note 非公式API用のセッションCookie（_note_session_v5 の値 / Issue #2）
         self.note_session = os.getenv("NOTE_SESSION", "").strip()
