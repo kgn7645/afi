@@ -14,11 +14,24 @@ from __future__ import annotations
 
 import argparse
 
-from core import batch
-from core.config import ROOT
+from core import batch, notify
+from core.config import ROOT, get_settings
+
+LOG_PATH = ROOT / "data" / "batch.log"
+
+
+def _rotate_log(max_bytes: int = 2_000_000, keep_lines: int = 1000) -> None:
+    """batch.log が肥大化したら末尾だけ残す簡易ローテーション（Issue #21）。"""
+    try:
+        if LOG_PATH.exists() and LOG_PATH.stat().st_size > max_bytes:
+            tail = LOG_PATH.read_text(errors="ignore").splitlines()[-keep_lines:]
+            LOG_PATH.write_text("\n".join(tail) + "\n")
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def main() -> None:
+    _rotate_log()
     # 既定キュー: QUEUE_SHEET_CSV_URL があればスプレッドシート公開CSV、なければローカルCSV
     from core.config import get_settings
     default_queue = get_settings().queue_sheet_csv_url or str(ROOT / "data" / "queue.csv")
@@ -41,6 +54,13 @@ def main() -> None:
         # cronで毎日走るため、キュー未配置でも異常終了させず静かに終える
         print(f"[batch] キューが無いためスキップ: {e}")
         return
+    except Exception as e:  # noqa: BLE001
+        # 想定外の異常終了は必ず通知して非ゼロ終了（cron監視で検知）
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[batch] 🔥 異常終了: {e}\n{tb}")
+        notify.send(f"🔥 記事バッチが異常終了しました\n{e}\n```\n{tb[-700:]}\n```")
+        raise SystemExit(1)
 
     print("=" * 60)
     print(f"生成: {s['generated']} / 重複スキップ: {s['skipped_dup']} / 失敗: {s['failed']}")
@@ -56,6 +76,10 @@ def main() -> None:
         else:
             print(f"  ❌ 失敗: {it['key']} - {it.get('error', it.get('status'))}")
     print("=" * 60)
+
+    # 通知（Issue #21）: 失敗があれば必ず、成功時はNOTIFY_ON_SUCCESSに従う
+    if notify.enabled() and (s["failed"] > 0 or get_settings().notify_on_success):
+        notify.send(notify.summarize_batch(s))
 
 
 if __name__ == "__main__":

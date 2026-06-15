@@ -326,6 +326,37 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_notify(monkeypatch):
+    from core import notify
+    s = notify.get_settings()
+    # 未設定なら no-op
+    monkeypatch.setattr(s, "notify_webhook_url", "", raising=False)
+    assert notify.enabled() is False
+    assert notify.send("x") is False
+
+    # 設定ありならSlack/Discord両対応payloadでPOST
+    monkeypatch.setattr(s, "notify_webhook_url", "https://hook.test/x", raising=False)
+    sent = {}
+    monkeypatch.setattr(notify.requests, "post",
+                        lambda url, **k: sent.update(url=url, json=k.get("json")) or type("R", (), {})())
+    assert notify.send("やあ") is True
+    assert sent["json"] == {"text": "やあ", "content": "やあ"}
+
+    # バッチ要約の整形
+    msg = notify.summarize_batch({
+        "generated": 2, "skipped_dup": 1, "failed": 1,
+        "items": [
+            {"status": "ok", "warnings": ["w1"]},
+            {"status": "error", "key": "BrandX", "error": "429"},
+            {"status": "selection_ng", "key": "BrandY", "reason": "安すぎ"},
+        ],
+    })
+    assert "生成 2" in msg and "失敗 1" in msg
+    assert "❌ 失敗: BrandX - 429" in msg
+    assert "⛔ 選定NG: BrandY" in msg
+    assert "警告 計1件" in msg
+
+
 def test_sheet_log(monkeypatch):
     from core import sheet_log
     s = sheet_log.get_settings()
