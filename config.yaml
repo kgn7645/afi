@@ -74,13 +74,22 @@ wordpress:
   # SEOプラグインのメタ用キー（Rank Math / Yoast）。使うものに合わせる
   seo_plugin: "rankmath"       # rankmath | yoast | none
 
-# --- アイキャッチ画像の自動生成（Issue #5: キャッチコピー＋商品画像を合成） ---
+# --- アイキャッチ画像の自動生成（Issue #5） ---
+# 優先順位: Canva(設定時) → Pillow合成 → 商品画像そのまま
 eyecatch:
   enabled: true
   font_path: ""                # 日本語フォント(.ttf/.ttc)パス。空なら自動探索(mac/Linux)
   bg_color: "#0d1b2a"
+  bg_color2: "#16324f"         # グラデ下端色
   accent_color: "#ff9900"
   text_color: "#ffffff"
+
+# Canva Connect API（任意・有料プラン＋OAuth設定が必要。docs/canva-setup.md）
+canva:
+  enabled: false               # trueかつ.env/テンプレ設定が揃えばCanvaを優先
+  brand_template_id: ""        # CanvaブランドテンプレID
+  text_field: "headline"       # テンプレのテキスト差込口名
+  image_field: "product"       # テンプレの画像差込口名
 
 # --- E-E-A-T（信頼性の土台） ---
 eeat:

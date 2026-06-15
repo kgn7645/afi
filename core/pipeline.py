@@ -8,8 +8,8 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import (affiliate, content_generator, eyecatch, moshimo_link, product_extractor,
-               product_selector, prompts, qa, site_setup, wordpress)
+from . import (affiliate, canva, content_generator, eyecatch, moshimo_link,
+               product_extractor, product_selector, prompts, qa, site_setup, wordpress)
 from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
 from .models import PipelineResult, Product
@@ -142,23 +142,42 @@ def _make_featured_media(article, product: Product, result: PipelineResult) -> i
     if not urls:
         return None
     rules = get_rules()
-    if (rules.get("eyecatch", {}).get("enabled", True)
-            and eyecatch.available() and (article.catch_copy or "").strip()):
+    site = rules.get("eeat", {}).get("site_name", "")
+    has_copy = bool((article.catch_copy or "").strip())
+
+    # 商品画像のバイト列（Canva/Pillow合成に必要）
+    img_bytes = b""
+    if rules.get("eyecatch", {}).get("enabled", True) and has_copy:
         try:
             import requests
-            img = requests.get(urls[0], headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-            img.raise_for_status()
-            site = rules.get("eeat", {}).get("site_name", "")
-            png = eyecatch.build_eyecatch(article.catch_copy, img.content,
-                                          brand=product.brand, site_name=site)
-            if png:
+            r = requests.get(urls[0], headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+            r.raise_for_status()
+            img_bytes = r.content
+        except Exception as e:  # noqa: BLE001
+            result.warnings.append(f"商品画像の取得に失敗（アイキャッチ簡易化）: {e}")
+
+    if img_bytes:
+        # 1) Canva（設定時）→ 2) Pillow合成 の順で試す
+        png = None
+        if canva.available():
+            png = canva.build_eyecatch(article.catch_copy, img_bytes,
+                                       brand=product.brand, site_name=site)
+            if not png:
+                result.warnings.append("Canvaアイキャッチ生成に失敗（Pillowで代替）")
+        if not png:
+            png = eyecatch.build_eyecatch(article.catch_copy, img_bytes,
+                                          brand=product.brand, site_name=site,
+                                          stars=article.trust_total)
+        if png:
+            try:
                 fid = abs(hash(article.title)) % 10**8
                 media = wordpress.upload_image_bytes(
                     png, filename=f"eyecatch-{fid}.png", content_type="image/png")
                 return media.get("id")
-        except Exception as e:  # noqa: BLE001
-            result.warnings.append(f"アイキャッチ生成に失敗（商品画像で代替）: {e}")
-    # フォールバック: 商品画像そのまま
+            except Exception as e:  # noqa: BLE001
+                result.warnings.append(f"アイキャッチ画像のアップロードに失敗: {e}")
+
+    # 3) フォールバック: 商品画像そのまま（#42）
     try:
         media = wordpress.upload_image_from_url(urls[0])
         return media.get("id")
