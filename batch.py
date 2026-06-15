@@ -14,10 +14,31 @@ from __future__ import annotations
 
 import argparse
 
+import time
+
 from core import batch, notify
-from core.config import ROOT, get_settings
+from core.config import ROOT, get_rules, get_settings
 
 LOG_PATH = ROOT / "data" / "batch.log"
+_GEN_MARKER = ROOT / "data" / ".last_gen"
+
+
+def _interval_gate() -> bool:
+    """設定の generation.interval_minutes 未満なら False（cronは5分毎・実間隔はここで制御）。"""
+    iv = int(get_rules().get("generation", {}).get("interval_minutes", 20))
+    last = 0.0
+    try:
+        last = float(_GEN_MARKER.read_text().strip())
+    except Exception:  # noqa: BLE001
+        last = 0.0
+    if time.time() - last < iv * 60 - 30:   # 30秒の余裕（cronの早発火対策）
+        return False
+    try:
+        _GEN_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        _GEN_MARKER.write_text(str(time.time()))
+    except Exception:  # noqa: BLE001
+        pass
+    return True
 
 
 def _rotate_log(max_bytes: int = 2_000_000, keep_lines: int = 1000) -> None:
@@ -38,7 +59,7 @@ def main() -> None:
 
     p = argparse.ArgumentParser(description="アフィリエイト記事のバッチ生成")
     p.add_argument("--queue", default=default_queue, help="キューCSVのパス or 公開CSV URL")
-    p.add_argument("--limit", type=int, default=15, help="1回で生成する最大件数")
+    p.add_argument("--limit", type=int, default=0, help="1回の生成数（0=設定値を使用）")
     p.add_argument("--no-wp", action="store_true", help="WordPressへ送らない")
     p.add_argument("--status", default="draft", choices=["draft", "publish"], help="投稿ステータス")
     p.add_argument("--skip-dedup", action="store_true", help="重複チェックを無効化")
@@ -46,15 +67,22 @@ def main() -> None:
                    help="承認済み候補(スワイプ選定)から生成する（CSVキューの代わり）")
     args = p.parse_args()
 
+    # 承認済み候補モードは「設定の実行間隔」でゲート（cronは5分毎に回す前提）
+    if args.candidates and not _interval_gate():
+        print("[batch] 実行間隔に未到達のためスキップ")
+        return
+
+    gen = get_rules().get("generation", {})
+    limit = args.limit or (gen.get("per_run", 2) if args.candidates else 15)
     src = "承認済み候補" if args.candidates else args.queue
-    print(f"[batch] source={src} limit={args.limit} wp={not args.no_wp} status={args.status}")
+    print(f"[batch] source={src} limit={limit} wp={not args.no_wp} status={args.status}")
     try:
         if args.candidates:
             s = batch.run_candidates_batch(
-                limit=args.limit, post_to_wp=not args.no_wp, wp_status=args.status)
+                limit=limit, post_to_wp=not args.no_wp, wp_status=args.status)
         else:
             s = batch.run_batch(
-                queue_path=args.queue, limit=args.limit,
+                queue_path=args.queue, limit=limit,
                 post_to_wp=not args.no_wp, wp_status=args.status, skip_dedup=args.skip_dedup,
             )
     except FileNotFoundError as e:

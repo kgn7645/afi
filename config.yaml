@@ -78,6 +78,11 @@ prompts:
   style_guide: ""              # 空ならコード内デフォルト(STYLE_GUIDE_DEFAULT)を使用
   extra_instructions: ""       # 本文生成に追加する指示（任意）
 
+# --- 生成バッチの実行ペース（承認→記事化） ---
+generation:
+  interval_minutes: 20         # 承認済み候補を拾う間隔(分)。cronは5分毎・実間隔はこれで制御
+  per_run: 2                   # 1回の実行で生成する記事数
+
 # --- note 同時下書き（任意・非公式API / Issue #2） ---
 note:
   enabled: true                # NOTE_SESSION設定時、WP下書きと同時にnote下書きも作成

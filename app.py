@@ -258,7 +258,10 @@ def settings_form(request: Request, saved: str = ""):
     art = r.get("article", {}) or {}
     pr = r.get("prompts", {}) or {}
     cand = r.get("candidates", {}) or {}
+    gen = r.get("generation", {}) or {}
     d = {
+        "interval_minutes": gen.get("interval_minutes", 20),
+        "per_run": gen.get("per_run", 2),
         "min_price": sel.get("min_price", 3000),
         "exclude_keywords": "\n".join(sel.get("exclude_keywords", []) or []),
         "min_chars": art.get("min_chars", 6000),
@@ -287,6 +290,7 @@ def settings_save(
     style_guide: str = Form(""), extra_instructions: str = Form(""),
     keywords: str = Form(""), ranking_nodes: str = Form(""),
     per_source: str = Form("10"), max_total: str = Form("40"),
+    interval_minutes: str = Form("20"), per_run: str = Form("2"),
 ):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
@@ -310,6 +314,8 @@ def settings_save(
                     "extra_instructions": extra_instructions.strip()},
         "candidates": {"keywords": _lines(keywords), "ranking_nodes": _lines(ranking_nodes),
                        "per_source": _int(per_source, 10), "max_total": _int(max_total, 40)},
+        "generation": {"interval_minutes": max(5, _int(interval_minutes, 20)),
+                       "per_run": _int(per_run, 2)},
     }
     ok = overrides.update(ov)   # 他項目(_crawl_request等)を壊さず部分更新
     return RedirectResponse("/settings?saved=" + ("1" if ok else "fail"), status_code=303)
