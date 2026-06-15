@@ -4,24 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>ログイン｜記事の承認</title>
+<title>ログイン｜おうちベース</title>
 <style>
-  body{ font-family:-apple-system,"Hiragino Sans",sans-serif; background:#f5a623; margin:0;
-        min-height:100vh; display:flex; align-items:center; justify-content:center; }
-  .box{ background:#fff; border-radius:16px; padding:28px 24px; width:88%; max-width:360px;
-        box-shadow:0 8px 24px rgba(0,0,0,.15); text-align:center; }
-  h1{ font-size:18px; margin:0 0 4px; }
-  p{ color:#777; font-size:13px; margin:0 0 18px; }
-  input{ width:100%; padding:14px; font-size:16px; border:1.5px solid #ddd; border-radius:10px;
-         margin-bottom:12px; }
-  button{ width:100%; padding:14px; font-size:16px; font-weight:bold; color:#fff;
-          background:#2e9b57; border:none; border-radius:10px; }
-  .err{ color:#d9534f; font-size:13px; margin-bottom:10px; }
+  *{ box-sizing:border-box; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; min-height:100dvh;
+        display:flex; align-items:center; justify-content:center;
+        background:linear-gradient(135deg,#ffb347,#ff9f1c 60%,#ff7e5f); }
+  .box{ background:#fff; border-radius:24px; padding:34px 26px; width:88%; max-width:360px;
+        box-shadow:0 20px 50px rgba(0,0,0,.25); text-align:center; animation:rise .5s cubic-bezier(.2,.9,.3,1); }
+  @keyframes rise{ from{ opacity:0; transform:translateY(20px) scale(.97); } to{ opacity:1; transform:none; } }
+  .logo{ font-size:42px; } h1{ font-size:19px; margin:8px 0 2px; color:#2b2b3a; }
+  p{ color:#9a96ad; font-size:13px; margin:0 0 20px; }
+  input{ width:100%; padding:15px; font-size:16px; border:2px solid #ece9f1; border-radius:14px;
+         margin-bottom:12px; transition:.2s; outline:none; }
+  input:focus{ border-color:#ff9f1c; }
+  button{ width:100%; padding:15px; font-size:16px; font-weight:800; color:#fff; border:none; border-radius:14px;
+          background:linear-gradient(135deg,#ff9f1c,#ff7e5f); box-shadow:0 8px 20px rgba(255,126,95,.4);
+          transition:transform .12s; }
+  button:active{ transform:scale(.97); }
+  .err{ color:#ff5a5f; font-size:13px; font-weight:700; margin-bottom:10px; }
 </style>
 </head>
 <body>
   <form class="box" method="post" action="/review/login">
-    <h1>📝 記事の承認</h1>
+    <div class="logo">🏠</div>
+    <h1>おうちベース 管理</h1>
     <p>パスワードを入力してください</p>
     {% if error %}<div class="err">パスワードが違います</div>{% endif %}
     <input type="password" name="password" placeholder="パスワード" autofocus required>

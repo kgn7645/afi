@@ -6,129 +6,147 @@
 <meta name="robots" content="noindex,nofollow">
 <title>記事の承認｜おうちベース</title>
 <style>
-  :root{ --orange:#f5a623; --green:#2e9b57; --red:#d9534f; --ink:#23204a; }
-  *{ box-sizing:border-box; }
-  body{ font-family:-apple-system,"Hiragino Sans",sans-serif; margin:0; background:#f6f6f8; color:#222; }
-  header{ position:sticky; top:0; background:var(--orange); color:#fff; padding:14px 16px;
-          display:flex; align-items:center; justify-content:space-between; }
-  header h1{ font-size:17px; margin:0; }
-  header a{ color:#fff; font-size:13px; text-decoration:underline; }
-  .wrap{ max-width:680px; margin:0 auto; padding:12px; }
-  .flash{ background:#fff3cd; border:1px solid #ffe69c; border-radius:10px; padding:12px 14px;
-          margin:10px 0; font-size:14px; font-weight:bold; }
-  .flash-ok{ background:#e6f5ec; border-color:#bfe6cd; color:#1f7a45; }
-  .tabs{ display:flex; gap:6px; margin:12px 0 4px; }
-  .tabs a{ flex:1; text-align:center; padding:10px 6px; border-radius:10px; text-decoration:none;
-           font-size:13.5px; font-weight:bold; color:#666; background:#fff; border:1px solid #e6e6ea; }
-  .tabs a.on{ background:#23204a; color:#fff; border-color:#23204a; }
-  .open{ background:#eef0f5; color:#23204a; padding:13px; border-radius:10px; font-weight:bold;
-         text-decoration:none; text-align:center; display:block; width:100%; }
-  .empty{ text-align:center; color:#888; padding:48px 16px; }
-  .card{ background:#fff; border-radius:14px; box-shadow:0 1px 5px rgba(0,0,0,.07);
-         padding:14px; margin:12px 0; }
+  :root{ --orange:#ff9f1c; --green:#21c17a; --red:#ff5a5f; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0;
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); color:var(--ink);
+        min-height:100dvh; padding-bottom:30px; }
+  .nav{ padding:14px 16px 4px; position:sticky; top:0; z-index:5;
+        background:linear-gradient(180deg,#fbf7f0 70%,rgba(251,247,240,0)); }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:460px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:14px; font-weight:700;
+          color:#8a86a0; text-decoration:none; transition:.25s; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:6px 14px 14px; }
+
+  .tabs{ display:flex; background:#fff; border-radius:14px; padding:5px; margin:10px 0 6px;
+         box-shadow:0 2px 10px rgba(40,30,70,.06); }
+  .tabs a{ flex:1; text-align:center; padding:10px 4px; border-radius:10px; font-size:13.5px;
+           font-weight:700; color:#8a86a0; text-decoration:none; transition:.22s; }
+  .tabs a.on{ color:#fff; background:var(--ink); box-shadow:0 4px 12px rgba(43,43,58,.25); }
+
+  @keyframes rise{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+  .card{ background:#fff; border-radius:18px; box-shadow:0 6px 22px rgba(40,30,70,.08);
+         padding:14px; margin:12px 0; animation:rise .4s cubic-bezier(.2,.8,.2,1) backwards; }
+  .card:nth-child(2){ animation-delay:.04s } .card:nth-child(3){ animation-delay:.08s }
+  .card:nth-child(4){ animation-delay:.12s } .card:nth-child(5){ animation-delay:.16s }
+  .card.leaving{ transition:.35s; opacity:0; transform:translateX(40px) scale(.96); }
   .row{ display:flex; gap:12px; }
-  .thumb{ width:96px; height:96px; flex:0 0 96px; border-radius:10px; object-fit:cover;
-          background:#eee; }
-  .title{ font-weight:bold; font-size:15px; line-height:1.4; margin:0 0 6px; }
-  .excerpt{ font-size:12.5px; color:#666; line-height:1.6; margin:0; }
-  .badges{ margin:8px 0 0; }
-  .badge{ display:inline-block; font-size:12px; font-weight:bold; border-radius:20px;
-          padding:3px 10px; margin-right:6px; }
-  .b-ok{ background:#e6f5ec; color:var(--green); }
-  .b-warn{ background:#fff4e0; color:#b8780b; }
-  .b-err{ background:#fdecea; color:var(--red); }
-  .actions{ display:flex; gap:10px; margin-top:12px; }
+  .thumb{ width:92px; height:92px; flex:0 0 92px; border-radius:12px; object-fit:cover; background:#eee; }
+  .title{ font-weight:800; font-size:15px; line-height:1.45; margin:0 0 5px; }
+  .excerpt{ font-size:12.5px; color:#7a7790; line-height:1.6; margin:0; }
+  .badges{ margin-top:9px; }
+  .badge{ display:inline-block; font-size:11.5px; font-weight:800; border-radius:999px; padding:4px 11px; }
+  .b-ok{ background:#e3f8ee; color:#149a5e; } .b-warn{ background:#fff2dc; color:#c8810a; }
+  .b-err{ background:#ffe7e7; color:#e0433f; }
+  .open{ display:block; text-align:center; background:#f0eef6; color:var(--ink); padding:12px;
+         border-radius:12px; font-weight:700; font-size:13px; text-decoration:none; margin-top:10px; transition:.15s; }
+  .open:active{ transform:scale(.98); }
+  .actions{ display:flex; gap:10px; margin-top:10px; }
   .actions form{ flex:1; margin:0; }
-  .btn{ display:block; width:100%; text-align:center; padding:13px; border-radius:10px;
-        font-size:15px; font-weight:bold; border:none; text-decoration:none; }
-  .btn-pub{ background:var(--green); color:#fff; }
-  .btn-rej{ background:#fff; color:var(--red); border:1.5px solid var(--red); }
-  .btn-prev{ background:#eef0f5; color:var(--ink); padding:10px; font-size:13px; margin-top:8px;
-             display:block; text-align:center; border-radius:10px; text-decoration:none; }
+  .btn{ width:100%; padding:14px; border-radius:13px; font-size:15px; font-weight:800; border:none;
+        transition:transform .12s, filter .12s; }
+  .btn:active{ transform:scale(.96); }
+  .btn[disabled]{ filter:grayscale(.3) opacity(.7); }
+  .btn-pub{ background:var(--green); color:#fff; box-shadow:0 6px 16px rgba(33,193,122,.32); }
+  .btn-rej{ background:#fff; color:var(--red); border:2px solid var(--red); }
+
+  .empty{ text-align:center; color:#8a86a0; padding:60px 16px; }
+  .empty .big{ font-size:48px; display:block; margin-bottom:8px; }
+
+  .toast{ position:fixed; left:50%; bottom:24px; transform:translate(-50%,40px); opacity:0;
+          background:var(--green); color:#fff; padding:13px 22px; border-radius:999px; font-weight:800;
+          font-size:14px; z-index:40; transition:.32s cubic-bezier(.2,.9,.3,1); box-shadow:0 10px 26px rgba(0,0,0,.2); }
+  .toast.on{ transform:translate(-50%,0); opacity:1; }
+  .toast.warn{ background:#b8780b; }
 </style>
 </head>
 <body>
-<header>
-  <h1>📝 記事の承認</h1>
-  <span>
-    {% if not disabled %}<a href="/select" style="margin-right:12px;">🛍 商品選定</a>
-    <a href="/review/logout">ログアウト</a>{% endif %}
-  </span>
-</header>
+<div class="nav">
+  <div class="seg">
+    <a href="/select">🛍 商品選定</a>
+    <a href="/review" class="on">📝 記事承認</a>
+  </div>
+</div>
 <div class="wrap">
   {% if disabled %}
-    <div class="empty">
-      承認画面は無効です。<br>サーバーの <code>.env</code> に <b>REVIEW_PASSWORD</b> を設定してください。
-    </div>
+    <div class="empty"><span class="big">🔒</span>承認画面は無効です<br><b>REVIEW_PASSWORD</b> を設定してください</div>
   {% else %}
-    <nav class="tabs">
+    <div class="tabs">
       <a class="{{ 'on' if status=='draft' }}" href="/review?status=draft">承認待ち</a>
       <a class="{{ 'on' if status=='publish' }}" href="/review?status=publish">公開済み</a>
       <a class="{{ 'on' if status=='trash' }}" href="/review?status=trash">却下</a>
-    </nav>
-    {% if msg %}<div class="flash {% if 'しました' in msg %}flash-ok{% endif %}">{{ msg }}</div>{% endif %}
-    {% if error %}<div class="flash">{{ error }}</div>{% endif %}
+    </div>
+    {% if error %}<div class="empty" style="padding:20px;">{{ error }}</div>{% endif %}
     {% if not items %}
-      <div class="empty">
-        {% if status=='draft' %}承認待ちの記事はありません 🎉
+      <div class="empty"><span class="big">{% if status=='draft' %}🎉{% elif status=='publish' %}📭{% else %}🗑{% endif %}</span>
+        {% if status=='draft' %}承認待ちの記事はありません
         {% elif status=='publish' %}公開済みの記事はまだありません
-        {% else %}却下した記事はありません{% endif %}
-      </div>
+        {% else %}却下した記事はありません{% endif %}</div>
     {% endif %}
     {% for it in items %}
-      <div class="card">
+      <div class="card" id="card-{{ it.id }}">
         <div class="row">
-          {% if it.thumb %}<img class="thumb" src="{{ it.thumb }}" alt="">{% else %}<div class="thumb"></div>{% endif %}
+          {% if it.thumb %}<img class="thumb" src="{{ it.thumb }}" alt="" loading="lazy">{% else %}<div class="thumb"></div>{% endif %}
           <div>
             <p class="title">{{ it.title }}</p>
             <p class="excerpt">{{ it.excerpt }}</p>
+            <div class="badges">
+              {% if it.errors %}<span class="badge b-err">QA NG {{ it.errors }}</span>
+              {% elif it.warns %}<span class="badge b-warn">要確認 {{ it.warns }}</span>
+              {% else %}<span class="badge b-ok">QA OK</span>{% endif %}
+            </div>
           </div>
         </div>
-        <div class="badges">
-          {% if it.errors %}<span class="badge b-err">QA NG {{ it.errors }}</span>
-          {% elif it.warns %}<span class="badge b-warn">要確認 {{ it.warns }}</span>
-          {% else %}<span class="badge b-ok">QA OK</span>{% endif %}
-        </div>
-        <a class="btn-prev" href="/review/{{ it.id }}">本文プレビューを見る ›</a>
+        <a class="open" href="/review/{{ it.id }}">本文プレビューを見る ›</a>
         {% if status == 'draft' %}
         <div class="actions">
           <form method="post" action="/review/{{ it.id }}/publish"
-                onsubmit="return go(this,'「{{ it.title[:20] }}」を公開しますか？','公開中…');">
-            <button class="btn btn-pub" type="submit">公開する</button>
-          </form>
+                onsubmit="return go(this,{{ it.id }},'「{{ it.title[:18] }}」を公開しますか？','公開中…');">
+            <button class="btn btn-pub" type="submit">公開する</button></form>
           <form method="post" action="/review/{{ it.id }}/reject"
-                onsubmit="return go(this,'「{{ it.title[:20] }}」を却下（ゴミ箱）しますか？','却下中…');">
-            <button class="btn btn-rej" type="submit">却下</button>
-          </form>
+                onsubmit="return go(this,{{ it.id }},'「{{ it.title[:18] }}」を却下しますか？','却下中…');">
+            <button class="btn btn-rej" type="submit">却下</button></form>
         </div>
         {% elif status == 'publish' %}
         <div class="actions">
-          {% if it.link %}<a class="open" href="{{ it.link }}" target="_blank">公開ページを開く ↗</a>{% endif %}
+          {% if it.link %}<a class="btn btn-pub" style="text-decoration:none;text-align:center;line-height:1.4;" href="{{ it.link }}" target="_blank">公開ページ ↗</a>{% endif %}
           <form method="post" action="/review/{{ it.id }}/to_draft"
-                onsubmit="return go(this,'「{{ it.title[:20] }}」を下書きに戻しますか？','処理中…');">
-            <button class="btn btn-rej" type="submit">下書きに戻す</button>
-          </form>
+                onsubmit="return go(this,{{ it.id }},'下書きに戻しますか？','処理中…');">
+            <button class="btn btn-rej" type="submit">下書きに戻す</button></form>
         </div>
         {% else %}
         <div class="actions">
           <form method="post" action="/review/{{ it.id }}/to_draft"
-                onsubmit="return go(this,'「{{ it.title[:20] }}」を承認待ちに戻しますか？','処理中…');">
-            <button class="btn btn-pub" type="submit">復元（承認待ちへ）</button>
-          </form>
+                onsubmit="return go(this,{{ it.id }},'承認待ちに戻しますか？','処理中…');">
+            <button class="btn btn-pub" type="submit">復元（承認待ちへ）</button></form>
         </div>
         {% endif %}
       </div>
     {% endfor %}
   {% endif %}
 </div>
+
+<div class="toast" id="toast"></div>
 <script>
-  // 確認ダイアログ＋押下後の処理中フィードバック（二重送信も防止）
-  function go(form, msg, busy){
+  // 確認→押下フィードバック（カードを退場アニメ→送信）
+  function go(form, id, msg, busyTxt){
     if(!confirm(msg)) return false;
-    var b = form.querySelector('button');
-    b.disabled = true; b.textContent = busy; b.style.opacity = .6;
-    return true;
+    var b=form.querySelector('button'); b.disabled=true; b.textContent=busyTxt;
+    if(navigator.vibrate) try{ navigator.vibrate(15); }catch(e){}
+    var card=document.getElementById('card-'+id); if(card) card.classList.add('leaving');
+    return true;  // 通常のPOST送信（サーバーで処理→リダイレクト）
   }
+  // リダイレクト後のメッセージをトースト表示
+  (function(){
+    var p=new URLSearchParams(location.search), m=p.get('msg');
+    if(!m) return;
+    var t=document.getElementById('toast'); t.textContent=m;
+    if(m.indexOf('失敗')>=0||m.indexOf('エラー')>=0) t.classList.add('warn');
+    requestAnimationFrame(function(){ t.classList.add('on'); });
+    setTimeout(function(){ t.classList.remove('on'); }, 2600);
+    history.replaceState(null,'',location.pathname+(p.get('status')?'?status='+p.get('status'):''));
+  })();
 </script>
 </body>
 </html>
