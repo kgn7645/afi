@@ -103,6 +103,10 @@
   <div class="sec">
     <h2>🎨 文体ガイド（プロンプト）</h2>
     <p class="hint">記事の世界観・語り口・禁止事項。AIへの基本指示です</p>
+    <label>記事タイトルの型</label>
+    <input type="text" name="title_format" value="{{ d.title_format }}">
+    <p class="hint">差し込み語: <code>{brand}</code> ブランド名／<code>{category}</code> カテゴリー／<code>{product_name}</code> 商品名／<code>{model}</code> 型番／<code>{year}</code> 西暦。<br>
+      例（中華・無名向け）: <code>【{year}】{brand}はどこの国の企業？{category}の評判・口コミを徹底レビュー</code></p>
     <label>スタイルガイド</label>
     <textarea name="style_guide" rows="12">{{ d.style_guide }}</textarea>
     <label>追加の指示（任意・本文生成に上乗せ）</label>

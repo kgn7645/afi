@@ -77,6 +77,10 @@ candidates:
 prompts:
   style_guide: ""              # 空ならコード内デフォルト(STYLE_GUIDE_DEFAULT)を使用
   extra_instructions: ""       # 本文生成に追加する指示（任意）
+  # 記事タイトルの型。差し込み語: {brand} {category} {product_name} {model} {year}
+  # 空ならコード内デフォルト(DEFAULT_TITLE_FORMAT)を使用。「どこの国？」にしたいなら例:
+  #   【{year}】{brand}はどこの国の企業？{category}の評判・口コミを徹底レビュー
+  title_format: "【{year}】{brand}の{category}は買い？評判・口コミ・実力を徹底レビュー"
 
 # --- 生成バッチの実行ペース（承認→記事化） ---
 generation:
