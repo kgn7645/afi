@@ -67,14 +67,24 @@ def upload_image(image_bytes: bytes, filename: str, content_type: str = "image/j
 
 
 def create_empty_note(*, timeout: int = 30) -> dict:
-    """空の下書きを作成し {id, key} を返す。"""
+    """空の下書きを作成し {id, key} を返す。
+
+    note内部APIの仕様変更で、ボディは空 {} を送る（旧 {"template_key": null} は422）。
+    """
     sess = _session()
-    r = sess.post(_BASE, json={"template_key": None}, timeout=timeout)
+    r = sess.post(_BASE, json={}, timeout=timeout)
     r.raise_for_status()
     d = r.json().get("data", r.json())
     if not d.get("id"):
         raise RuntimeError(f"下書きidの取得に失敗: {r.text[:200]}")
     return {"id": d.get("id"), "key": d.get("key", "")}
+
+
+def delete_note(note_id: int, *, timeout: int = 30) -> bool:
+    """下書き/記事を削除（DELETE /api/v1/notes/{id}）。"""
+    sess = _session()
+    r = sess.delete(f"https://note.com/api/v1/notes/{note_id}", timeout=timeout)
+    return r.status_code == 200
 
 
 def save_draft(note_id: int, title: str, body_html: str, body_length: int, *, timeout: int = 30) -> None:
@@ -119,16 +129,13 @@ def create_draft(title: str, body_html: str, body_length: int, *, timeout: int =
 
 
 def test_connection(timeout: int = 15) -> tuple[bool, str]:
-    """ログインユーザー情報の取得でセッション有効性を確認。"""
+    """空下書きを作成→削除してセッション有効性を確認（旧 /api/v1/nu/ は廃止済み）。"""
     s = get_settings()
     if not s.note_ready:
         return False, "NOTE_SESSION 未設定"
     try:
-        sess = _session()
-        r = sess.get("https://note.com/api/v1/nu/", timeout=timeout)
-        if r.status_code == 200 and r.json().get("data"):
-            name = r.json()["data"].get("nickname") or r.json()["data"].get("urlname", "")
-            return True, f"note接続OK: {name}"
-        return False, f"認証失敗 HTTP {r.status_code}: {r.text[:120]}"
+        note = create_empty_note(timeout=timeout)
+        delete_note(note["id"], timeout=timeout)   # テスト用の空下書きは消す
+        return True, "note接続OK（下書き作成→削除を確認）"
     except Exception as e:  # noqa: BLE001
-        return False, f"接続エラー: {e}"
+        return False, f"認証失敗/接続エラー: {e}"
