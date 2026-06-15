@@ -67,6 +67,16 @@ def main() -> None:
                    help="承認済み候補(スワイプ選定)から生成する（CSVキューの代わり）")
     args = p.parse_args()
 
+    # 手動選定の短縮リンク解決（毎回＝5分毎）。生成ゲートより前に回して取りこぼさない。
+    if args.candidates:
+        try:
+            from core import manual_resolve
+            added = manual_resolve.resolve_pending()
+            if added:
+                print(f"[batch] 手動選定の短縮リンクを解決: {added}件を選定済みへ")
+        except Exception as e:  # noqa: BLE001
+            print(f"[batch] 短縮リンク解決でエラー（継続）: {e}")
+
     # 承認済み候補モードは「設定の実行間隔」でゲート（cronは5分毎に回す前提）
     if args.candidates and not _interval_gate():
         print("[batch] 実行間隔に未到達のためスキップ")
