@@ -25,6 +25,11 @@ STYLE_GUIDE_DEFAULT = """\
 """
 
 
+# タイトルの型（config.yaml > prompts.title_format で上書き可）。
+# 差し込み語: {brand} {category} {product_name} {model} {year}
+DEFAULT_TITLE_FORMAT = "【{year}】{brand}の{category}は買い？評判・口コミ・実力を徹底レビュー"
+
+
 def _style_guide() -> str:
     from .config import get_rules
     return (get_rules().get("prompts", {}) or {}).get("style_guide") or STYLE_GUIDE_DEFAULT
@@ -35,8 +40,15 @@ def _extra_instructions() -> str:
     return (get_rules().get("prompts", {}) or {}).get("extra_instructions", "").strip()
 
 
+def _title_format() -> str:
+    from .config import get_rules
+    return (get_rules().get("prompts", {}) or {}).get("title_format") or DEFAULT_TITLE_FORMAT
+
+
 def title_and_meta_prompt(product: Product) -> str:
     """タイトル・キャッチコピー・メタ情報を一括生成（JSON出力）。"""
+    from datetime import datetime
+    cur_year = datetime.now().year
     return f"""{_style_guide()}
 
 # 商品情報
@@ -46,14 +58,20 @@ def title_and_meta_prompt(product: Product) -> str:
 - 商品名: {product.product_name}
 - 企業ヒント: {product.company_hint or "（不明。一般的な推測でよいが断定は避ける）"}
 
+# タイトルの型（"title" はこの型に沿って作る）
+{_title_format()}
+（差し込み語を実際の値に置換: {{brand}}=ブランド名 / {{category}}=カテゴリー /
+ {{product_name}}=商品名 / {{model}}=型番 / {{year}}=西暦（今は{cur_year}）。
+ 型に無い差し込み語は無視。日本語として自然に整え、不自然な空欄や記号残りを作らない）
+
 # タスク
 以下を生成し、**JSONのみ**を出力してください（前後の説明文やコードフェンスは禁止）。
 
 {{
   "category": "この商品の簡潔な大カテゴリー名。例『除湿機』『DCモーター扇風機』『スマホ冷却ファン』。10字前後。",
-  "title": "記事タイトル。『【...】<ブランド>はどこの国の企業？評判・口コミを徹底レビュー』系。30〜45字程度。煽りすぎず検索されやすく。",
+  "title": "記事タイトル。上の【タイトルの型】に従う。30〜45字程度、煽りすぎず検索されやすく。",
   "catch_copy": "アイキャッチ用キャッチコピー。20〜30字。感情を動かす一文。例『「熱っ！」を「快適」に。夏のスマホ、放置は危険。』",
-  "meta_description": "メタディスクリプション。100〜150字。『ブランドの正体(どこの国か)＋製品特徴＋大手との比較＋どんな人におすすめか』を凝縮。",
+  "meta_description": "メタディスクリプション。100〜150字。『ブランドの正体（メーカーの背景・信頼性）＋製品特徴＋大手との比較＋どんな人におすすめか』を凝縮。",
   "meta_keywords": ["5語前後", "ブランド名", "カテゴリー", "関連語", "関連語"]
 }}
 """
@@ -121,12 +139,13 @@ def article_body_prompt(product: Product, rules: dict, trust_block_md: str) -> s
 - メリット/デメリットは双方を厚く。デメリットも正直に書くことで信頼を得る。
 - 比較は文章のみ。比較対象の大手: {", ".join(competitors)} から、カテゴリーに合うものを2系統選ぶ。
 - 最後に必ずまとめで「どんな人に買いか／どんな人は避けるべきか」を提示。
+- **企業セクションの扱い**: 無名・新興・海外系ブランドなら「どこの国の会社か」をはっきり明らかにして不安を解消する。誰もが知る国内大手・有名ブランドなら出自を煽らず、実績・サポート体制・信頼性を中心に語る（不自然に「どこの国？」と書かない）。
 
 【固定構成】
 ## はじめに：{product.brand}の{product.category}が話題の理由
 （生活シーン＋悩み＋比喩で引き込む導入。読者の悩み→このブランドに注目する理由）
 
-## {product.brand}とは？：どこの国の企業か、その正体を深掘り
+## {product.brand}とは？：メーカーの正体と信頼性を深掘り
 ### 企業詳細
 （ここに信頼度評価ブロックの企業説明を反映）
 ### ★当ブログのオリジナル企業信頼度評価(5つ星評価)
