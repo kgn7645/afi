@@ -17,6 +17,12 @@
   .flash{ background:#fff3cd; border:1px solid #ffe69c; border-radius:10px; padding:12px 14px;
           margin:10px 0; font-size:14px; font-weight:bold; }
   .flash-ok{ background:#e6f5ec; border-color:#bfe6cd; color:#1f7a45; }
+  .tabs{ display:flex; gap:6px; margin:12px 0 4px; }
+  .tabs a{ flex:1; text-align:center; padding:10px 6px; border-radius:10px; text-decoration:none;
+           font-size:13.5px; font-weight:bold; color:#666; background:#fff; border:1px solid #e6e6ea; }
+  .tabs a.on{ background:#23204a; color:#fff; border-color:#23204a; }
+  .open{ background:#eef0f5; color:#23204a; padding:13px; border-radius:10px; font-weight:bold;
+         text-decoration:none; text-align:center; display:block; width:100%; }
   .empty{ text-align:center; color:#888; padding:48px 16px; }
   .card{ background:#fff; border-radius:14px; box-shadow:0 1px 5px rgba(0,0,0,.07);
          padding:14px; margin:12px 0; }
@@ -52,10 +58,19 @@
       承認画面は無効です。<br>サーバーの <code>.env</code> に <b>REVIEW_PASSWORD</b> を設定してください。
     </div>
   {% else %}
+    <nav class="tabs">
+      <a class="{{ 'on' if status=='draft' }}" href="/review?status=draft">承認待ち</a>
+      <a class="{{ 'on' if status=='publish' }}" href="/review?status=publish">公開済み</a>
+      <a class="{{ 'on' if status=='trash' }}" href="/review?status=trash">却下</a>
+    </nav>
     {% if msg %}<div class="flash {% if 'しました' in msg %}flash-ok{% endif %}">{{ msg }}</div>{% endif %}
     {% if error %}<div class="flash">{{ error }}</div>{% endif %}
     {% if not items %}
-      <div class="empty">承認待ちの下書きはありません 🎉</div>
+      <div class="empty">
+        {% if status=='draft' %}承認待ちの記事はありません 🎉
+        {% elif status=='publish' %}公開済みの記事はまだありません
+        {% else %}却下した記事はありません{% endif %}
+      </div>
     {% endif %}
     {% for it in items %}
       <div class="card">
@@ -72,6 +87,7 @@
           {% else %}<span class="badge b-ok">QA OK</span>{% endif %}
         </div>
         <a class="btn-prev" href="/review/{{ it.id }}">本文プレビューを見る ›</a>
+        {% if status == 'draft' %}
         <div class="actions">
           <form method="post" action="/review/{{ it.id }}/publish"
                 onsubmit="return go(this,'「{{ it.title[:20] }}」を公開しますか？','公開中…');">
@@ -82,6 +98,22 @@
             <button class="btn btn-rej" type="submit">却下</button>
           </form>
         </div>
+        {% elif status == 'publish' %}
+        <div class="actions">
+          {% if it.link %}<a class="open" href="{{ it.link }}" target="_blank">公開ページを開く ↗</a>{% endif %}
+          <form method="post" action="/review/{{ it.id }}/to_draft"
+                onsubmit="return go(this,'「{{ it.title[:20] }}」を下書きに戻しますか？','処理中…');">
+            <button class="btn btn-rej" type="submit">下書きに戻す</button>
+          </form>
+        </div>
+        {% else %}
+        <div class="actions">
+          <form method="post" action="/review/{{ it.id }}/to_draft"
+                onsubmit="return go(this,'「{{ it.title[:20] }}」を承認待ちに戻しますか？','処理中…');">
+            <button class="btn btn-pub" type="submit">復元（承認待ちへ）</button>
+          </form>
+        </div>
+        {% endif %}
       </div>
     {% endfor %}
   {% endif %}
