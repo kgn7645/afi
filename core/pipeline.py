@@ -8,9 +8,9 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import (affiliate, canva, content_generator, eyecatch, moshimo_link,
-               product_extractor, product_selector, prompts, qa, sheet_log,
-               site_setup, wordpress)
+from . import (affiliate, canva, content_generator, eyecatch, internal_links,
+               moshimo_link, product_extractor, product_selector, prompts, qa,
+               sheet_log, site_setup, wordpress)
 from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
 from .models import PipelineResult, Product
@@ -119,6 +119,10 @@ def run(
             featured_id = _make_featured_media(article, product, result)
             # カテゴリ自動割当（Issue #44: 未分類を避ける）
             category_ids = _pick_category_ids(product, result, gemini)
+            # 内部リンク（Issue #18）: 同カテゴリの公開記事への関連リンクを本文に
+            if category_ids:
+                article.body_html = internal_links.add_related(
+                    article.body_html, category_ids[0], result)
             wp = wordpress.create_draft(article, status=wp_status,
                                         featured_media=featured_id, categories=category_ids)
             result.wp_post_id = wp["id"]

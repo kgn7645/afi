@@ -326,6 +326,32 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_internal_links(monkeypatch):
+    from core import internal_links as il
+
+    rel = [{"id": 2, "title": "記事B", "link": "http://x/b"},
+           {"id": 3, "title": "記事<C>", "link": "http://x/c"}]
+    block = il.build_block(rel)
+    assert "あわせて読みたい" in block
+    assert "http://x/b" in block and "記事&lt;C&gt;" in block      # XSSエスケープ
+    assert il.build_block([]) == ""
+
+    # upsert: 既存ブロックを置換（重複しない）
+    body = "<p>本文</p>" + il.build_block([{"id": 9, "title": "旧", "link": "u"}])
+    out = il.upsert_block(body, rel)
+    assert out.count("related-links") == 2          # START/ENDマーカー1組
+    assert "旧" not in out and "記事B" in out
+    assert out.startswith("<p>本文</p>")
+
+    # add_related: 同カテゴリ記事から関連リンク付与（自分は除外）
+    monkeypatch.setattr(il.wordpress, "posts_in_category",
+                        lambda cat_id, **k: [{"id": 1, "title": "自分", "link": "s"},
+                                             {"id": 2, "title": "他1", "link": "o1"},
+                                             {"id": 3, "title": "他2", "link": "o2"}])
+    res = il.add_related("<p>x</p>", category_id=5, exclude_id=1)
+    assert "他1" in res and "他2" in res and "自分" not in res
+
+
 def test_run_candidates_batch(monkeypatch):
     from core import batch, candidates, pipeline
     from core.models import Article, PipelineResult, Product

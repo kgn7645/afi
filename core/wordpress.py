@@ -109,6 +109,43 @@ def get_media_url(media_id: int, *, timeout: int = 30) -> str:
     return r.json().get("source_url", "") if r.status_code == 200 else ""
 
 
+def posts_in_category(cat_id: int, *, status: str = "publish", with_content: bool = False,
+                      per_page: int = 50, timeout: int = 30) -> list[dict]:
+    """指定カテゴリの記事を新しい順で返す（内部リンク用 / Issue #18）。
+
+    返り値: [{id, title(str), link, [content]}]
+    """
+    s = get_settings()
+    fields = "id,title,link" + (",content" if with_content else "")
+    r = requests.get(
+        f"{s.wp_base_url}/wp-json/wp/v2/posts",
+        params={"categories": cat_id, "status": status, "per_page": per_page,
+                "orderby": "date", "order": "desc", "context": "edit", "_fields": fields},
+        headers=_auth_header(), timeout=timeout,
+    )
+    r.raise_for_status()
+    out: list[dict] = []
+    for p in r.json():
+        t = p.get("title", {}) or {}
+        item = {"id": p["id"], "title": t.get("rendered") or t.get("raw", ""),
+                "link": p.get("link", "")}
+        if with_content:
+            item["content"] = (p.get("content", {}) or {}).get("raw", "")
+        out.append(item)
+    return out
+
+
+def update_post_content(post_id: int, content: str, *, timeout: int = 30) -> dict:
+    """投稿の本文を更新（内部リンクの相互更新用 / Issue #18）。"""
+    s = get_settings()
+    r = requests.post(
+        f"{s.wp_base_url}/wp-json/wp/v2/posts/{post_id}", json={"content": content},
+        headers={**_auth_header(), "Content-Type": "application/json"}, timeout=timeout,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
 def set_post_status(post_id: int, status: str, *, timeout: int = 30) -> dict:
     """投稿のステータスを変更（publish/draft 等）。"""
     s = get_settings()
