@@ -375,6 +375,8 @@ def manual_paste(request: Request, bulk: str = Form("")):
                           "source": "manual"}])
         if candidates.set_status(a, "approved"):
             n += 1
+    if n == 0:
+        return RedirectResponse("/manual?msg=no_asin", status_code=303)
     return RedirectResponse(f"/manual?added={n}", status_code=303)
 
 

@@ -52,35 +52,36 @@
 
 <div class="wrap">
   {% if added %}<div class="flash">✓ {{ added }}件を選定リストに追加しました</div>{% endif %}
+  {% if msg=='no_asin' %}<div class="ro">⚠️ Amazon商品リンク/ASINが見つかりませんでした。<b>商品ページの完全なURL（…/dp/… を含む）</b>か<b>10桁のASIN</b>を貼ってください。Amazonアプリの短縮リンク（amzn.asia/…）は、ブラウザで開いて完全URLをコピーしてください。</div>{% endif %}
   {% if not configured %}<div class="ro">⚠️ 候補プール未設定（<code>CANDIDATES_WEBHOOK_URL</code>）。追加は保存されません。</div>{% endif %}
 
-  <div class="sec">
-    <h2>① ブックマークレットを入れる（最初に1回だけ）</h2>
-    <p class="hint">下のボタンを<b>ブックマークバーにドラッグ</b>（スマホは長押し→ブックマークに追加）。これで準備完了。</p>
-    <p><a class="bm" href="{{ bookmarklet|safe }}">＋ おうちベースに選定</a></p>
-    <p class="hint">ドラッグできない場合は、下のコードをコピーして「ブックマークのURL」に貼り付けて保存:</p>
-    <div class="copy" id="bm">{{ bookmarklet }}</div>
-  </div>
-
-  <div class="sec">
-    <h2>② Amazonで見つけて「＋選定」をタップ</h2>
+  <div class="sec" style="border:2px solid var(--orange);">
+    <h2>📱 スマホはこれが速い（3タップ）</h2>
     <ol>
-      <li>普段のブラウザで <b>Amazonの商品ページ</b>を開く</li>
-      <li>ブックマークの <b>「＋ おうちベースに選定」</b>をタップ</li>
-      <li>商品名・価格・画像・ブランドを自動取得して<b>選定リスト（選定済み）</b>に追加</li>
-      <li>20分ごとのバッチが、選定済みから順に記事化します</li>
+      <li>Amazon商品ページで <b>共有 → 「リンクをコピー」</b></li>
+      <li>このおうちベースを開く（ホーム画面アイコン推奨）</li>
+      <li>下の <b>「📋 コピーしたリンクを追加」</b> をタップ</li>
     </ol>
-    <p class="hint">※ おうちベースにログイン済みのブラウザで実行してください（このページが開けているならOK）。</p>
+    <button class="btn" type="button" onclick="pasteAdd()">📋 コピーしたリンクを追加</button>
+    <p class="hint" id="pasteHint"></p>
   </div>
 
   <div class="sec">
-    <h2>③ URL/ASINを貼って一括追加（手入力派向け）</h2>
-    <p class="hint">Amazon商品URL か ASIN を1行に1つ。まとめて選定済みにします。</p>
-    <form method="post" action="/manual/paste">
-      <textarea name="bulk" rows="4" placeholder="https://www.amazon.co.jp/dp/B0XXXXXXXX&#10;B0YYYYYYYY"></textarea>
+    <h2>✍️ URL/ASINを貼って追加（手入力）</h2>
+    <p class="hint">Amazon商品URL か ASIN を1行に1つ。複数まとめてOK。上のボタンが効かない時の予備にも。</p>
+    <form method="post" action="/manual/paste" id="pasteForm">
+      <textarea name="bulk" rows="3" placeholder="https://www.amazon.co.jp/dp/B0XXXXXXXX&#10;B0YYYYYYYY"></textarea>
       <button class="btn" type="submit">リストに追加</button>
     </form>
   </div>
+
+  <details class="sec">
+    <summary style="font-weight:800;font-size:15px;cursor:pointer;">💻 PC向け: ワンタップ用ブックマークレット</summary>
+    <p class="hint" style="margin-top:10px;">下のボタンを<b>ブックマークバーにドラッグ</b>。Amazon商品ページで押すと、商品名・価格・画像も自動取得して追加します。</p>
+    <p><a class="bm" href="{{ bookmarklet|safe }}">＋ おうちベースに選定</a></p>
+    <p class="hint">ドラッグできない場合は下のコードをコピーして「ブックマークのURL」に貼り付け:</p>
+    <div class="copy" id="bm">{{ bookmarklet }}</div>
+  </details>
 
   <div class="sec">
     <h2>🗂 選定済みリスト（{{ approved|length }}件）</h2>
@@ -99,6 +100,26 @@
     {% endif %}
   </div>
 </div>
+<script>
+async function pasteAdd(){
+  var hint=document.getElementById('pasteHint');
+  var ta=document.querySelector('#pasteForm textarea[name=bulk]');
+  hint.textContent='';
+  var txt='';
+  try{ txt = await navigator.clipboard.readText(); }catch(e){ txt=''; }
+  if(!txt){
+    hint.textContent='クリップボードを読めませんでした。下の欄に長押しで貼り付けて「リストに追加」を押してください。';
+    if(ta){ ta.focus(); }
+    return;
+  }
+  if(!/\/(?:dp|gp\/product)\/[A-Z0-9]{10}|\b[A-Z0-9]{10}\b/.test(txt)){
+    hint.textContent='コピー内容にAmazon商品リンク/ASINが見つかりません: '+txt.slice(0,50);
+    return;
+  }
+  ta.value = txt;
+  ta.form.submit();
+}
+</script>
 <script src="/static/ui.js"></script>
 </body>
 </html>
