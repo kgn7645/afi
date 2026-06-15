@@ -60,6 +60,19 @@ affiliate:
   mode: amazon                 # amazon | moshimo
   amazon_button_label: "Amazonで見る"
 
+# --- 商品候補のクロール（Issue #3: スワイプ選定の元データ） ---
+candidates:
+  per_source: 10               # 1ソースあたり拾う最大ASIN数
+  max_total: 40                # 1回のクロールで作る候補の上限
+  # 検索キーワード（担当者の狙い）
+  keywords:
+    - ネッククーラー
+    - 卓上扇風機
+    - 除湿機 コンパクト
+  # 売れ筋ランキングのノード（kitchen/<nodeId> 形式 or フルURL）
+  ranking_nodes:
+    - kitchen/4083001          # 除湿機
+
 # --- 自動QA（Issue #16: 薬機法/誇大・構成・整形の検査） ---
 qa:
   enabled: true
