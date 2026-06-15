@@ -60,5 +60,7 @@ class PipelineResult(BaseModel):
     selection_reason: str = ""
     wp_post_id: Optional[int] = None
     wp_edit_link: str = ""
+    note_id: Optional[int] = None        # note下書きID（同時投稿時）
+    note_edit_url: str = ""
     warnings: list[str] = Field(default_factory=list)
     qa_issues: list[dict] = Field(default_factory=list)  # 自動QAの検出結果（Issue #16）

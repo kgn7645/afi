@@ -13,34 +13,8 @@ note 下書き自動作成（Issue #2・非公式API）。
 from __future__ import annotations
 
 import argparse
-import uuid
 
-import requests
-
-from core import note_client, note_export, pipeline, product_extractor
-from core.config import get_settings
-
-# 1記事に埋め込む商品画像の最大枚数
-MAX_NOTE_IMAGES = 3
-
-
-def _upload_product_images(image_urls: list[str]) -> list[tuple[str, int, int]]:
-    """商品画像URL群をnoteへアップロードし、(noteURL, 幅, 高さ)のリストを返す。"""
-    out: list[tuple[str, int, int]] = []
-    for src in image_urls[:MAX_NOTE_IMAGES]:
-        try:
-            resp = requests.get(src, timeout=20)
-            resp.raise_for_status()
-            data = resp.content
-            ctype = resp.headers.get("content-type", "image/jpeg").split(";")[0]
-            ext = "png" if "png" in ctype else "jpg"
-            w, h = note_export.get_image_size(data)
-            note_url = note_client.upload_image(data, f"{uuid.uuid4().hex}.{ext}", ctype)
-            out.append((note_url, w, h))
-            print(f"  画像アップロード: {note_url}")
-        except Exception as e:  # noqa: BLE001
-            print(f"  ⚠ 画像アップロード失敗（スキップ）: {e}")
-    return out
+from core import note_client, note_publish, pipeline
 
 
 def main() -> None:
@@ -71,36 +45,16 @@ def main() -> None:
         return
 
     print(f"タイトル: {result.article.title}")
-
-    # Amazonカードモード: Amazon URL＋自分のタグがあれば、タグ付きURLを本文に置く
-    #（noteで末尾Enter→Amazonカード化。あなたのタグで収益化／カードに画像も含まれる）
-    s = get_settings()
-    use_amazon = "amazon." in args.url and s.amazon_associate_tag
-
-    if use_amazon:
-        # Amazonカードモード: 空下書き作成→カード生成(自分のタグ)→本文に埋め込み（Enter不要）
-        amazon_url = product_extractor.amazon_affiliate_url(args.url, s.amazon_associate_tag)
-        note = note_client.create_empty_note()
-        # 3箇所それぞれに固有キーのカードが要る（同一キー使い回しは画像が出ない）
-        amazon_embeds = []
-        for _ in range(3):
-            emb = note_client.get_external_embed(note["key"], amazon_url)
-            amazon_embeds.append({"url": amazon_url, "key": emb["key"], "html": emb["html_for_embed"]})
-        body_html, body_len = note_export.build_note_html(
-            result.article, result.product, amazon_embeds=amazon_embeds)
-        note_client.save_draft(note["id"], result.article.title, body_html, body_len)
-        edit_url = f"https://editor.note.com/notes/{note['key']}/edit/"
-        print(f"本文長: {body_len}文字 / Amazonカード(タグ={s.amazon_associate_tag}) 3箇所・自動埋め込み")
+    nd = note_publish.create_note_draft(
+        result.article, result.product, source_url=args.url, result=result)
+    if nd:
         print("✅ note下書きを作成しました")
-        print(f"   下書きID: {note['id']}  編集URL: {edit_url}")
+        print(f"   下書きID: {nd['id']}  編集URL: {nd['edit_url']}")
+        print("   → note の「下書き」一覧で確認し、問題なければnote側で公開してください。")
     else:
-        note_images = _upload_product_images(result.article.product_image_urls)
-        body_html, body_len = note_export.build_note_html(result.article, result.product, note_images)
-        print(f"本文長: {body_len}文字 / もしもリンク＋画像{len(note_images)}枚")
-        res = note_client.create_draft(result.article.title, body_html, body_len)
-        print("✅ note下書きを作成しました")
-        print(f"   下書きID: {res['id']}  編集URL: {res['edit_url']}")
-    print("   → note の「下書き」一覧で確認し、問題なければnote側で公開してください。")
+        print("❌ note下書きの作成に失敗（NOTE_SESSION未設定/期限切れの可能性）")
+        for w in result.warnings:
+            print("⚠", w)
 
 
 if __name__ == "__main__":

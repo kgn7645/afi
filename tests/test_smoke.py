@@ -330,6 +330,34 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_note_publish(monkeypatch):
+    from core import note_publish
+    from core.models import Article, Product
+
+    s = note_publish.get_settings()
+    # NOTE_SESSION未設定 → None（no-op、WPは止めない）
+    monkeypatch.setattr(s, "note_session", "", raising=False)
+    assert note_publish.create_note_draft(Article(title="T"), Product()) is None
+
+    # 設定あり＋Amazonソース → カードモードで下書き作成
+    monkeypatch.setattr(s, "note_session", "cookie", raising=False)
+    monkeypatch.setattr(s, "amazon_associate_tag", "chance274-22", raising=False)
+    monkeypatch.setattr(note_publish.note_client, "create_empty_note",
+                        lambda: {"id": 50, "key": "K9"})
+    monkeypatch.setattr(note_publish.note_client, "get_external_embed",
+                        lambda key, url: {"key": "e" + url[-1], "html_for_embed": "<x>"})
+    saved = {}
+    monkeypatch.setattr(note_publish.note_client, "save_draft",
+                        lambda nid, title, body, length: saved.update(id=nid, title=title))
+    monkeypatch.setattr(note_publish.note_export, "build_note_html",
+                        lambda art, prod, amazon_embeds=None: ("<body>", 1234))
+    out = note_publish.create_note_draft(
+        Article(title="RANVOOレビュー"), Product(),
+        source_url="https://www.amazon.co.jp/dp/B0D7C999LG")
+    assert out["id"] == 50 and "editor.note.com" in out["edit_url"]
+    assert saved["title"] == "RANVOOレビュー"
+
+
 def test_overrides_update(monkeypatch):
     from core import overrides
     # 既存に candidates があり、_crawl_request は維持しつつ candidates を差し替え

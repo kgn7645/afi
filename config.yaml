@@ -78,6 +78,10 @@ prompts:
   style_guide: ""              # 空ならコード内デフォルト(STYLE_GUIDE_DEFAULT)を使用
   extra_instructions: ""       # 本文生成に追加する指示（任意）
 
+# --- note 同時下書き（任意・非公式API / Issue #2） ---
+note:
+  enabled: true                # NOTE_SESSION設定時、WP下書きと同時にnote下書きも作成
+
 # --- 内部リンク（Issue #18: 関連記事の相互リンク） ---
 internal_links:
   enabled: true
