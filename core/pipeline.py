@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import (affiliate, canva, content_generator, eyecatch, moshimo_link,
-               product_extractor, product_selector, prompts, qa, site_setup, wordpress)
+               product_extractor, product_selector, prompts, qa, sheet_log,
+               site_setup, wordpress)
 from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
 from .models import PipelineResult, Product
@@ -299,19 +300,27 @@ def _auto_affiliate_link(product: Product, result: PipelineResult) -> tuple[str,
 def _log(result: PipelineResult, *, wp_status: str) -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     new_file = not LOG_PATH.exists()
+    dt = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    title = result.article.title if result.article else ""
     with LOG_PATH.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=LOG_FIELDS)
         if new_file:
             w.writeheader()
         w.writerow({
-            "datetime": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+            "datetime": dt,
             "brand": result.product.brand,
             "category": result.product.category,
             "model_number": result.product.model_number,
-            "title": result.article.title if result.article else "",
+            "title": title,
             "selection_ok": result.selection_ok,
             "selection_reason": result.selection_reason,
             "wp_post_id": result.wp_post_id or "",
             "wp_status": wp_status,
             "source_url": result.product.source_url,
         })
+    # スプレッドシート書き戻し（Issue #4）。未設定なら no-op。
+    if sheet_log.enabled():
+        sheet_log.log_generation(
+            post_id=result.wp_post_id, datetime_iso=dt, brand=result.product.brand,
+            category=result.product.category, title=title, status=wp_status,
+            url=result.wp_edit_link, warnings=result.warnings)

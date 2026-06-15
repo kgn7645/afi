@@ -326,6 +326,38 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_sheet_log(monkeypatch):
+    from core import sheet_log
+    s = sheet_log.get_settings()
+
+    # 未設定なら no-op（POSTしない）
+    monkeypatch.setattr(s, "sheet_log_webhook_url", "", raising=False)
+    assert sheet_log.enabled() is False
+    assert sheet_log.log_status(7, "publish") is False
+
+    # 設定ありならPOSTされ、payloadが正しい
+    monkeypatch.setattr(s, "sheet_log_webhook_url", "https://script.test/exec", raising=False)
+    sent = {}
+
+    def fake_post(url, **k):
+        sent["url"] = url
+        sent["json"] = k.get("json")
+
+        class R:
+            pass
+        return R()
+
+    monkeypatch.setattr(sheet_log.requests, "post", fake_post)
+    assert sheet_log.enabled() is True
+    assert sheet_log.log_generation(post_id=7, datetime_iso="2026-06-15T10:00:00",
+                                    brand="X", category="Y", title="T",
+                                    status="draft", url="http://x/edit")
+    assert sent["url"] == "https://script.test/exec"
+    assert sent["json"]["action"] == "upsert" and sent["json"]["post_id"] == 7
+    sheet_log.log_status(7, "publish")
+    assert sent["json"] == {"action": "status", "post_id": 7, "status": "publish"}
+
+
 def test_review_token_and_password(monkeypatch):
     from core import review
     s = review.get_settings()

@@ -39,6 +39,8 @@ class Settings:
 
         # キュー: Googleスプレッドシートの「ウェブに公開(CSV)」URL（設定時はこちらを優先）
         self.queue_sheet_csv_url = os.getenv("QUEUE_SHEET_CSV_URL", "").strip()
+        # 生成実績の書き戻し先: Google Apps Script Web App の URL（Issue #4）
+        self.sheet_log_webhook_url = os.getenv("SHEET_LOG_WEBHOOK_URL", "").strip()
 
         # note 非公式API用のセッションCookie（_note_session_v5 の値 / Issue #2）
         self.note_session = os.getenv("NOTE_SESSION", "").strip()
