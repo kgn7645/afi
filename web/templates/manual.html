@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>手動選定｜おうちベース</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:30px; }
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:480px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:13px; font-weight:700;
+          color:#8a86a0; text-decoration:none; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .sec{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:16px;
+        margin:14px 0; }
+  .sec h2{ font-size:15px; margin:0 0 6px; } .hint{ font-size:12.5px; color:#8a86a0; line-height:1.6; margin:0 0 10px; }
+  .bm{ display:inline-block; background:linear-gradient(135deg,var(--orange),#ff7e5f); color:#fff;
+       font-weight:800; text-decoration:none; padding:13px 26px; border-radius:12px; font-size:16px;
+       box-shadow:0 6px 16px rgba(255,126,95,.35); }
+  ol{ padding-left:18px; font-size:13.5px; line-height:1.9; margin:8px 0; }
+  textarea{ width:100%; padding:11px 12px; border:1.5px solid #ece9f1; border-radius:10px; font-size:14px;
+            font-family:inherit; outline:none; resize:vertical; }
+  textarea:focus{ border-color:var(--orange); }
+  .btn{ width:100%; margin-top:10px; padding:14px; border:none; border-radius:12px; font-size:15px;
+        font-weight:800; color:#fff; background:linear-gradient(135deg,var(--orange),#ff7e5f); }
+  .flash{ background:#e3f8ee; color:#149a5e; border-radius:12px; padding:11px 13px; font-weight:800;
+          font-size:14px; margin:10px 0; }
+  .copy{ font-size:11px; color:#b3b0c4; word-break:break-all; background:#faf9fd; border:1px dashed #e3e0ec;
+         border-radius:8px; padding:8px; margin-top:10px; max-height:64px; overflow:auto; }
+  .list{ list-style:none; padding:0; margin:6px 0 0; }
+  .list li{ display:flex; gap:10px; align-items:center; padding:8px 0; border-top:1px solid #f0eef6; font-size:13px; }
+  .list img{ width:42px; height:42px; object-fit:contain; border-radius:8px; background:#fff; flex:0 0 42px; }
+  .list .t{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .list .p{ color:#149a5e; font-weight:800; flex:0 0 auto; }
+  .ro{ background:#fff3cd; color:#8a6d1a; border-radius:12px; padding:12px 14px; font-size:13px; margin:10px 0; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="seg">
+    <a href="/select">🛍 自動</a>
+    <a href="/manual" class="on">✋ 手動</a>
+    <a href="/review">📝 承認</a>
+    <a href="/settings">⚙️ 設定</a>
+  </div>
+</div>
+
+<div class="wrap">
+  {% if added %}<div class="flash">✓ {{ added }}件を選定リストに追加しました</div>{% endif %}
+  {% if not configured %}<div class="ro">⚠️ 候補プール未設定（<code>CANDIDATES_WEBHOOK_URL</code>）。追加は保存されません。</div>{% endif %}
+
+  <div class="sec">
+    <h2>① ブックマークレットを入れる（最初に1回だけ）</h2>
+    <p class="hint">下のボタンを<b>ブックマークバーにドラッグ</b>（スマホは長押し→ブックマークに追加）。これで準備完了。</p>
+    <p><a class="bm" href="{{ bookmarklet|safe }}">＋ おうちベースに選定</a></p>
+    <p class="hint">ドラッグできない場合は、下のコードをコピーして「ブックマークのURL」に貼り付けて保存:</p>
+    <div class="copy" id="bm">{{ bookmarklet }}</div>
+  </div>
+
+  <div class="sec">
+    <h2>② Amazonで見つけて「＋選定」をタップ</h2>
+    <ol>
+      <li>普段のブラウザで <b>Amazonの商品ページ</b>を開く</li>
+      <li>ブックマークの <b>「＋ おうちベースに選定」</b>をタップ</li>
+      <li>商品名・価格・画像・ブランドを自動取得して<b>選定リスト（選定済み）</b>に追加</li>
+      <li>20分ごとのバッチが、選定済みから順に記事化します</li>
+    </ol>
+    <p class="hint">※ おうちベースにログイン済みのブラウザで実行してください（このページが開けているならOK）。</p>
+  </div>
+
+  <div class="sec">
+    <h2>③ URL/ASINを貼って一括追加（手入力派向け）</h2>
+    <p class="hint">Amazon商品URL か ASIN を1行に1つ。まとめて選定済みにします。</p>
+    <form method="post" action="/manual/paste">
+      <textarea name="bulk" rows="4" placeholder="https://www.amazon.co.jp/dp/B0XXXXXXXX&#10;B0YYYYYYYY"></textarea>
+      <button class="btn" type="submit">リストに追加</button>
+    </form>
+  </div>
+
+  <div class="sec">
+    <h2>🗂 選定済みリスト（{{ approved|length }}件）</h2>
+    {% if approved %}
+    <ul class="list">
+      {% for c in approved %}
+      <li>
+        {% if c.image %}<img src="{{ c.image }}" alt="" loading="lazy">{% else %}<span style="flex:0 0 42px"></span>{% endif %}
+        <span class="t">{{ c.title or c.asin }}</span>
+        {% if c.price %}<span class="p">¥{{ c.price }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint">まだありません。上の「＋選定」やURL貼り付けで追加してください。</p>
+    {% endif %}
+  </div>
+</div>
+<script src="/static/ui.js"></script>
+</body>
+</html>
