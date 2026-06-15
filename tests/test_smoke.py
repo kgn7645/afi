@@ -326,6 +326,30 @@ def test_eyecatch_build():
     assert im.size == (1200, 630)                      # OGPサイズ
 
 
+def test_run_candidates_batch(monkeypatch):
+    from core import batch, candidates, pipeline
+    from core.models import Article, PipelineResult, Product
+
+    monkeypatch.setattr(candidates, "list_by_status",
+                        lambda status, **k: [{"asin": "B01", "title": "RANVOO ネッククーラー",
+                                              "url": "https://www.amazon.co.jp/dp/B01"}])
+    marked = {}
+    monkeypatch.setattr(candidates, "set_status",
+                        lambda asin, status: marked.update({asin: status}))
+    monkeypatch.setattr(batch, "GeminiClient", lambda: object())
+
+    def fake_run(*, url, manual, post_to_wp, wp_status, gemini):
+        art = Article(title="生成タイトル")
+        return PipelineResult(product=Product(brand="RANVOO"), article=art,
+                              selection_ok=True, wp_post_id=99)
+
+    monkeypatch.setattr(pipeline, "run", fake_run)
+    s = batch.run_candidates_batch(limit=5)
+    assert s["generated"] == 1
+    assert marked == {"B01": "generated"}        # 生成済みにマーク
+    assert s["items"][0]["wp_post_id"] == 99
+
+
 def test_amazon_rank(monkeypatch):
     from core import amazon_rank as ar
 

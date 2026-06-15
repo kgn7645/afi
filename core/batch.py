@@ -128,5 +128,49 @@ def run_batch(
     return summary
 
 
+def run_candidates_batch(
+    *, limit: int = 10, post_to_wp: bool = True, wp_status: str = "draft",
+) -> dict:
+    """承認済み(approved)候補から記事化（Issue #3/#12 Phase3）。
+
+    成功した候補は status=generated に更新（再生成防止）。
+    候補プール(CANDIDATES_WEBHOOK_URL)未設定なら空サマリ。
+    """
+    from . import candidates
+
+    approved = candidates.list_by_status("approved", limit=limit * 3)
+    gemini = GeminiClient()
+    summary = {"generated": 0, "skipped_dup": 0, "failed": 0, "items": []}
+
+    for cand in approved:
+        if summary["generated"] >= limit:
+            break
+        asin = cand.get("asin", "")
+        title = cand.get("title", "")
+        try:
+            result = pipeline.run(
+                url=cand.get("url", "").strip(),
+                manual={"product_name": title, "specs": []},
+                post_to_wp=post_to_wp, wp_status=wp_status, gemini=gemini,
+            )
+            if not result.selection_ok:
+                summary["failed"] += 1
+                summary["items"].append(
+                    {"key": asin, "status": "selection_ng", "reason": result.selection_reason})
+                continue
+            candidates.set_status(asin, "generated")
+            summary["generated"] += 1
+            summary["items"].append({
+                "key": asin, "status": "ok",
+                "title": result.article.title if result.article else "",
+                "wp_post_id": result.wp_post_id, "warnings": result.warnings,
+            })
+        except Exception as e:  # noqa: BLE001
+            summary["failed"] += 1
+            summary["items"].append({"key": asin, "status": "error", "error": str(e)})
+
+    return summary
+
+
 def queue_template_path() -> Path:
     return ROOT / "data" / "queue.example.csv"
