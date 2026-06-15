@@ -42,14 +42,21 @@ def main() -> None:
     p.add_argument("--no-wp", action="store_true", help="WordPressへ送らない")
     p.add_argument("--status", default="draft", choices=["draft", "publish"], help="投稿ステータス")
     p.add_argument("--skip-dedup", action="store_true", help="重複チェックを無効化")
+    p.add_argument("--candidates", action="store_true",
+                   help="承認済み候補(スワイプ選定)から生成する（CSVキューの代わり）")
     args = p.parse_args()
 
-    print(f"[batch] queue={args.queue} limit={args.limit} wp={not args.no_wp} status={args.status}")
+    src = "承認済み候補" if args.candidates else args.queue
+    print(f"[batch] source={src} limit={args.limit} wp={not args.no_wp} status={args.status}")
     try:
-        s = batch.run_batch(
-            queue_path=args.queue, limit=args.limit,
-            post_to_wp=not args.no_wp, wp_status=args.status, skip_dedup=args.skip_dedup,
-        )
+        if args.candidates:
+            s = batch.run_candidates_batch(
+                limit=args.limit, post_to_wp=not args.no_wp, wp_status=args.status)
+        else:
+            s = batch.run_batch(
+                queue_path=args.queue, limit=args.limit,
+                post_to_wp=not args.no_wp, wp_status=args.status, skip_dedup=args.skip_dedup,
+            )
     except FileNotFoundError as e:
         # cronで毎日走るため、キュー未配置でも異常終了させず静かに終える
         print(f"[batch] キューが無いためスキップ: {e}")
