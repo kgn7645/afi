@@ -109,6 +109,12 @@ def main() -> None:
 
     print("=" * 60)
     print(f"生成: {s['generated']} / 重複スキップ: {s['skipped_dup']} / 失敗: {s['failed']}")
+    gu = s.get("gemini_usage") or {}
+    if gu.get("calls"):
+        per = (f" / 1記事あたり概算 ${round(gu['est_cost_usd']/s['generated'], 4)}"
+               if s["generated"] else "")
+        print(f"Gemini: {gu['calls']}コール 入力{gu['prompt']} 出力{gu['candidates']}"
+              f"(+思考{gu['thoughts']}) tok / 概算 ${gu['est_cost_usd']}（¥{gu['est_cost_jpy']}）{per}")
     for it in s["items"]:
         if it["status"] == "ok":
             wid = it.get("wp_post_id")

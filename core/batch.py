@@ -125,6 +125,7 @@ def run_batch(
             summary["failed"] += 1
             summary["items"].append({"key": key, "status": "error", "error": str(e)})
 
+    summary["gemini_usage"] = gemini.usage_summary()
     return summary
 
 
@@ -178,6 +179,7 @@ def run_candidates_batch(
                      "error": "Geminiの枠切れのため中断（次回再試行）"})
                 break
 
+    summary["gemini_usage"] = gemini.usage_summary()
     return summary
 
 
