@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import re
 
-from . import prompts, wordpress
+from . import prompts, qa, wordpress
+from .models import Article, Product
 
 # (key, ラベル, AIへの指示)。10項目＋自由記入。
 REVISE_OPTIONS: list[tuple[str, str, str]] = [
@@ -80,8 +81,6 @@ def revise_post(post_id: int, keys: set[str], note: str = "") -> tuple[bool, str
     instrs = [opt[2] for opt in REVISE_OPTIONS if opt[0] in keys]
     if note and note.strip():
         instrs.append(note.strip())
-    if not instrs:
-        return False, "修正項目が選択されていません"
 
     try:
         p = wordpress.get_post(post_id, fields="id,title,content")
@@ -93,7 +92,18 @@ def revise_post(post_id: int, keys: set[str], note: str = "") -> tuple[bool, str
     if not body:
         return False, "本文が空のためリライトできません"
 
-    instr_text = "\n".join(f"- {x}" for x in instrs)
+    # 現在のQA指摘を“必ず解消する”修正対象として明示的に渡す（汎用指示だけだと直らない）
+    qa_msgs = [i["message"] for i in qa.check_article(Article(title=title, body_html=body), Product())]
+    if not instrs and not qa_msgs:
+        return False, "修正項目が選択されていません"
+
+    blocks = []
+    if instrs:
+        blocks.append("【指定の修正方針】\n" + "\n".join(f"- {x}" for x in instrs))
+    if qa_msgs:
+        blocks.append("【QAで検出された問題（必ず解消すること）】\n"
+                      + "\n".join(f"- {m}" for m in qa_msgs))
+    instr_text = "\n\n".join(blocks)
     try:
         gem = GeminiClient()
         out = gem.generate(
@@ -111,4 +121,5 @@ def revise_post(post_id: int, keys: set[str], note: str = "") -> tuple[bool, str
         wordpress.set_post_status(post_id, "draft")
     except Exception as e:  # noqa: BLE001
         return False, f"WP更新に失敗: {e}"
-    return True, f"リライトしました（{len(instrs)}項目）。内容を再確認してください"
+    detail = f"修正{len(instrs)}項目" + (f"＋QA指摘{len(qa_msgs)}件" if qa_msgs else "")
+    return True, f"リライトしました（{detail}）。内容を再確認してください"
