@@ -186,57 +186,134 @@ def _kw_match(text: str, keyword_filters: list[str]) -> bool:
     return False
 
 
+_RANK_ITEM_SEL = "div#gridItemRoot, div.zg-grid-general-faceout, div.p13n-sc-uncoverable-faceout"
+_HREF_DP = re.compile(r"/dp/[A-Z0-9]{10}")
+
+
+def _fetch_ranking_html(node: str, *, timeout: int = 25, retries: int = 2) -> str:
+    """ランキングページHTMLを取得（空スタブはリトライ）。"""
+    url = node if node.startswith("http") else f"https://www.amazon.co.jp/gp/bestsellers/{node}"
+    for attempt in range(retries + 1):
+        try:
+            r = requests.get(url, headers=_HEADERS, timeout=timeout)
+        except requests.RequestException:
+            r = None
+        if r is not None and r.status_code == 200 and len(r.text) > 50_000:
+            return r.text
+        if attempt < retries:
+            time.sleep(2.5 * (attempt + 1))
+    return ""
+
+
+def ranking_candidates(node: str, *, limit: int = 15, timeout: int = 25) -> list[dict]:
+    """ランキングページのグリッドから候補(完成形dict)を直接抽出する。
+
+    /dp 個別ページを叩かないので、Amazonの /dp スロットリング中でも収集できる。
+    title/価格/画像をページ内グリッドから取得（在庫はランキング掲載＝あり扱い）。
+    """
+    from bs4 import BeautifulSoup
+
+    html = _fetch_ranking_html(node, timeout=timeout)
+    if not html:
+        return []
+    soup = BeautifulSoup(html, "html.parser")
+    out: list[dict] = []
+    seen: set[str] = set()
+    for it in soup.select(_RANK_ITEM_SEL):
+        a = it.find("a", href=_HREF_DP)
+        if not a:
+            continue
+        m = re.search(r"/dp/([A-Z0-9]{10})", a.get("href", ""))
+        if not m:
+            continue
+        asin = m.group(1)
+        if asin in seen:
+            continue
+        img = it.find("img")
+        title = ((img.get("alt") if img else "") or "").strip()
+        if not title:
+            continue
+        image = (img.get("src") if img else "") or ""
+        # 価格は「￥…」を含む単一テキストノードから取る（get_text連結で桁が壊れるのを防ぐ）
+        price = None
+        ptxt = it.find(string=re.compile(r"￥\s*[\d,]+"))
+        if ptxt:
+            pm = re.search(r"￥\s*([\d,]+)", ptxt)
+            if pm:
+                price = int(pm.group(1).replace(",", ""))
+        seen.add(asin)
+        out.append({"asin": asin, "title": title, "price": price, "brand": "",
+                    "in_stock": True, "image": image,
+                    "url": f"https://www.amazon.co.jp/dp/{asin}", "source": "amazon"})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def collect(*, keywords: list[str] | None = None, nodes: list[str] | None = None,
             source_urls: list[str] | None = None, rakuten_genres: list | None = None,
             per_source: int = 10, max_total: int = 40,
             exclude_asins: set[str] | None = None,
             season: bool = False, screen: bool = True,
             report: list | None = None) -> list[dict]:
-    """ランキング＋参照元URLから候補を集め、キーワードで絞り込み＆選定基準で足切り。
+    """候補を収集し、キーワード絞り込み＆選定基準で足切りして返す。
 
-    方針: Amazon検索(/s)はbot対策で塞がれやすいため**収集元にしない**。
-    - 収集元 = 売れ筋ランキング(nodes) ＋ 参照元URL(source_urls)
-    - keywords = **タイトル絞り込みフィルタ**（設定時、タイトル/ブランドに含むものだけ採用）
-    - screen = 価格/在庫/除外カテゴリ/大手/雑誌書籍 の足切り
-    - season = 季節該当を上位に並べ替え（絞り込みはしない）
+    収集元（Amazon検索/sはbot対策で塞がれるため使わない）:
+    - Amazon売れ筋ランキング(nodes) … **グリッドから直接抽出（/dp不要・throttle耐性）**
+    - 参照元URL(source_urls) … ページ内のAmazonリンク→/dpで候補化
+    - 楽天ジャンル(rakuten_genres) … 公式API（bot対策無し）
+    keywords=タイトル絞り込み / screen=価格・在庫・除外カテゴリ・大手・雑誌の足切り。
     report に dict を渡すと不採用候補 {asin,reason,title} を追記する。
     """
     from . import product_selector
 
     exclude = exclude_asins or set()
     kw_filters = [k for k in (keywords or []) if k and k.strip()]
-
-    asins: list[str] = []
-    for nd in (nodes or []):
-        asins += ranking_asins(nd, limit=per_source)
-    for u in (source_urls or []):
-        asins += extract_asins_from_url(u, limit=per_source)
-
-    # キーワード絞り込み＋足切りで減るぶん、ビルド対象は広めに確保
-    cap = max_total * 3 if (screen or kw_filters) else max_total
-    asins = [a for a in _uniq(asins) if a not in exclude][:cap]
-
     out: list[dict] = []
-    for a in asins:
-        c = build_candidate(a)
-        if not c:
-            continue
+    seen_out: set[str] = set()
+
+    def consider(c: dict) -> None:
+        if len(out) >= max_total:
+            return
+        asin = c.get("asin")
+        if not asin or asin in exclude or asin in seen_out:
+            return
         title = c.get("title", "")
         if kw_filters and not _kw_match(f"{title} {c.get('brand', '')}", kw_filters):
             if report is not None:
-                report.append({"asin": a, "reason": "キーワード不一致", "title": title[:40]})
-            continue
+                report.append({"asin": asin, "reason": "キーワード不一致", "title": title[:40]})
+            return
         if screen:
             ok, reason = product_selector.screen(c)
             if not ok:
                 if report is not None:
-                    report.append({"asin": a, "reason": reason, "title": title[:40]})
-                continue
+                    report.append({"asin": asin, "reason": reason, "title": title[:40]})
+                return
+        seen_out.add(asin)
         out.append(c)
+
+    # 1) Amazonランキング: グリッドから直接（/dp不要）
+    for nd in (nodes or []):
+        for c in ranking_candidates(nd, limit=per_source):
+            consider(c)
         if len(out) >= max_total:
             break
 
-    # 楽天ジャンル（公式API・bot対策無し）。候補は完成形dictなのでbuild不要
+    # 2) 参照元URL: ASIN抽出→/dpで候補化
+    if len(out) < max_total:
+        src_asins: list[str] = []
+        for u in (source_urls or []):
+            src_asins += extract_asins_from_url(u, limit=per_source)
+        for a in _uniq(src_asins):
+            if len(out) >= max_total:
+                break
+            if a in exclude or a in seen_out:
+                continue
+            c = build_candidate(a)
+            if c:
+                consider(c)
+
+    # 3) 楽天ジャンル（公式API・bot対策無し）
     if rakuten_genres and len(out) < max_total:
         from . import rakuten
         for gid in rakuten_genres:
@@ -247,24 +324,7 @@ def collect(*, keywords: list[str] | None = None, nodes: list[str] | None = None
             except Exception:  # noqa: BLE001
                 continue
             for c in items:
-                if c.get("asin") in exclude:
-                    continue
-                title = c.get("title", "")
-                if kw_filters and not _kw_match(f"{title} {c.get('brand', '')}", kw_filters):
-                    if report is not None:
-                        report.append({"asin": c.get("asin"), "reason": "キーワード不一致",
-                                       "title": title[:40]})
-                    continue
-                if screen:
-                    ok, reason = product_selector.screen(c)
-                    if not ok:
-                        if report is not None:
-                            report.append({"asin": c.get("asin"), "reason": reason,
-                                           "title": title[:40]})
-                        continue
-                out.append(c)
-                if len(out) >= max_total:
-                    break
+                consider(c)
 
     if season:  # 季節該当を先頭へ（安定ソート・絞り込みはしない）
         sk = seasonal_keywords()
