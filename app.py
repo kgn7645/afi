@@ -111,6 +111,10 @@ def _compute_stats() -> dict:
         s["drafts"] = len(wordpress.list_posts(statuses="draft", fields="id"))
     except Exception:  # noqa: BLE001
         s["drafts"] = None
+    try:  # 手動追加の未反映（Xserver補完待ち）件数
+        s["queue"] = len(overrides.load().get("_manual_pending", []) or [])
+    except Exception:  # noqa: BLE001
+        s["queue"] = None
     try:
         jst = timezone(timedelta(hours=9))
         midnight = datetime.now(jst).replace(hour=0, minute=0, second=0, microsecond=0)
