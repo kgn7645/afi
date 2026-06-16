@@ -20,10 +20,13 @@ from .product_extractor import _HEADERS
 _DP = re.compile(r"/(?:dp|gp/product)/([A-Z0-9]{10})")
 
 
-def _resolve_asin(short_url: str, *, timeout: int = 20) -> str:
-    """短縮リンクのリダイレクト先URLからASINを取得。失敗時は空。"""
+def _resolve_asin(url: str, *, timeout: int = 20) -> str:
+    """URLからASINを取得。/dp/ を含むURLは即返す（fetch不要）。短縮リンクは展開して取得。"""
+    m = _DP.search(url)
+    if m:
+        return m.group(1)
     try:
-        r = requests.get(short_url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
+        r = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
     except requests.RequestException:
         return ""
     m = _DP.search(r.url) or _DP.search(r.text or "")
