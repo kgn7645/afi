@@ -72,9 +72,11 @@ def list_review_items(status: str = "draft") -> list[dict]:
             or (d.get("title", {}) or {}).get("raw", "")
         body = (d.get("content", {}) or {}).get("raw", "")
         issues = qa.check_article(Article(title=title, body_html=body), Product())
+        pm = re.search(r"<!--\s*price:(\d+)\s*-->", body)
         items.append({
             "id": d["id"],
             "title": title,
+            "price": int(pm.group(1)) if pm else None,
             "excerpt": _strip((d.get("excerpt", {}) or {}).get("rendered", ""))[:120],
             "thumb": wordpress.get_media_url(d.get("featured_media") or 0),
             "errors": sum(1 for i in issues if i["level"] == "error"),

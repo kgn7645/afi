@@ -70,6 +70,7 @@
     <a href="/settings">⚙️ 設定</a>
   </div>
 </div>
+{% include "_statsbar.html" %}
 <div class="wrap">
   {% if disabled %}
     <div class="empty"><span class="big">🔒</span>承認画面は無効です<br><b>REVIEW_PASSWORD</b> を設定してください</div>
@@ -94,6 +95,7 @@
             <p class="title">{{ it.title }}</p>
             <p class="excerpt">{{ it.excerpt }}</p>
             <div class="badges">
+              {% if it.price %}<span class="badge" style="background:#eef7f0;color:#149a5e;">¥{{ "{:,}".format(it.price) }}</span>{% endif %}
               {% if it.errors %}<span class="badge b-err">QA NG {{ it.errors }}</span>
               {% elif it.warns %}<span class="badge b-warn">要確認 {{ it.warns }}</span>
               {% else %}<span class="badge b-ok">QA OK</span>{% endif %}

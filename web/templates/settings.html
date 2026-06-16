@@ -43,6 +43,7 @@
     <a href="/select">🛍 自動</a><a href="/manual">✋ 手動</a><a href="/review">📝 承認</a><a href="/settings" class="on">⚙️ 設定</a>
   </div>
 </div>
+{% include "_statsbar.html" %}
 <form class="wrap" method="post" action="/settings">
   {% if saved=='1' %}<div class="flash">✓ 保存しました（生成に最大1分で反映）</div>{% endif %}
   {% if saved=='crawl' %}<div class="flash">🔎 クロールを予約しました（Xserverが数分以内に実行）</div>{% endif %}

@@ -77,6 +77,38 @@ def _bookmarklet(base: str) -> str:
     return js
 
 
+_stats_cache: dict = {"ts": 0.0, "data": {}}
+
+
+def _compute_stats() -> dict:
+    """作業指標（選定待ち/選定済み/承認待ち/本日公開）を集計。各項目は失敗時None。"""
+    import time
+    from datetime import datetime, timedelta, timezone
+    s: dict = {}
+    try:
+        s["pending"] = len(candidates.list_by_status("pending", limit=300))
+    except Exception:  # noqa: BLE001
+        s["pending"] = None
+    try:
+        s["approved"] = len(candidates.list_by_status("approved", limit=300))
+    except Exception:  # noqa: BLE001
+        s["approved"] = None
+    try:
+        s["drafts"] = len(wordpress.list_posts(statuses="draft", fields="id"))
+    except Exception:  # noqa: BLE001
+        s["drafts"] = None
+    try:
+        jst = timezone(timedelta(hours=9))
+        midnight = datetime.now(jst).replace(hour=0, minute=0, second=0, microsecond=0)
+        s["published_today"] = len(
+            wordpress.list_published_since(midnight.replace(tzinfo=None).isoformat()))
+    except Exception:  # noqa: BLE001
+        s["published_today"] = None
+    _stats_cache["ts"] = time.time()
+    _stats_cache["data"] = s
+    return s
+
+
 def _crawl_status() -> dict:
     """クロール状況（Xserverが書いた _crawl_status）＋相対時刻を返す。"""
     st = {}
@@ -88,6 +120,17 @@ def _crawl_status() -> dict:
     st["started_ago"] = _ago(st.get("started_at", 0))
     st["finished_ago"] = _ago(st.get("finished_at", 0))
     return st
+
+
+@app.get("/stats")
+def stats(request: Request):
+    """全タブ共通ヘッダーの作業指標（45秒キャッシュ・非同期取得用）。"""
+    if not _authed(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    import time
+    if time.time() - _stats_cache["ts"] < 45 and _stats_cache["data"]:
+        return JSONResponse({"ok": True, "stats": _stats_cache["data"]})
+    return JSONResponse({"ok": True, "stats": _compute_stats()})
 
 
 @app.get("/health")
