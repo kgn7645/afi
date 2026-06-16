@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 
 from fastapi import FastAPI, Form, Request
@@ -442,32 +443,29 @@ padding:11px 22px;border-radius:11px;font-weight:800}}</style></head><body><div 
 _SHORT_RE = re.compile(r"https?://(?:amzn\.asia|amzn\.to|a\.co)/\S+")
 
 
-@app.post("/manual/paste")
-def manual_paste(request: Request, bulk: str = Form("")):
-    """URL/ASINを複数貼り付け→まとめて選定済みへ。短縮リンクはXserverで展開予約。"""
-    if not _authed(request):
-        return RedirectResponse("/review/login", status_code=303)
+def _add_manual_text(text: str) -> tuple[int, int]:
+    """テキストからAmazon URL/ASIN/短縮リンクを抽出して選定リストへ。 (追加数, 短縮予約数)。
+
+    /manual/paste と /line/webhook が共用。完全URL/ASINは即approved＋手動マーク、
+    短縮リンクはXserverで解決するため _manual_pending へ。
+    """
     asins: list[str] = []
     shorts: list[str] = []
-    for raw in (bulk or "").splitlines():
+    for raw in (text or "").splitlines():
         line = raw.strip()
         if not line:
             continue
-        m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", line)
-        if m:
+        for m in re.finditer(r"/(?:dp|gp/product)/([A-Z0-9]{10})", line):
             asins.append(m.group(1))
-            continue
-        sm = _SHORT_RE.search(line)
-        if sm:                      # 短縮リンク（Amazonアプリの共有等）はXserverで解決
+        for sm in _SHORT_RE.finditer(line):
             shorts.append(sm.group(0))
-            continue
-        bm = re.fullmatch(r"[A-Z0-9]{10}", line)
-        if bm:
-            asins.append(line)
+        if not re.search(r"/(?:dp|gp/product)/", line) and not _SHORT_RE.search(line):
+            bm = re.fullmatch(r"[A-Z0-9]{10}", line)
+            if bm:
+                asins.append(line)
 
     seen: set[str] = set()
     added_asins: list[str] = []
-    n = 0
     for a in asins:
         if a in seen:
             continue
@@ -475,23 +473,63 @@ def manual_paste(request: Request, bulk: str = Form("")):
         candidates.push([{"asin": a, "url": f"https://www.amazon.co.jp/dp/{a}",
                           "source": "manual"}])
         if candidates.set_status(a, "approved"):
-            n += 1
             added_asins.append(a)
     _mark_manual(added_asins)
 
     q = 0
+    shorts = list(dict.fromkeys(shorts))
     if shorts:
         try:
             cur = overrides.load(force=True).get("_manual_pending", []) or []
-            merged = list(dict.fromkeys([*cur, *shorts]))
-            overrides.update({"_manual_pending": merged})
+            overrides.update({"_manual_pending": list(dict.fromkeys([*cur, *shorts]))})
             q = len(shorts)
         except Exception:  # noqa: BLE001
             q = 0
+    return len(added_asins), q
 
+
+@app.post("/manual/paste")
+def manual_paste(request: Request, bulk: str = Form("")):
+    """URL/ASINを複数貼り付け→まとめて選定済みへ。短縮リンクはXserverで展開予約。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    n, q = _add_manual_text(bulk)
     if n == 0 and q == 0:
         return RedirectResponse("/manual?msg=no_asin", status_code=303)
     return RedirectResponse(f"/manual?added={n}&pending={q}", status_code=303)
+
+
+@app.post("/line/webhook")
+async def line_webhook(request: Request):
+    """LINE公式アカウントへAmazon商品を共有→選定リストに追加（Messaging API）。"""
+    from core import line_client
+
+    raw = await request.body()
+    if not line_client.verify(raw, request.headers.get("X-Line-Signature", "")):
+        return JSONResponse({"ok": False}, status_code=400)
+    try:
+        events = json.loads(raw).get("events", [])
+    except Exception:  # noqa: BLE001
+        events = []
+    for ev in events:
+        if ev.get("type") != "message" or (ev.get("message") or {}).get("type") != "text":
+            continue
+        token = ev.get("replyToken", "")
+        user_id = (ev.get("source") or {}).get("userId", "")
+        if not line_client.allowed(user_id):
+            line_client.reply(token, "このアカウントからの追加は許可されていません。")
+            continue
+        n, p = _add_manual_text(ev["message"]["text"])
+        if n == 0 and p == 0:
+            line_client.reply(token, "Amazonの商品リンク/ASINが見つかりませんでした🙏\n商品ページを「共有」して送ってください。")
+        else:
+            msg = []
+            if n:
+                msg.append(f"✅ {n}件を選定リストに追加しました")
+            if p:
+                msg.append(f"⏳ 短縮リンク{p}件は数分以内に反映されます")
+            line_client.reply(token, "\n".join(msg))
+    return JSONResponse({"ok": True})
 
 
 @app.post("/select/{asin}/approve")

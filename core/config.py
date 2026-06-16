@@ -42,6 +42,13 @@ class Settings:
         self.rakuten_access_key = os.getenv("RAKUTEN_ACCESS_KEY", "").strip()
         self.rakuten_affiliate_id = os.getenv("RAKUTEN_AFFILIATE_ID", "").strip()
 
+        # LINE: 商品ページを公式アカウントへ共有→選定リストに追加（Messaging API）
+        self.line_channel_secret = os.getenv("LINE_CHANNEL_SECRET", "").strip()
+        self.line_channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
+        # 追加を許可するLINEユーザーID（カンマ区切り）。空なら誰でも（個人運用想定）
+        self.line_allowed_user_ids = [
+            u.strip() for u in os.getenv("LINE_ALLOWED_USER_IDS", "").split(",") if u.strip()]
+
         # キュー: Googleスプレッドシートの「ウェブに公開(CSV)」URL（設定時はこちらを優先）
         self.queue_sheet_csv_url = os.getenv("QUEUE_SHEET_CSV_URL", "").strip()
         # 生成実績の書き戻し先: Google Apps Script Web App の URL（Issue #4）
