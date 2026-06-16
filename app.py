@@ -81,7 +81,7 @@ def _crawl_status() -> dict:
     st = {}
     try:
         if overrides.enabled():
-            st = dict(overrides.load(force=True).get("_crawl_status") or {})
+            st = dict(overrides.load().get("_crawl_status") or {})  # 60秒キャッシュ利用
     except Exception:  # noqa: BLE001
         st = {}
     st["started_ago"] = _ago(st.get("started_at", 0))
@@ -274,17 +274,24 @@ def select_list(request: Request):
             "select.html", {"request": request, "disabled": True, "items": []})
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    try:
-        items = candidates.list_by_status("pending", limit=50)
-        err = ""
-    except Exception as e:  # noqa: BLE001
-        items, err = [], f"候補の取得に失敗: {e}"
+    # 候補リストは描画後に /select/items で非同期ロード（ページは即表示・Issue #103）
     return templates.TemplateResponse(
         "select.html",
-        {"request": request, "disabled": False, "items": items, "error": err,
-         "configured": candidates.enabled(),
-         "crawl": _crawl_status(), "pending": len(items)},
+        {"request": request, "disabled": False, "error": "",
+         "configured": candidates.enabled(), "crawl": _crawl_status()},
     )
+
+
+@app.get("/select/items")
+def select_items(request: Request):
+    """スワイプ候補(pending)をJSONで返す（/select の非同期ロード用）。"""
+    if not _authed(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        items = candidates.list_by_status("pending", limit=50)
+        return JSONResponse({"ok": True, "items": items})
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(e), "items": []})
 
 
 @app.get("/crawl/status")
