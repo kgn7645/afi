@@ -1,0 +1,25 @@
+name: Render Deploy
+
+# main への push（PRマージ含む）で Render の Deploy Hook を叩いて自動デプロイ。
+# Render側 Auto-Deploy(GitHub Webhook) が効かない時の確実な発火手段。
+# 要: リポジトリ Secrets に RENDER_DEPLOY_HOOK（Render → Settings → Deploy Hook のURL）。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # 手動実行も可
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK secret が未設定です（リポジトリ Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
+          echo "Triggering Render deploy..."
+          curl -fsS -X POST "$HOOK" && echo "OK: Render deploy triggered"
