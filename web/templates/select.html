@@ -119,7 +119,7 @@
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 
 <script>
-  var ITEMS = {{ items | tojson }};
+  var ITEMS = [];
   var i = 0, deck = document.getElementById('deck'), busy = false;
 
   function yen(p){ return (p===null||p===undefined||p==='') ? '価格情報なし'
@@ -221,7 +221,21 @@
     else if(e.key==='ArrowUp') bInfo.click();
   });
 
-  render();
+  // 候補は非同期ロード（ページは即表示）。読み込み中はスピナー表示。
+  function loadItems(){
+    if(!deck) return;
+    deck.innerHTML='<div class="empty"><div class="big">⏳</div>候補を読み込み中…</div>';
+    var ctrl=document.getElementById('controls'); if(ctrl) ctrl.style.display='none';
+    fetch('/select/items').then(function(r){ return r.json(); }).then(function(d){
+      ITEMS = (d && d.items) || []; i=0;
+      if(ctrl) ctrl.style.display='';
+      render();
+    }).catch(function(){
+      deck.innerHTML='<div class="empty"><div class="big">⚠️</div>候補の取得に失敗しました<br>'+
+        '<a href="" onclick="location.reload();return false;">再読み込み</a></div>';
+    });
+  }
+  loadItems();
 </script>
 <script src="/static/ui.js"></script>
 </body>
