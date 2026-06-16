@@ -14,6 +14,7 @@ Issue #3: Amazon売れ筋ランキング/検索から商品候補を収集（ク
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime
 from urllib.parse import quote
 
@@ -69,13 +70,27 @@ def search_asins(keyword: str, *, limit: int = 15, timeout: int = 25) -> list[st
     return _uniq(_ASIN_IN_ATTR.findall(r.text))[:limit]
 
 
-def ranking_asins(node: str, *, limit: int = 15, timeout: int = 25) -> list[str]:
-    """売れ筋ランキングページからASINを抽出。node は 'kitchen/4083001' 形式 or フルURL。"""
+def ranking_asins(node: str, *, limit: int = 15, timeout: int = 25,
+                  retries: int = 2) -> list[str]:
+    """売れ筋ランキングページからASINを抽出。node は 'kitchen/4083001' 形式 or フルURL。
+
+    Amazonが時々返す“空スタブ”対策で、ASINが取れない/応答が極端に小さい時はリトライ。
+    /dp/ に加え data-asin もフォールバックで拾う。
+    """
     url = node if node.startswith("http") else f"https://www.amazon.co.jp/gp/bestsellers/{node}"
-    r = requests.get(url, headers=_HEADERS, timeout=timeout)
-    if r.status_code != 200:
-        return []
-    return _uniq(_ASIN_IN_DP.findall(r.text))[:limit]
+    for attempt in range(retries + 1):
+        try:
+            r = requests.get(url, headers=_HEADERS, timeout=timeout)
+        except requests.RequestException:
+            time.sleep(2)
+            continue
+        if r.status_code == 200 and len(r.text) > 50_000:
+            asins = _uniq(_ASIN_IN_DP.findall(r.text) + _ASIN_IN_ATTR.findall(r.text))
+            if asins:
+                return asins[:limit]
+        if attempt < retries:
+            time.sleep(2.5 * (attempt + 1))  # スタブ/スロットリングはバックオフして再取得
+    return []
 
 
 def extract_asins_from_url(url: str, *, limit: int = 15, timeout: int = 25) -> list[str]:
