@@ -101,6 +101,40 @@ def revise_article_prompt(title: str, body_html: str, instructions: str) -> str:
 """
 
 
+def roundup_prompt(category: str, products: list[dict]) -> str:
+    """カテゴリ比較記事（おすすめN選）。検索意図「{category} おすすめ/比較/選び方」狙い。"""
+    from datetime import datetime
+    n = len(products)
+    lines = "\n".join(
+        f"{i+1}. {p.get('name','')}（{('¥'+str(p['price'])) if p.get('price') else '価格不明'}）"
+        for i, p in enumerate(products))
+    return f"""{_style_guide()}
+
+# タスク: 「{category}のおすすめ{n}選」比較記事
+検索意図「{category} おすすめ / 比較 / 選び方」に応える、実用的な比較まとめ記事を書く。
+下記{n}商品を、初心者にも分かりやすく比較する。各商品の名前は**与えられた通り**に使うこと。
+
+# 比較する商品（この順番で）
+{lines}
+
+# 出力（**JSONのみ**・前後の説明やコードフェンス禁止）
+{{
+  "title": "記事タイトル30〜45字。例『【{datetime.now().year}】{category}のおすすめ{n}選｜静音・コスパで徹底比較』",
+  "intro": "導入250〜350字。読者の悩み・選ぶ難しさから入り、この記事で何が分かるかを示す",
+  "criteria": "{category}の選び方のポイント（3〜4観点を文章で説明、150〜250字）",
+  "picks": [
+    {{"name": "商品名（リストのまま）", "catch": "一言の推しポイント20字", "review": "レビュー150〜220字（特徴・使用シーン）", "good": "良い点（簡潔に）", "bad": "気になる点（正直に）", "recommend": "こんな人におすすめ（一言）"}}
+  ],
+  "comparison": "総合比較200〜300字。結局どれがどんな人向けかを言い切る",
+  "conclusion": "まとめ150字。選び方の最後の一押し",
+  "meta_description": "100〜150字。『{category}のおすすめを価格・機能で比較、どんな人に何が向くか』を凝縮"
+}}
+
+注意: picks は商品リストと**同じ順番・同じ件数（{n}件）・同じ商品名**で出力。
+薬機法・景表法に触れる効果効能の断定や根拠なき最大級表現は避ける。
+"""
+
+
 def trust_rating_prompt(product: Product, rules: dict) -> str:
     axes = rules.get("article", {}).get(
         "trust_axes",
