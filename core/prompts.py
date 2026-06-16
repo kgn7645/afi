@@ -77,6 +77,30 @@ def title_and_meta_prompt(product: Product) -> str:
 """
 
 
+def revise_article_prompt(title: str, body_html: str, instructions: str) -> str:
+    """差し戻しリライト用。HTML/カード/画像/リンクは保持し本文だけ改善する。"""
+    return f"""あなたは日本語アフィリエイト記事のリライト編集者です。
+次の記事HTMLを、下記の【修正方針】**だけ**を反映してリライトしてください。
+
+【絶対厳守（崩すと収益・表示が壊れる）】
+- <img> / <a> / <script> / <iframe> / <figure> /
+  class に card・amazon・affiliate・msmaflink を含む <div> / <!-- ... --> コメント は、
+  **タグ・属性・URL・中身を一字一句そのまま**残す（位置もできるだけ保持）。
+- 著者情報ボックス・関連記事リンク・商品カード・画像・アフィリンクは削除も改変もしない。
+- 見出し(h2/h3)の骨格は維持しつつ、本文テキストのみ改善する。
+- 出力は記事HTMLのみ（前後の説明文・コードフェンス・<html>等のラッパー禁止）。
+- 薬機法・景表法に触れる効果効能の断定は使わない。
+
+【修正方針】
+{instructions}
+
+【記事タイトル】{title}
+
+【記事HTML】
+{body_html}
+"""
+
+
 def trust_rating_prompt(product: Product, rules: dict) -> str:
     axes = rules.get("article", {}).get(
         "trust_axes",

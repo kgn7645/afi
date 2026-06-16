@@ -14,7 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core import (candidates, internal_links, overrides, pipeline, prompts,
-                  ranking_catalog, rakuten_catalog, review, sheet_log, wordpress)
+                  ranking_catalog, rakuten_catalog, review, reviser, sheet_log,
+                  wordpress)
 from core.config import ROOT, get_rules, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -225,7 +226,20 @@ def review_preview(request: Request, post_id: int):
     except Exception as e:  # noqa: BLE001
         return RedirectResponse(f"/review?msg=取得失敗: {e}", status_code=303)
     return templates.TemplateResponse(
-        "review_preview.html", {"request": request, "post": data})
+        "review_preview.html",
+        {"request": request, "post": data,
+         "revise_options": reviser.REVISE_OPTIONS,
+         "revise_recommended": reviser.recommended_keys(data.get("qa"))})
+
+
+@app.post("/review/{post_id}/revise")
+def review_revise(request: Request, post_id: int,
+                  revise_cb: list[str] = Form([]), revise_note: str = Form("")):
+    """差し戻し（リライト）: 選択した修正項目で記事をリライトして下書き更新。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    _ok, msg = reviser.revise_post(post_id, set(revise_cb), revise_note)
+    return RedirectResponse(f"/review?msg={msg}", status_code=303)
 
 
 @app.post("/review/{post_id}/publish")
