@@ -13,6 +13,7 @@ from pathlib import Path
 
 from . import pipeline, sheet_queue
 from .config import ROOT
+from . import gemini_client as gemini_module
 from .gemini_client import GeminiClient
 
 QUEUE_FIELDS = [
@@ -126,6 +127,7 @@ def run_batch(
             summary["items"].append({"key": key, "status": "error", "error": str(e)})
 
     summary["gemini_usage"] = gemini.usage_summary()
+    gemini_module.record_shared_usage(summary["gemini_usage"])  # 共有消費に加算
     return summary
 
 
@@ -192,6 +194,7 @@ def run_candidates_batch(
                 break
 
     summary["gemini_usage"] = gemini.usage_summary()
+    gemini_module.record_shared_usage(summary["gemini_usage"])  # 共有消費に加算
     return summary
 
 

@@ -558,7 +558,6 @@ def settings_form(request: Request, saved: str = ""):
     cand = r.get("candidates", {}) or {}
     gen = r.get("generation", {}) or {}
     d = {
-        "gemini_model": gemini_client.resolve_model(),
         "interval_minutes": gen.get("interval_minutes", 20),
         "per_run": gen.get("per_run", 2),
         "min_price": sel.get("min_price", 3000),
@@ -594,8 +593,7 @@ def settings_form(request: Request, saved: str = ""):
         {"request": request, "d": d, "saved": saved, "can_save": overrides.enabled(),
          "crawl": _crawl_status(), "catalog_groups": groups,
          "selected_nodes": selected, "catalog_updated": cat["updated_at"],
-         "rakuten_catalog": rk_catalog, "rakuten_selected": rk_selected,
-         "gemini_model_choices": gemini_client.MODEL_CHOICES})
+         "rakuten_catalog": rk_catalog, "rakuten_selected": rk_selected})
 
 
 @app.post("/settings")
@@ -612,7 +610,6 @@ def settings_save(
     rakuten_genres_cb: list[str] = Form([]),
     per_source: str = Form("10"), max_total: str = Form("40"),
     interval_minutes: str = Form("20"), per_run: str = Form("2"),
-    gemini_model: str = Form(""),
 ):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
@@ -626,8 +623,6 @@ def settings_save(
     def _lines(v):
         return [ln.strip() for ln in v.splitlines() if ln.strip()]
 
-    # AIモデル（既知の候補のみ採用。不正値は無視＝従来値維持）
-    valid_models = {m for m, _ in gemini_client.MODEL_CHOICES}
     ov = {
         "selection": {"min_price": _int(min_price, 3000),
                       "exclude_keywords": _lines(exclude_keywords),
@@ -648,10 +643,66 @@ def settings_save(
         "generation": {"interval_minutes": max(5, _int(interval_minutes, 20)),
                        "per_run": _int(per_run, 2)},
     }
-    if gemini_model.strip() in valid_models:
-        ov["gemini"] = {"model": gemini_model.strip()}
     ok = overrides.update(ov)   # 他項目(_crawl_request等)を壊さず部分更新
     return RedirectResponse("/settings?saved=" + ("1" if ok else "fail"), status_code=303)
+
+
+@app.get("/ai-settings", response_class=HTMLResponse)
+def ai_settings_form(request: Request, saved: str = ""):
+    """AI設定（モデル選択＋Gemini消費の概算/残）。検索系の/settingsとは分離。"""
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    from datetime import datetime
+    g = get_rules().get("gemini", {}) or {}
+    usage = overrides.load(force=True).get("_gemini_usage") or {}
+    rate = float(g.get("usd_jpy", 150) or 150)
+    budget = float(g.get("budget_jpy", 0) or 0)
+    cost_usd = float(usage.get("cost_usd", 0.0) or 0.0)
+    spent = cost_usd * rate
+    today = datetime.now().astimezone().strftime("%Y-%m-%d")
+    today_jpy = float((usage.get("by_day") or {}).get(today, 0.0) or 0.0) * rate
+    pct = min(100, round(spent / budget * 100)) if budget > 0 else 0
+    days = [{"date": d, "jpy": round(c * rate, 1)}
+            for d, c in sorted((usage.get("by_day") or {}).items(), reverse=True)[:14]]
+    return templates.TemplateResponse("ai_settings.html", {
+        "request": request, "saved": saved, "can_save": overrides.enabled(),
+        "model": gemini_client.resolve_model(),
+        "model_choices": gemini_client.MODEL_CHOICES,
+        "budget_jpy": int(budget), "usd_jpy": int(rate),
+        "calls": int(usage.get("calls", 0) or 0), "tokens": int(usage.get("tokens", 0) or 0),
+        "cost_usd": round(cost_usd, 4), "spent_jpy": round(spent, 1),
+        "remaining_jpy": round(budget - spent, 1), "today_jpy": round(today_jpy, 1),
+        "pct": pct, "days": days, "updated": usage.get("updated", "")})
+
+
+@app.post("/ai-settings")
+def ai_settings_save(request: Request, gemini_model: str = Form(""),
+                     budget_jpy: str = Form("")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    valid = {m for m, _ in gemini_client.MODEL_CHOICES}
+    g: dict = {}
+    if gemini_model.strip() in valid:
+        g["model"] = gemini_model.strip()
+    try:
+        g["budget_jpy"] = max(0, int(str(budget_jpy).strip()))
+    except ValueError:
+        pass
+    ok = overrides.update({"gemini": g}) if g else True
+    return RedirectResponse("/ai-settings?saved=" + ("1" if ok else "fail"), status_code=303)
+
+
+@app.post("/ai-settings/reset")
+def ai_settings_reset(request: Request):
+    """消費カウンタ(_gemini_usage)をゼロに（請求実体ではなく自前集計のリセット）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    data = overrides.load(force=True)
+    data["_gemini_usage"] = {"calls": 0, "tokens": 0, "cost_usd": 0.0, "by_day": {}, "updated": ""}
+    overrides.save(data)
+    return RedirectResponse("/ai-settings?saved=reset", status_code=303)
 
 
 @app.post("/crawl/request")

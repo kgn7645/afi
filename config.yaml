@@ -132,6 +132,8 @@ gemini:
   # 候補: gemini-3.1-flash-lite(推奨・最安) / gemini-3-flash-preview /
   #       gemini-3.5-flash(高品質) / gemini-2.5-flash / gemini-2.5-flash-lite(旧)
   model: "gemini-3.1-flash-lite"
+  budget_jpy: 5000   # 課金額の目安（AI設定の「概算残」表示用）。実請求はGoogle Cloudが正
+  usd_jpy: 150       # 概算コストの円換算レート
 
 # --- 生成バッチの実行ペース（承認→記事化） ---
 generation:

@@ -40,7 +40,7 @@
 <body>
 <div class="nav">
   <div class="seg">
-    <a href="/select">🛍 自動</a><a href="/manual">✋ 手動</a><a href="/review">📝 承認</a><a href="/settings" class="on">⚙️ 設定</a>
+    <a href="/select">🛍 自動</a><a href="/manual">✋ 手動</a><a href="/review">📝 承認</a><a href="/settings" class="on">⚙️ 設定</a><a href="/ai-settings">🤖 AI</a>
   </div>
 </div>
 {% include "_statsbar.html" %}
@@ -109,18 +109,6 @@
     <textarea name="exclude_brands" rows="4" placeholder="パナソニック&#10;アイリスオーヤマ&#10;Anker">{{ d.exclude_brands }}</textarea>
     <div class="chk"><input type="checkbox" name="seasonal_boost" {{ 'checked' if d.seasonal_boost }}>
       季節物を優先（今の季節のキーワードを自動追加・上位表示）</div>
-  </div>
-
-  <div class="sec">
-    <h2>🤖 AIモデル（記事生成）</h2>
-    <p class="hint">記事生成・リライトに使うGeminiモデル。変更は最大1分で両サーバーに反映されます。
-      下ほど高品質・高コスト。現在: <b>{{ d.gemini_model }}</b></p>
-    <label>使用モデル</label>
-    <select name="gemini_model">
-      {% for mid, label in gemini_model_choices %}
-      <option value="{{ mid }}" {{ 'selected' if mid == d.gemini_model }}>{{ label }}</option>
-      {% endfor %}
-    </select>
   </div>
 
   <div class="sec">
