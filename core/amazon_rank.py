@@ -20,7 +20,7 @@ from urllib.parse import quote
 
 import requests
 
-from .product_extractor import _HEADERS
+from .product_extractor import _HEADERS, fetch_product_html
 
 _ASIN_IN_ATTR = re.compile(r'data-asin="([A-Z0-9]{10})"')
 _ASIN_IN_DP = re.compile(r"/dp/([A-Z0-9]{10})")
@@ -161,13 +161,9 @@ def _extract_stock(html: str) -> bool | None:
 def build_candidate(asin: str, *, timeout: int = 20) -> dict | None:
     """ASINから候補1件 {asin,title,price,brand,in_stock,image,url} を作る。取得不可ならNone。"""
     url = f"https://www.amazon.co.jp/dp/{asin}"
-    try:
-        r = requests.get(url, headers=_HEADERS, timeout=timeout)
-    except requests.RequestException:
+    text = fetch_product_html(url, timeout=max(timeout, 20))  # 空スタブはリトライ
+    if not text:
         return None
-    if r.status_code != 200 or "何かお探し" in r.text:
-        return None
-    text = r.text
     m = re.search(r'id="productTitle"[^>]*>\s*([^<]+)', text)
     title = m.group(1).strip() if m else ""
     if not title:

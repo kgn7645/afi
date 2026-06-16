@@ -6,6 +6,7 @@ A/B作業: 商品情報の取得。
 from __future__ import annotations
 
 import re
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -62,19 +63,35 @@ def amazon_url_alive(url: str, *, timeout: int = 15) -> bool:
     return True
 
 
+def fetch_product_html(url: str, *, timeout: int = 20, retries: int = 2) -> str:
+    """商品ページHTMLを取得。Amazonの“空スタブ(api-services-support・極小)”はリトライ。
+
+    無効ASIN(404/「何かお探し」)は空文字を返し、リトライしない。取得不能も空文字。
+    """
+    for attempt in range(retries + 1):
+        try:
+            r = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
+        except requests.RequestException:
+            r = None
+        if r is not None and r.status_code == 200:
+            if "何かお探し" in r.text or "ページが見つかりません" in r.text:
+                return ""  # 無効ページ＝リトライ不要
+            if len(r.text) > 50_000 and "productTitle" in r.text:
+                return r.text  # 通常ページ
+        if attempt < retries:
+            time.sleep(2.5 * (attempt + 1))  # スタブ/スロットリングはバックオフ再取得
+    return ""
+
+
 def fetch_amazon_product_card(url: str, *, timeout: int = 15) -> dict | None:
     """商品ページから商品名とメイン画像URLを取得し {title, image} を返す。
 
     noteのような自前カードHTMLを組むための材料。
     無効ASIN(404/「何かお探し」)・bot対策ブロック・画像/商品名欠落時は None。
     """
-    try:
-        r = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
-    except requests.RequestException:
+    text = fetch_product_html(url, timeout=max(timeout, 20))
+    if not text:
         return None
-    if r.status_code != 200 or "何かお探し" in r.text:
-        return None
-    text = r.text
 
     m = re.search(r'id="productTitle"[^>]*>\s*([^<]+)', text)
     title = m.group(1).strip() if m else ""
