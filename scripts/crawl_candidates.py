@@ -82,10 +82,10 @@ def main() -> None:
     season = bool(sel.get("seasonal_boost", True))
 
     exclude = set() if args.dry else candidates.known_asins()
-    sk = amazon_rank.seasonal_keywords() if season else []
     started = int(time.time())
-    print(f"[crawl] keywords={len(keywords)} nodes={len(nodes)} urls={len(source_urls)} "
-          f"季節={','.join(sk) or '無'} 既存除外={len(exclude)}件 …収集中")
+    kw_disp = "/".join(keywords) if keywords else "（絞り込み無し）"
+    print(f"[crawl] ランキング{len(nodes)}件＋参照元{len(source_urls)}件を巡回 / "
+          f"絞り込みKW={kw_disp} 既存除外={len(exclude)}件 …収集中")
 
     if not args.dry:
         _set_status(state="running", started_at=started, finished_at=0,
