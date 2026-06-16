@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import amazon_rank, candidates, overrides  # noqa: E402
+from core import amazon_rank, candidates, overrides, ranking_catalog  # noqa: E402
 from core.config import ROOT, get_rules  # noqa: E402
 
 _MARKER = ROOT / "data" / ".crawl_request"
@@ -134,6 +134,17 @@ def main() -> None:
         top_reasons=top_reasons,
         message=(f"{pushed}件を候補プールへ追加" if pushed
                  else "新規候補なし（既出または全て足切り）"))
+
+    # 売れ筋カテゴリのカタログを週1で更新（毎日5amのフル実行に相乗り）
+    if not args.if_requested and ranking_catalog.age_days() >= 7:
+        try:
+            items = ranking_catalog.crawl_catalog()
+            if ranking_catalog.update_store(items):
+                print(f"[crawl] 売れ筋カタログを更新: {len(items)}件")
+            else:
+                print("[crawl] カタログ取得が少なく更新見送り（既存維持）")
+        except Exception as e:  # noqa: BLE001
+            print(f"[crawl] カタログ更新でエラー（継続）: {e}")
 
 
 if __name__ == "__main__":
