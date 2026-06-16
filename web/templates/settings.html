@@ -70,6 +70,16 @@
     </div>
     <label>追加で手入力（上級者向け・一覧に無いノード。kitchen/4083001 形式 or フルURL）</label>
     <textarea name="ranking_nodes" rows="2" placeholder="kitchen/4083001">{{ d.ranking_nodes }}</textarea>
+    <label>楽天ジャンル（チェックで選択＝収集元）</label>
+    <p class="hint">楽天は公式APIで安定収集（Amazonのようなブロック無し）。選んだジャンルの人気商品を候補化し、もしも経由で記事化します。</p>
+    <div style="max-height:240px;overflow:auto;border:1px solid #ece9f1;border-radius:10px;padding:8px 10px;">
+      {% for it in rakuten_catalog %}
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:5px 0;">
+        <input type="checkbox" name="rakuten_genres_cb" value="{{ it.genre_id }}" {{ 'checked' if it.genre_id in rakuten_selected }} style="width:18px;height:18px;">
+        {{ it.name }}
+      </label>
+      {% endfor %}
+    </div>
     <label>参照元URL（まとめ/ランキング/トレンド記事。1行に1つ）</label>
     <textarea name="source_urls" rows="3" placeholder="https://my-best.com/...&#10;https://the360.life/...">{{ d.source_urls }}</textarea>
     <p class="hint">マイベスト・360LIFE・LDK・GET NAVI 等の記事URLを貼ると、ページ内のAmazonリンク（商品）を自動で候補化します。</p>

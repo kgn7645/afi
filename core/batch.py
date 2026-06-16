@@ -148,10 +148,15 @@ def run_candidates_batch(
             break
         asin = cand.get("asin", "")
         title = cand.get("title", "")
+        cand_url = cand.get("url", "").strip()
+        is_rakuten = "rakuten" in cand_url  # 楽天候補はURLで判別（source列に依存しない）
+        rk_item = ({"name": title, "url": cand_url, "image": cand.get("image", "")}
+                   if is_rakuten else None)
         try:
             result = pipeline.run(
-                url=cand.get("url", "").strip(),
-                manual={"product_name": title, "specs": []},
+                url=cand_url,
+                manual={"product_name": title, "specs": [], "price": cand.get("price")},
+                rakuten_item=rk_item,
                 post_to_wp=post_to_wp, wp_status=wp_status, gemini=gemini,
             )
             if not result.selection_ok:

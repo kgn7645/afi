@@ -53,6 +53,7 @@ def run(
     url: str = "",
     manual: dict | None = None,
     affiliate_link_html: str = "",
+    rakuten_item: dict | None = None,
     post_to_wp: bool = True,
     wp_status: str | None = None,
     skip_selection_gate: bool = False,
@@ -88,6 +89,17 @@ def run(
 
     if affiliate_link_html:
         article.body_html = affiliate.insert_into_body(article.body_html, affiliate_link_html)
+    elif rakuten_item:  # 楽天候補: その商品で直接もしもリンク（キーワード再検索しない）
+        res = moshimo_link.build_rakuten_link_from_item(
+            rakuten_item.get("name", ""), rakuten_item.get("url", ""),
+            rakuten_item.get("image", ""))
+        if res:
+            article.affiliate_click_url = res["click_url"]
+            if rakuten_item.get("image"):
+                article.product_image_urls = [rakuten_item["image"]]
+            article.body_html = affiliate.insert_into_body(article.body_html, res["html"])
+        else:
+            result.warnings.append("楽天もしもリンク生成に失敗（プレースホルダで継続）")
     elif amazon_ready and _embed_amazon(article, product, s, result):
         pass  # Amazonカード/ボタンを埋め込み済み
     else:

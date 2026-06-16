@@ -152,3 +152,37 @@ def build_rakuten_link_by_keyword(keyword: str, a_id: int | None = None) -> dict
         "click_url": build_click_url(a_id, item["url"], "rakuten"),
         "product": item,
     }
+
+
+def build_rakuten_link_from_item(name: str, url: str, image: str = "",
+                                 a_id: int | None = None) -> dict | None:
+    """既知の楽天商品（候補そのもの）から、もしもかんたんリンクを生成する。
+
+    キーワード再検索をせず、その商品URLをそのままリンク化（楽天ジャンル収集の候補用）。
+    返り値: {html, click_url, product} / a_id未設定は None。
+    """
+    from urllib.parse import urlsplit
+    from .config import get_settings
+
+    a_id = a_id or get_settings().moshimo_aid
+    if not a_id or not (name and url):
+        return None
+
+    image_domain, image_paths = "", []
+    if image:
+        clean = image.split("?_ex=")[0]
+        parts = urlsplit(clean)
+        if parts.netloc:
+            image_domain = f"{parts.scheme}://{parts.netloc}"
+            image_paths = [parts.path + (f"?{parts.query}" if parts.query else "")]
+
+    clean_url = url.split("?")[0]
+    html = build_easylink_html(
+        a_id=a_id, name=name, product_url=clean_url,
+        image_domain=image_domain, image_paths=image_paths, program="rakuten")
+    return {
+        "html": html,
+        "click_url": build_click_url(a_id, clean_url, "rakuten"),
+        "product": {"name": name, "url": clean_url,
+                    "image_domain": image_domain, "image_paths": image_paths},
+    }

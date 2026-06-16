@@ -102,6 +102,9 @@ candidates:
     - kitchen/4083001          # 除湿機
     - "https://www.amazon.co.jp/gp/bestsellers/?ref_=nav_em_cs_bestsellers_0_1_1_2"  # 総合売れ筋
     - "https://www.amazon.co.jp/ranking?tag=googhydr-22&ref=pd_sl_4e56zly8mi_e"      # ランキングハブ
+  # 楽天ジャンルID（チェックで選択＝収集元）。楽天は公式API・bot対策無しで安定。
+  # 楽天候補はもしも経由で記事化（Amazonカードではなく楽天もしもリンク）。
+  rakuten_genres: []
   # 参照元URL（選定シートのリサーチソース）。各ページからAmazonリンク(/dp/ASIN,
   # amzn.to)を抽出して候補化する。マイベスト/360LIFE/LDK/GET NAVI など。
   # ※ページ単体を読むだけ（記事内リンクまでは辿らない）。一覧/記事URLほど有効。
