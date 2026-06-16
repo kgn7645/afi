@@ -121,4 +121,5 @@ def revise_post(post_id: int, keys: set[str], note: str = "") -> tuple[bool, str
         wordpress.set_post_status(post_id, "draft")
     except Exception as e:  # noqa: BLE001
         return False, f"WP更新に失敗: {e}"
-    return True, f"リライトしました（{len(instrs)}項目）。内容を再確認してください"
+    detail = f"修正{len(instrs)}項目" + (f"＋QA指摘{len(qa_msgs)}件" if qa_msgs else "")
+    return True, f"リライトしました（{detail}）。内容を再確認してください"
