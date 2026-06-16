@@ -49,6 +49,19 @@ def _ago(ts: int) -> str:
     return f"{d // 86400}日前"
 
 
+def _mark_manual(asins: list[str]) -> None:
+    """手動選定したASINを記録（生成時に足切りをバイパスするため・Issue対応）。"""
+    asins = [a for a in asins if a]
+    if not asins:
+        return
+    try:
+        cur = overrides.load(force=True).get("_manual_asins", []) or []
+        merged = list(dict.fromkeys([*cur, *asins]))[-300:]  # 直近300件を保持
+        overrides.update({"_manual_asins": merged})
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _public_base(request: Request) -> str:
     """ブックマークレットに焼き込む公開URL（Render等はhttpsに正規化）。"""
     b = str(request.base_url).rstrip("/")
@@ -407,6 +420,8 @@ def select_add(request: Request, asin: str = "", title: str = "", price: str = "
                 "url": src or f"https://www.amazon.co.jp/dp/{asin}", "source": "manual"}
         candidates.push([cand])
         ok = candidates.set_status(asin, "approved")
+        if ok:
+            _mark_manual([asin])
     body = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>選定追加</title><style>body{{font-family:-apple-system,sans-serif;background:#f1eef6;
@@ -451,6 +466,7 @@ def manual_paste(request: Request, bulk: str = Form("")):
             asins.append(line)
 
     seen: set[str] = set()
+    added_asins: list[str] = []
     n = 0
     for a in asins:
         if a in seen:
@@ -460,6 +476,8 @@ def manual_paste(request: Request, bulk: str = Form("")):
                           "source": "manual"}])
         if candidates.set_status(a, "approved"):
             n += 1
+            added_asins.append(a)
+    _mark_manual(added_asins)
 
     q = 0
     if shorts:

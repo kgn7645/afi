@@ -137,9 +137,14 @@ def run_candidates_batch(
     成功した候補は status=generated に更新（再生成防止）。
     候補プール(CANDIDATES_WEBHOOK_URL)未設定なら空サマリ。
     """
-    from . import candidates
+    from . import candidates, overrides
 
     approved = candidates.list_by_status("approved", limit=limit * 3)
+    # 手動選定したASINは足切りをバイパス（ユーザーが意図して選んだもの）
+    try:
+        manual_asins = set(overrides.load(force=True).get("_manual_asins", []) or [])
+    except Exception:  # noqa: BLE001
+        manual_asins = set()
     gemini = GeminiClient()
     summary = {"generated": 0, "skipped_dup": 0, "failed": 0, "items": []}
 
@@ -150,17 +155,19 @@ def run_candidates_batch(
         title = cand.get("title", "")
         cand_url = cand.get("url", "").strip()
         is_rakuten = "rakuten" in cand_url  # 楽天候補はURLで判別（source列に依存しない）
+        is_manual = asin in manual_asins
         rk_item = ({"name": title, "url": cand_url, "image": cand.get("image", "")}
                    if is_rakuten else None)
         try:
             result = pipeline.run(
                 url=cand_url,
                 manual={"product_name": title, "specs": [], "price": cand.get("price")},
-                rakuten_item=rk_item,
+                rakuten_item=rk_item, skip_selection_gate=is_manual,
                 post_to_wp=post_to_wp, wp_status=wp_status, gemini=gemini,
             )
-            if not result.selection_ok:
+            if not result.selection_ok and not is_manual:
                 # 選定NGは決定論的（毎回必ず失敗）。rejectedにして無限リトライを防ぐ
+                # ※手動選定(is_manual)は足切りをバイパスしてそのまま記事化する
                 candidates.set_status(asin, "rejected")
                 summary["failed"] += 1
                 summary["items"].append(
