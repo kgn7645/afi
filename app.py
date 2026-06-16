@@ -412,17 +412,22 @@ def select_add(request: Request, asin: str = "", title: str = "", price: str = "
     asin = (asin or "").strip().upper()
     ok = False
     if re.fullmatch(r"[A-Z0-9]{10}", asin):
-        try:
-            pr = int(re.sub(r"[^0-9]", "", price)) if price else None
-        except ValueError:
-            pr = None
-        cand = {"asin": asin, "title": (title or "")[:200], "price": pr,
-                "image": image or "", "brand": (brand or "")[:60],
-                "url": src or f"https://www.amazon.co.jp/dp/{asin}", "source": "manual"}
-        candidates.push([cand])
-        ok = candidates.set_status(asin, "approved")
-        if ok:
-            _mark_manual([asin])
+        url = src or f"https://www.amazon.co.jp/dp/{asin}"
+        if (title or "").strip():
+            # ブックマークレットがDOMから商品情報を取得済み → そのまま登録
+            try:
+                pr = int(re.sub(r"[^0-9]", "", price)) if price else None
+            except ValueError:
+                pr = None
+            candidates.push([{"asin": asin, "title": title[:200], "price": pr,
+                              "image": image or "", "brand": (brand or "")[:60],
+                              "url": url, "source": "manual"}])
+            ok = candidates.set_status(asin, "approved")
+            if ok:
+                _mark_manual([asin])
+        else:
+            # 商品情報なし → Xserverで補完してから登録（title/price/image欠落を防ぐ）
+            ok = _queue_manual_urls([url]) > 0
     body = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>選定追加</title><style>body{{font-family:-apple-system,sans-serif;background:#f1eef6;
@@ -443,49 +448,39 @@ padding:11px 22px;border-radius:11px;font-weight:800}}</style></head><body><div 
 _SHORT_RE = re.compile(r"https?://(?:amzn\.asia|amzn\.to|a\.co)/\S+")
 
 
-def _add_manual_text(text: str) -> tuple[int, int]:
-    """テキストからAmazon URL/ASIN/短縮リンクを抽出して選定リストへ。 (追加数, 短縮予約数)。
+def _queue_manual_urls(urls: list[str]) -> int:
+    """手動追加URLをXserver補完キュー(_manual_pending)へ。Xserverが商品データ取得→登録。"""
+    urls = [u for u in dict.fromkeys(urls) if u]
+    if not urls:
+        return 0
+    try:
+        cur = overrides.load(force=True).get("_manual_pending", []) or []
+        overrides.update({"_manual_pending": list(dict.fromkeys([*cur, *urls]))})
+        return len(urls)
+    except Exception:  # noqa: BLE001
+        return 0
 
-    /manual/paste と /line/webhook が共用。完全URL/ASINは即approved＋手動マーク、
-    短縮リンクはXserverで解決するため _manual_pending へ。
+
+def _add_manual_text(text: str) -> int:
+    """テキストからAmazon URL/ASIN/短縮リンクを抽出してXserver補完キューへ。受付件数を返す。
+
+    Renderはamazonを読めない(title/price/image欠落)ため、即pushせず全てXserverで
+    商品データを補完してから登録する（/manual/paste と /line/webhook が共用）。
     """
-    asins: list[str] = []
-    shorts: list[str] = []
+    urls: list[str] = []
     for raw in (text or "").splitlines():
         line = raw.strip()
         if not line:
             continue
-        for m in re.finditer(r"/(?:dp|gp/product)/([A-Z0-9]{10})", line):
-            asins.append(m.group(1))
+        for m in re.finditer(r"https?://\S*?/(?:dp|gp/product)/[A-Z0-9]{10}\S*", line):
+            urls.append(m.group(0))
         for sm in _SHORT_RE.finditer(line):
-            shorts.append(sm.group(0))
+            urls.append(sm.group(0))
         if not re.search(r"/(?:dp|gp/product)/", line) and not _SHORT_RE.search(line):
             bm = re.fullmatch(r"[A-Z0-9]{10}", line)
             if bm:
-                asins.append(line)
-
-    seen: set[str] = set()
-    added_asins: list[str] = []
-    for a in asins:
-        if a in seen:
-            continue
-        seen.add(a)
-        candidates.push([{"asin": a, "url": f"https://www.amazon.co.jp/dp/{a}",
-                          "source": "manual"}])
-        if candidates.set_status(a, "approved"):
-            added_asins.append(a)
-    _mark_manual(added_asins)
-
-    q = 0
-    shorts = list(dict.fromkeys(shorts))
-    if shorts:
-        try:
-            cur = overrides.load(force=True).get("_manual_pending", []) or []
-            overrides.update({"_manual_pending": list(dict.fromkeys([*cur, *shorts]))})
-            q = len(shorts)
-        except Exception:  # noqa: BLE001
-            q = 0
-    return len(added_asins), q
+                urls.append(f"https://www.amazon.co.jp/dp/{bm.group(0)}")
+    return _queue_manual_urls(urls)
 
 
 @app.post("/manual/paste")
@@ -493,10 +488,10 @@ def manual_paste(request: Request, bulk: str = Form("")):
     """URL/ASINを複数貼り付け→まとめて選定済みへ。短縮リンクはXserverで展開予約。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    n, q = _add_manual_text(bulk)
-    if n == 0 and q == 0:
+    q = _add_manual_text(bulk)
+    if q == 0:
         return RedirectResponse("/manual?msg=no_asin", status_code=303)
-    return RedirectResponse(f"/manual?added={n}&pending={q}", status_code=303)
+    return RedirectResponse(f"/manual?pending={q}", status_code=303)
 
 
 @app.post("/line/webhook")
@@ -519,16 +514,11 @@ async def line_webhook(request: Request):
         if not line_client.allowed(user_id):
             line_client.reply(token, "このアカウントからの追加は許可されていません。")
             continue
-        n, p = _add_manual_text(ev["message"]["text"])
-        if n == 0 and p == 0:
+        q = _add_manual_text(ev["message"]["text"])
+        if q == 0:
             line_client.reply(token, "Amazonの商品リンク/ASINが見つかりませんでした🙏\n商品ページを「共有」して送ってください。")
         else:
-            msg = []
-            if n:
-                msg.append(f"✅ {n}件を選定リストに追加しました")
-            if p:
-                msg.append(f"⏳ 短縮リンク{p}件は数分以内に反映されます")
-            line_client.reply(token, "\n".join(msg))
+            line_client.reply(token, f"✅ {q}件を受け付けました！\n数分以内に商品情報（名前・価格・画像）を取得して選定リストに反映します📝")
     return JSONResponse({"ok": True})
 
 
