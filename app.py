@@ -89,6 +89,12 @@ def _crawl_status() -> dict:
     return st
 
 
+@app.get("/health")
+def health():
+    """死活監視・Renderコールドスタート防止用の軽量エンドポイント（認証/外部API無し）。"""
+    return JSONResponse({"ok": True, "service": "affiliate-automation"})
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     s = get_settings()
