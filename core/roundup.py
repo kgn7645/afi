@@ -31,10 +31,13 @@ def _get_products(source: dict, count: int) -> list[dict]:
         items = rakuten.genre_items(source["genre"], hits=count * 2)
     else:
         items = amazon_rank.ranking_candidates(source["node"], limit=count * 2)
+    # 比較記事は有名ブランドOK（むしろ自然）だが、中古・雑誌・ジャンク品は除外
+    import re as _re
+    _ng = _re.compile(r"中古|ジャンク|訳あり|\[雑誌\]|\d+月号")
     out: list[dict] = []
     for it in items:
         name = (it.get("title") or it.get("name") or "").strip()
-        if name and it.get("url"):
+        if name and it.get("url") and not _ng.search(name):
             it["name"] = name
             out.append(it)
         if len(out) >= count:
