@@ -22,7 +22,8 @@ def _stars_md(n: float) -> str:
 def _build_trust_block(product: Product, gemini: GeminiClient, rules: dict) -> tuple[str, float | None]:
     """信頼度評価ブロックのMarkdownと総合点を生成。"""
     try:
-        raw = gemini.generate(prompts.trust_rating_prompt(product, rules), temperature=0.5)
+        raw = gemini.generate(prompts.trust_rating_prompt(product, rules),
+                              temperature=0.5, thinking_budget=0)
         data = prompts.parse_json_response(raw)
     except Exception:
         return "", None
@@ -97,7 +98,8 @@ def generate_article(product: Product, gemini: GeminiClient | None = None) -> Ar
     article = Article()
 
     # 1) タイトル・コピー・メタ
-    meta_raw = gemini.generate(prompts.title_and_meta_prompt(product), temperature=0.85)
+    meta_raw = gemini.generate(prompts.title_and_meta_prompt(product),
+                               temperature=0.85, thinking_budget=0)
     try:
         meta = prompts.parse_json_response(meta_raw)
         # カテゴリー未指定なら推定値で補完（本文・見出しの品質確保）

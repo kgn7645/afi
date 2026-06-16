@@ -226,7 +226,8 @@ def _ground_company(product: Product, gemini: GeminiClient,
     """
     try:
         info = gemini.generate_grounded(
-            prompts.company_grounding_prompt(product.brand, product.category))
+            prompts.company_grounding_prompt(product.brand, product.category),
+            thinking_budget=0)  # 検索結果の要約が主。深い思考は不要
         info = (info or "").strip()
         if info:
             result.warnings.append("企業情報をWeb検索でグラウンディングしました")
@@ -261,7 +262,7 @@ def _pick_category_ids(product: Product, result: PipelineResult,
             g = gemini or GeminiClient()
             concept = rules.get("eeat", {}).get("site_concept", "")
             raw = g.generate(prompts.category_pick_prompt(product, pickable, concept),
-                             temperature=0.0)
+                             temperature=0.0, thinking_budget=0)
             chosen = raw.strip().split()[0].strip().strip('"').strip("`") if raw else ""
         except Exception as e:  # noqa: BLE001
             result.warnings.append(f"カテゴリ自動判定に失敗（既定運用）: {e}")
