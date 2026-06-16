@@ -10,7 +10,8 @@ from pathlib import Path
 
 from . import (affiliate, body_images, canva, content_generator, eyecatch,
                internal_links, moshimo_link, note_publish, product_extractor,
-               product_selector, prompts, qa, sheet_log, site_setup, wordpress)
+               product_selector, prompts, qa, schema, sheet_log, site_setup,
+               wordpress)
 from .config import ROOT, get_rules, get_settings
 from .gemini_client import GeminiClient
 from .models import PipelineResult, Product
@@ -110,6 +111,8 @@ def run(
 
     # 著者情報ボックス（Issue #44: E-E-A-T）を本文末尾に付与
     article.body_html = site_setup.append_author_box(article.body_html)
+    # 構造化データ（流入A: 検索結果に★・価格を出してCTR向上）
+    article.body_html += schema.build_jsonld(article, product)
     # 承認一覧で金額を出すための価格マーカー（本文末尾の非表示コメント）
     if product.price:
         article.body_html += f"\n<!-- price:{int(product.price)} -->"
