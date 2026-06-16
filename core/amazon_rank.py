@@ -234,8 +234,13 @@ def ranking_candidates(node: str, *, limit: int = 15, timeout: int = 25) -> list
         if not title:
             continue
         image = (img.get("src") if img else "") or ""
-        pm = re.search(r"￥\s*([\d,]+)", it.get_text())
-        price = int(pm.group(1).replace(",", "")) if pm else None
+        # 価格は「￥…」を含む単一テキストノードから取る（get_text連結で桁が壊れるのを防ぐ）
+        price = None
+        ptxt = it.find(string=re.compile(r"￥\s*[\d,]+"))
+        if ptxt:
+            pm = re.search(r"￥\s*([\d,]+)", ptxt)
+            if pm:
+                price = int(pm.group(1).replace(",", ""))
         seen.add(asin)
         out.append({"asin": asin, "title": title, "price": price, "brand": "",
                     "in_stock": True, "image": image,
