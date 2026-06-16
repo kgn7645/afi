@@ -147,6 +147,10 @@ qa:
   # 必要なら ng_keywords / exaggeration_keywords / required_headings を上書き可
   # （未指定時は core/qa.py の既定リストを使用）
 
+# --- SEO（流入施策A） ---
+seo:
+  structured_data: true        # Product＋Review(★)＋Offer(価格)のJSON-LDを本文に埋込
+
 # --- WordPress ---
 wordpress:
   category_id: null            # 投稿カテゴリID（null=自動割当に任せる）
