@@ -62,7 +62,7 @@ selection:
 article:
   tone: "親しみやすく、友達とおしゃべりしているような口調。専門用語は噛み砕く。"
   use_tables: false            # 比較は文章で（表は使わない）
-  min_chars: 6000              # 本文の目安最低文字数（amaviser水準）
+  min_chars: 4000              # 本文の目安文字数（6000は水増しの主因だった。密度優先で短縮）
   reviews_each: 5              # 良い/気になる口コミの件数（各）
   ground_company: true         # 企業情報をWeb検索で裏付けてから生成（どこの国の誤生成対策）
   # 比較で言及する大手メーカー（カテゴリに応じてAIが選ぶ）
