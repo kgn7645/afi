@@ -91,3 +91,55 @@ def search_item(keyword: str, *, timeout: int = 15) -> dict | None:
         "image_domain": image_domain,
         "image_paths": image_paths,
     }
+
+
+def genre_items(genre_id: str | int, *, hits: int = 20, sort: str = "standard",
+                timeout: int = 15) -> list[dict]:
+    """ジャンル(genreId)の人気商品を候補dict配列で返す（キーワード無し＝カテゴリ収集）。
+
+    返り: [{asin(=itemCode), title, price, brand(=shop), in_stock, image, url, source}]
+    楽天は公式API・bot対策無しなので安定。収益はもしも(a_id)経由のため affiliateId は使わない。
+    """
+    s = get_settings()
+    if not s.rakuten_app_id or not s.rakuten_access_key:
+        raise RuntimeError("RAKUTEN_APP_ID / RAKUTEN_ACCESS_KEY が未設定です（.env）。")
+    params = {
+        "applicationId": s.rakuten_app_id,
+        "accessKey": s.rakuten_access_key,
+        "genreId": str(genre_id),
+        "hits": min(max(hits, 1), 30),
+        "page": 1,
+        "format": "json",
+        "imageFlag": 1,        # 画像ありのみ
+        "availability": 1,     # 在庫ありのみ
+        "sort": sort,          # standard=人気順
+    }
+    resp = None
+    for attempt in range(4):
+        _throttle()
+        resp = requests.get(_ENDPOINT, params=params, timeout=timeout)
+        if resp.status_code == 429:
+            time.sleep(2 * (attempt + 1))
+            continue
+        break
+    resp.raise_for_status()
+    out: list[dict] = []
+    for wrap in resp.json().get("Items", []):
+        item = wrap.get("Item", wrap)
+        imgs = item.get("mediumImageUrls", [])
+        image = imgs[0].get("imageUrl", "").split("?_ex=")[0] if imgs else ""
+        code = item.get("itemCode", "")
+        title = item.get("itemName", "")
+        if not (code and title):
+            continue
+        out.append({
+            "asin": code,                    # 楽天のキー（候補プールの重複判定に流用）
+            "title": title,
+            "price": item.get("itemPrice"),
+            "brand": item.get("shopName", ""),
+            "in_stock": True,
+            "image": image,
+            "url": item.get("itemUrl", "").split("?")[0],
+            "source": "rakuten",
+        })
+    return out
