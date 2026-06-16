@@ -51,12 +51,10 @@
 
   <div class="sec">
     <h2>🔎 クロール（候補の自動収集）</h2>
-    <p class="hint">Amazon検索＋売れ筋ランキングから候補を集めます。変更後は「設定を保存」を先に。</p>
+    <p class="hint">下で選んだ<b>売れ筋ランキング</b>を巡回して候補を集めます。Amazon検索は使いません（bot対策で不安定なため）。変更後は「設定を保存」を先に。</p>
     {% include "_crawl_banner.html" %}
-    <label>検索キーワード（1行に1つ）</label>
-    <textarea name="keywords" rows="4" placeholder="ネッククーラー&#10;卓上扇風機">{{ d.keywords }}</textarea>
-    <label>売れ筋ランキング（チェックで選択）</label>
-    <p class="hint">部門を開いてチェックしたカテゴリの売れ筋から候補を集めます。{% if catalog_updated %}カタログ最終更新あり。{% else %}※サブカテゴリはAmazon取得後に増えます（今は部門のみ）。{% endif %}</p>
+    <label>売れ筋ランキング（チェックで選択＝収集元）</label>
+    <p class="hint">部門を開いてチェックしたカテゴリの売れ筋から候補を集めます。{% if catalog_updated %}カタログ更新済み。{% else %}※サブカテゴリはAmazon取得後に増えます（今は部門のみ）。{% endif %}</p>
     <div style="max-height:340px;overflow:auto;border:1px solid #ece9f1;border-radius:10px;padding:6px 10px;">
       {% for dept, items in catalog_groups.items() %}
       <details>
@@ -75,6 +73,9 @@
     <label>参照元URL（まとめ/ランキング/トレンド記事。1行に1つ）</label>
     <textarea name="source_urls" rows="3" placeholder="https://my-best.com/...&#10;https://the360.life/...">{{ d.source_urls }}</textarea>
     <p class="hint">マイベスト・360LIFE・LDK・GET NAVI 等の記事URLを貼ると、ページ内のAmazonリンク（商品）を自動で候補化します。</p>
+    <label>絞り込みキーワード（1行に1つ・任意）</label>
+    <textarea name="keywords" rows="3" placeholder="タンブラー&#10;日傘">{{ d.keywords }}</textarea>
+    <p class="hint">指定すると、上の収集元のうち<b>商品名にこのワードを含むものだけ</b>を採用します（空白区切りは全語一致）。空なら全件（雑誌・書籍・大手・在庫切れ・価格未満は自動除外）。</p>
     <label>1ソースあたりの取得数（per_source）</label>
     <input type="number" name="per_source" value="{{ d.per_source }}">
     <label>1回の上限（max_total）</label>

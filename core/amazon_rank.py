@@ -166,36 +166,43 @@ def build_candidate(asin: str, *, timeout: int = 20) -> dict | None:
             "image": image, "url": url}
 
 
+def _kw_match(text: str, keyword_filters: list[str]) -> bool:
+    """キーワード絞り込み: いずれかのキーワード（空白区切りは全語AND）が text に含まれる。"""
+    for kw in keyword_filters:
+        words = kw.split()
+        if words and all(w in text for w in words):
+            return True
+    return False
+
+
 def collect(*, keywords: list[str] | None = None, nodes: list[str] | None = None,
             source_urls: list[str] | None = None,
             per_source: int = 10, max_total: int = 40,
             exclude_asins: set[str] | None = None,
             season: bool = False, screen: bool = True,
             report: list | None = None) -> list[dict]:
-    """検索＋ランキング＋参照元URLから候補を収集し、選定基準で足切りして返す。
+    """ランキング＋参照元URLから候補を集め、キーワードで絞り込み＆選定基準で足切り。
 
-    season=True で季節キーワードを自動追加＆季節該当を上位に。
-    screen=True で product_selector.screen による足切り（価格/在庫/除外カテゴリ/大手）。
-    report に dict を渡すと足切りした候補 {asin,reason,title} を追記する。
+    方針: Amazon検索(/s)はbot対策で塞がれやすいため**収集元にしない**。
+    - 収集元 = 売れ筋ランキング(nodes) ＋ 参照元URL(source_urls)
+    - keywords = **タイトル絞り込みフィルタ**（設定時、タイトル/ブランドに含むものだけ採用）
+    - screen = 価格/在庫/除外カテゴリ/大手/雑誌書籍 の足切り
+    - season = 季節該当を上位に並べ替え（絞り込みはしない）
+    report に dict を渡すと不採用候補 {asin,reason,title} を追記する。
     """
     from . import product_selector
 
     exclude = exclude_asins or set()
-    kws = list(keywords or [])
-    season_kw = seasonal_keywords() if season else []
-    if season_kw:
-        kws = season_kw + kws
+    kw_filters = [k for k in (keywords or []) if k and k.strip()]
 
     asins: list[str] = []
-    for kw in kws:
-        asins += search_asins(kw, limit=per_source)
     for nd in (nodes or []):
         asins += ranking_asins(nd, limit=per_source)
     for u in (source_urls or []):
         asins += extract_asins_from_url(u, limit=per_source)
 
-    # 足切りで減るぶん、ビルド対象は max_total の2倍まで見て埋める
-    cap = max_total * 2 if screen else max_total
+    # キーワード絞り込み＋足切りで減るぶん、ビルド対象は広めに確保
+    cap = max_total * 3 if (screen or kw_filters) else max_total
     asins = [a for a in _uniq(asins) if a not in exclude][:cap]
 
     out: list[dict] = []
@@ -203,16 +210,22 @@ def collect(*, keywords: list[str] | None = None, nodes: list[str] | None = None
         c = build_candidate(a)
         if not c:
             continue
+        title = c.get("title", "")
+        if kw_filters and not _kw_match(f"{title} {c.get('brand', '')}", kw_filters):
+            if report is not None:
+                report.append({"asin": a, "reason": "キーワード不一致", "title": title[:40]})
+            continue
         if screen:
             ok, reason = product_selector.screen(c)
             if not ok:
                 if report is not None:
-                    report.append({"asin": a, "reason": reason, "title": c.get("title", "")[:40]})
+                    report.append({"asin": a, "reason": reason, "title": title[:40]})
                 continue
         out.append(c)
         if len(out) >= max_total:
             break
 
-    if season_kw:  # 季節該当を先頭へ（安定ソート）
-        out.sort(key=lambda c: 0 if any(k.split()[0] in c.get("title", "") for k in season_kw) else 1)
+    if season:  # 季節該当を先頭へ（安定ソート・絞り込みはしない）
+        sk = seasonal_keywords()
+        out.sort(key=lambda c: 0 if any(k.split()[0] in c.get("title", "") for k in sk) else 1)
     return out

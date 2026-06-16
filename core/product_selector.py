@@ -4,8 +4,13 @@ A作業: 商品選定ルールの判定。
 """
 from __future__ import annotations
 
+import re
+
 from .config import get_rules
 from .models import Product
+
+# 雑誌・書籍・メディア（まとめサイトが自社ムックのAmazonリンクを貼るため混入する）
+_BOOK_RE = re.compile(r"\[雑誌\]|\d+\s*月号|増刊|別冊|ムック|コミック|文庫|単行本")
 
 
 def screen(cand: dict) -> tuple[bool, str]:
@@ -20,6 +25,9 @@ def screen(cand: dict) -> tuple[bool, str]:
     brand = cand.get("brand", "") or ""
     price = cand.get("price")
     hay = f"{title} {brand}"
+
+    if _BOOK_RE.search(title):
+        return False, "雑誌・書籍"
 
     min_price = rules.get("min_price", 3000)
     if price is not None and price < min_price:
@@ -53,6 +61,10 @@ def evaluate(product: Product) -> tuple[bool, str]:
     if rules.get("require_in_stock", True) and not product.in_stock:
         ok = False
         reasons.append("在庫切れ")
+
+    if _BOOK_RE.search(product.product_name or ""):
+        ok = False
+        reasons.append("雑誌・書籍")
 
     haystack = f"{product.product_name} {product.category} {product.brand}"
     for kw in rules.get("exclude_keywords", []):
