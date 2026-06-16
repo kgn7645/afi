@@ -110,6 +110,9 @@ def run(
 
     # 著者情報ボックス（Issue #44: E-E-A-T）を本文末尾に付与
     article.body_html = site_setup.append_author_box(article.body_html)
+    # 承認一覧で金額を出すための価格マーカー（本文末尾の非表示コメント）
+    if product.price:
+        article.body_html += f"\n<!-- price:{int(product.price)} -->"
     result.article = article
 
     # QA（Issue #16）: 禁止表現・構成・整形を検査
