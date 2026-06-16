@@ -126,6 +126,13 @@ prompts:
   #   【{year}】{brand}はどこの国の企業？{category}の評判・口コミを徹底レビュー
   title_format: "【{year}】{brand}の{category}は買い？評判・口コミ・実力を徹底レビュー"
 
+# --- Gemini モデル（設定画面のドロップダウンで切替・両ホスト即反映） ---
+gemini:
+  # 使用モデル。空ならenv GEMINI_MODEL→既定。/settings の「AIモデル」で変更可。
+  # 候補: gemini-3.1-flash-lite(推奨・最安) / gemini-3-flash-preview /
+  #       gemini-3.5-flash(高品質) / gemini-2.5-flash / gemini-2.5-flash-lite(旧)
+  model: "gemini-3.1-flash-lite"
+
 # --- 生成バッチの実行ペース（承認→記事化） ---
 generation:
   interval_minutes: 20         # 承認済み候補を拾う間隔(分)。cronは5分毎・実間隔はこれで制御

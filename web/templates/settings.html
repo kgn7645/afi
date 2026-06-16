@@ -112,6 +112,18 @@
   </div>
 
   <div class="sec">
+    <h2>🤖 AIモデル（記事生成）</h2>
+    <p class="hint">記事生成・リライトに使うGeminiモデル。変更は最大1分で両サーバーに反映されます。
+      下ほど高品質・高コスト。現在: <b>{{ d.gemini_model }}</b></p>
+    <label>使用モデル</label>
+    <select name="gemini_model">
+      {% for mid, label in gemini_model_choices %}
+      <option value="{{ mid }}" {{ 'selected' if mid == d.gemini_model }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="sec">
     <h2>📝 記事の生成パラメータ</h2>
     <label>本文の最低文字数</label>
     <input type="number" name="min_chars" value="{{ d.min_chars }}">
