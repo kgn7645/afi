@@ -77,6 +77,7 @@ def main() -> None:
     keywords = cfg.get("keywords", [])
     nodes = cfg.get("ranking_nodes", [])
     source_urls = cfg.get("source_urls", []) or []
+    rakuten_genres = cfg.get("rakuten_genres", []) or []
     per_source = cfg.get("per_source", 10)
     max_total = args.limit or cfg.get("max_total", 40)
     season = bool(sel.get("seasonal_boost", True))
@@ -84,8 +85,8 @@ def main() -> None:
     exclude = set() if args.dry else candidates.known_asins()
     started = int(time.time())
     kw_disp = "/".join(keywords) if keywords else "（絞り込み無し）"
-    print(f"[crawl] ランキング{len(nodes)}件＋参照元{len(source_urls)}件を巡回 / "
-          f"絞り込みKW={kw_disp} 既存除外={len(exclude)}件 …収集中")
+    print(f"[crawl] Amazonランキング{len(nodes)}＋参照元{len(source_urls)}＋楽天ジャンル"
+          f"{len(rakuten_genres)} を巡回 / 絞り込みKW={kw_disp} 既存除外={len(exclude)}件 …収集中")
 
     if not args.dry:
         _set_status(state="running", started_at=started, finished_at=0,
@@ -96,6 +97,7 @@ def main() -> None:
     try:
         found = amazon_rank.collect(
             keywords=keywords, nodes=nodes, source_urls=source_urls,
+            rakuten_genres=rakuten_genres,
             per_source=per_source, max_total=max_total,
             exclude_asins=exclude, season=season, report=report)
     except Exception as e:  # noqa: BLE001

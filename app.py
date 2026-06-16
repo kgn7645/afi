@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core import (candidates, internal_links, overrides, pipeline, prompts,
-                  ranking_catalog, review, sheet_log, wordpress)
+                  ranking_catalog, rakuten_catalog, review, sheet_log, wordpress)
 from core.config import ROOT, get_rules, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -465,11 +465,15 @@ def settings_form(request: Request, saved: str = ""):
         groups.setdefault(it["dept"], []).append(it)
     catalog_nodes = {it["node"] for it in cat["items"]}
     d["ranking_nodes"] = "\n".join(n for n in selected if n not in catalog_nodes)  # 手入力=カタログ外のみ
+    # 楽天ジャンル（チェックボックス）
+    rk_catalog = rakuten_catalog.get_catalog()
+    rk_selected = {str(x) for x in (cand.get("rakuten_genres", []) or [])}
     return templates.TemplateResponse(
         "settings.html",
         {"request": request, "d": d, "saved": saved, "can_save": overrides.enabled(),
          "crawl": _crawl_status(), "catalog_groups": groups,
-         "selected_nodes": selected, "catalog_updated": cat["updated_at"]})
+         "selected_nodes": selected, "catalog_updated": cat["updated_at"],
+         "rakuten_catalog": rk_catalog, "rakuten_selected": rk_selected})
 
 
 @app.post("/settings")
@@ -483,6 +487,7 @@ def settings_save(
     title_format: str = Form(""),
     keywords: str = Form(""), ranking_nodes: str = Form(""), source_urls: str = Form(""),
     ranking_nodes_cb: list[str] = Form([]),
+    rakuten_genres_cb: list[str] = Form([]),
     per_source: str = Form("10"), max_total: str = Form("40"),
     interval_minutes: str = Form("20"), per_run: str = Form("2"),
 ):
@@ -513,6 +518,7 @@ def settings_save(
                        "ranking_nodes": list(dict.fromkeys(
                            [*ranking_nodes_cb, *_lines(ranking_nodes)])),  # チェック＋手入力
                        "source_urls": _lines(source_urls),
+                       "rakuten_genres": rakuten_genres_cb,
                        "per_source": _int(per_source, 10), "max_total": _int(max_total, 40)},
         "generation": {"interval_minutes": max(5, _int(interval_minutes, 20)),
                        "per_run": _int(per_run, 2)},

@@ -191,7 +191,7 @@ def _kw_match(text: str, keyword_filters: list[str]) -> bool:
 
 
 def collect(*, keywords: list[str] | None = None, nodes: list[str] | None = None,
-            source_urls: list[str] | None = None,
+            source_urls: list[str] | None = None, rakuten_genres: list | None = None,
             per_source: int = 10, max_total: int = 40,
             exclude_asins: set[str] | None = None,
             season: bool = False, screen: bool = True,
@@ -239,6 +239,36 @@ def collect(*, keywords: list[str] | None = None, nodes: list[str] | None = None
         out.append(c)
         if len(out) >= max_total:
             break
+
+    # 楽天ジャンル（公式API・bot対策無し）。候補は完成形dictなのでbuild不要
+    if rakuten_genres and len(out) < max_total:
+        from . import rakuten
+        for gid in rakuten_genres:
+            if len(out) >= max_total:
+                break
+            try:
+                items = rakuten.genre_items(gid, hits=per_source)
+            except Exception:  # noqa: BLE001
+                continue
+            for c in items:
+                if c.get("asin") in exclude:
+                    continue
+                title = c.get("title", "")
+                if kw_filters and not _kw_match(f"{title} {c.get('brand', '')}", kw_filters):
+                    if report is not None:
+                        report.append({"asin": c.get("asin"), "reason": "キーワード不一致",
+                                       "title": title[:40]})
+                    continue
+                if screen:
+                    ok, reason = product_selector.screen(c)
+                    if not ok:
+                        if report is not None:
+                            report.append({"asin": c.get("asin"), "reason": reason,
+                                           "title": title[:40]})
+                        continue
+                out.append(c)
+                if len(out) >= max_total:
+                    break
 
     if season:  # 季節該当を先頭へ（安定ソート・絞り込みはしない）
         sk = seasonal_keywords()
