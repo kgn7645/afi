@@ -14,9 +14,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from core import (candidates, internal_links, overrides, pipeline, prompts,
-                  ranking_catalog, rakuten_catalog, review, reviser, sheet_log,
-                  wordpress)
+from core import (candidates, gemini_client, internal_links, overrides, pipeline,
+                  prompts, ranking_catalog, rakuten_catalog, review, reviser,
+                  sheet_log, wordpress)
 from core.config import ROOT, get_rules, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -558,6 +558,7 @@ def settings_form(request: Request, saved: str = ""):
     cand = r.get("candidates", {}) or {}
     gen = r.get("generation", {}) or {}
     d = {
+        "gemini_model": gemini_client.resolve_model(),
         "interval_minutes": gen.get("interval_minutes", 20),
         "per_run": gen.get("per_run", 2),
         "min_price": sel.get("min_price", 3000),
@@ -593,7 +594,8 @@ def settings_form(request: Request, saved: str = ""):
         {"request": request, "d": d, "saved": saved, "can_save": overrides.enabled(),
          "crawl": _crawl_status(), "catalog_groups": groups,
          "selected_nodes": selected, "catalog_updated": cat["updated_at"],
-         "rakuten_catalog": rk_catalog, "rakuten_selected": rk_selected})
+         "rakuten_catalog": rk_catalog, "rakuten_selected": rk_selected,
+         "gemini_model_choices": gemini_client.MODEL_CHOICES})
 
 
 @app.post("/settings")
@@ -610,6 +612,7 @@ def settings_save(
     rakuten_genres_cb: list[str] = Form([]),
     per_source: str = Form("10"), max_total: str = Form("40"),
     interval_minutes: str = Form("20"), per_run: str = Form("2"),
+    gemini_model: str = Form(""),
 ):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
@@ -623,6 +626,8 @@ def settings_save(
     def _lines(v):
         return [ln.strip() for ln in v.splitlines() if ln.strip()]
 
+    # AIモデル（既知の候補のみ採用。不正値は無視＝従来値維持）
+    valid_models = {m for m, _ in gemini_client.MODEL_CHOICES}
     ov = {
         "selection": {"min_price": _int(min_price, 3000),
                       "exclude_keywords": _lines(exclude_keywords),
@@ -643,6 +648,8 @@ def settings_save(
         "generation": {"interval_minutes": max(5, _int(interval_minutes, 20)),
                        "per_run": _int(per_run, 2)},
     }
+    if gemini_model.strip() in valid_models:
+        ov["gemini"] = {"model": gemini_model.strip()}
     ok = overrides.update(ov)   # 他項目(_crawl_request等)を壊さず部分更新
     return RedirectResponse("/settings?saved=" + ("1" if ok else "fail"), status_code=303)
 

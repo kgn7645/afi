@@ -39,6 +39,30 @@ _RATES = {
 _USAGE_CSV = ROOT / "data" / "gemini_usage.csv"
 _USAGE_FIELDS = ["datetime", "model", "prompt", "candidates", "thoughts",
                  "total", "est_cost_usd"]
+
+# 設定画面のドロップダウン用（id, ラベル）。実測コストは思考最適化・課金単価ベースの目安。
+MODEL_CHOICES = [
+    ("gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite（推奨・最安 約¥0.8/記事・思考なし・高速）"),
+    ("gemini-3-flash-preview", "Gemini 3 Flash preview（約¥5/記事・preview）"),
+    ("gemini-3.5-flash", "Gemini 3.5 Flash（高品質・思考あり 約¥12/記事）"),
+    ("gemini-2.5-flash", "Gemini 2.5 Flash（約¥4/記事）"),
+    ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite（旧・最安だが品質低）"),
+]
+
+
+def resolve_model() -> str:
+    """使用モデルを解決: 設定(overrides/config.yaml gemini.model) > env GEMINI_MODEL > 既定。
+
+    設定画面のドロップダウンで切替→WPオーバーライド経由で両ホスト(Xserver/Render)即反映。
+    """
+    try:
+        from .config import get_rules
+        m = ((get_rules().get("gemini") or {}).get("model") or "").strip()
+        if m:
+            return m
+    except Exception:  # noqa: BLE001
+        pass
+    return get_settings().gemini_model
 _ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/"
              "models/{model}:generateContent?key={key}")
 
@@ -50,6 +74,7 @@ def _rates_for(model: str) -> tuple[float, float]:
 class GeminiClient:
     def __init__(self) -> None:
         self.settings = get_settings()
+        self._model = resolve_model()  # 設定画面で切替可（overrides>env>既定）
         self._keys = list(self.settings.gemini_api_keys)
         self._ki = 0  # 現在使用中のキーindex（429で前進し戻らない）
         self._last_call = 0.0
@@ -64,7 +89,7 @@ class GeminiClient:
         self._last_call = time.time()
 
     def _post(self, key: str, body: dict) -> dict:
-        url = _ENDPOINT.format(model=self.settings.gemini_model, key=key)
+        url = _ENDPOINT.format(model=self._model, key=key)
         req = urllib.request.Request(
             url, data=json.dumps(body).encode("utf-8"),
             headers={"Content-Type": "application/json"})
@@ -79,7 +104,7 @@ class GeminiClient:
         c = int(um.get("candidatesTokenCount", 0) or 0)
         th = int(um.get("thoughtsTokenCount", 0) or 0)
         t = int(um.get("totalTokenCount", 0) or (p + c + th))
-        in_rate, out_rate = _rates_for(self.settings.gemini_model)
+        in_rate, out_rate = _rates_for(self._model)
         cost = p * in_rate / 1e6 + (c + th) * out_rate / 1e6
         self.usage["calls"] += 1
         self.usage["prompt"] += p
@@ -96,7 +121,7 @@ class GeminiClient:
                     w.writeheader()
                 w.writerow({
                     "datetime": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
-                    "model": self.settings.gemini_model,
+                    "model": self._model,
                     "prompt": p, "candidates": c, "thoughts": th, "total": t,
                     "est_cost_usd": round(cost, 6)})
         except Exception:  # noqa: BLE001
