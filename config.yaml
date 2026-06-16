@@ -151,6 +151,19 @@ qa:
 seo:
   structured_data: true        # Product＋Review(★)＋Offer(価格)のJSON-LDを本文に埋込
 
+# --- 比較記事の自動生成（流入B: 「{カテゴリ} おすすめ/比較」狙い） ---
+roundup:
+  enabled: false               # true で週次cronが比較記事を自動生成
+  count: 5                     # 1記事に載せる商品数
+  per_run: 1                   # 1日に作る本数（cronは毎日・実際はrefresh_daysで間引く）
+  refresh_days: 14            # 同カテゴリの再生成を空ける日数（薄い重複回避）
+  status: draft               # draft（承認後公開）推奨
+  # 比較記事にするカテゴリ。type: rakuten(genre) / amazon(node)
+  categories: []
+  #  - {type: rakuten, id: "204546", name: "除湿機"}
+  #  - {type: rakuten, id: "208375", name: "扇風機・ネッククーラー"}
+  #  - {type: amazon,  node: "kitchen/4083001", name: "除湿機"}
+
 # --- WordPress ---
 wordpress:
   category_id: null            # 投稿カテゴリID（null=自動割当に任せる）
