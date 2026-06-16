@@ -210,6 +210,10 @@ def from_manual(
     company_hint: str = "",
     source_url: str = "",
 ) -> Product:
+    # price は空文字/非数値で来ることがある（候補プールの欠損など）→ int or None に正規化
+    if not isinstance(price, int):
+        ps = re.sub(r"[^0-9]", "", str(price or ""))
+        price = int(ps) if ps else None
     return Product(
         source_url=source_url,
         brand=brand,
