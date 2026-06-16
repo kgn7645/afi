@@ -110,6 +110,11 @@ def revise_post(post_id: int, keys: set[str], note: str = "") -> tuple[bool, str
             prompts.revise_article_prompt(title, body, instr_text), temperature=0.7)
     except Exception as e:  # noqa: BLE001
         return False, f"リライトに失敗（Gemini未設定/枠切れ等）: {e}"
+    try:
+        from . import gemini_client as _gc
+        _gc.record_shared_usage(gem.usage_summary())  # 共有消費に加算
+    except Exception:  # noqa: BLE001
+        pass
 
     out = _strip_fences(out)
     ok, why = _is_safe(body, out)

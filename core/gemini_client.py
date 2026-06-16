@@ -63,6 +63,36 @@ def resolve_model() -> str:
     except Exception:  # noqa: BLE001
         pass
     return get_settings().gemini_model
+
+
+def record_shared_usage(summary: dict) -> None:
+    """1プロセス分の累計usage(usage_summary)を共有overridesの`_gemini_usage`に加算。
+
+    Xserver(生成)とRender(リライト)の消費を1か所に合算し、AI設定画面で「概算消費/残」を表示する。
+    概算（自前のトークン集計×単価）であり、実請求はGoogle Cloud billingが正。失敗しても無視。
+    """
+    if not summary or not summary.get("calls"):
+        return
+    try:
+        from datetime import datetime
+
+        from . import overrides
+        if not overrides.enabled():
+            return
+        cur = dict(overrides.load(force=True).get("_gemini_usage") or {})
+        cur["calls"] = int(cur.get("calls", 0)) + int(summary.get("calls", 0))
+        cur["tokens"] = int(cur.get("tokens", 0)) + int(summary.get("total", 0))
+        cur["cost_usd"] = round(float(cur.get("cost_usd", 0.0))
+                                + float(summary.get("est_cost_usd", 0.0)), 6)
+        day = datetime.now().astimezone().strftime("%Y-%m-%d")
+        byday = dict(cur.get("by_day") or {})
+        byday[day] = round(float(byday.get(day, 0.0))
+                           + float(summary.get("est_cost_usd", 0.0)), 6)
+        cur["by_day"] = dict(sorted(byday.items())[-30:])  # 直近30日のみ保持
+        cur["updated"] = day
+        overrides.update({"_gemini_usage": cur})
+    except Exception:  # noqa: BLE001
+        pass
 _ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/"
              "models/{model}:generateContent?key={key}")
 

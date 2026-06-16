@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>AI設定｜おうちベース</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:30px; }
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:520px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:13px; font-weight:700;
+          color:#8a86a0; text-decoration:none; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .flash{ background:#e3f8ee; color:#149a5e; border-radius:12px; padding:12px 14px; font-weight:800;
+          font-size:14px; margin:10px 0; }
+  .flash.warn{ background:#ffe7e7; color:#e0433f; }
+  .sec{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:16px;
+        margin:14px 0; }
+  .sec h2{ font-size:15px; margin:0 0 4px; } .sec .hint{ font-size:12px; color:#9a96ad; margin:0 0 12px; }
+  label{ display:block; font-size:13px; font-weight:700; margin:12px 0 5px; }
+  input[type=number],select{ width:100%; padding:11px 12px; border:1.5px solid #ece9f1;
+    border-radius:10px; font-size:15px; font-family:inherit; outline:none; background:#fff; }
+  input:focus,select:focus{ border-color:var(--orange); }
+  .save button{ width:100%; padding:15px; border:none; border-radius:14px; font-size:16px; font-weight:800;
+    color:#fff; background:linear-gradient(135deg,var(--orange),#ff7e5f); box-shadow:0 8px 20px rgba(255,126,95,.4); }
+  .save button:active{ transform:scale(.98); }
+  .ro{ background:#fff3cd; color:#8a6d1a; border-radius:12px; padding:12px 14px; font-size:13px; margin:10px 0; }
+  /* メーター */
+  .big{ font-size:30px; font-weight:900; letter-spacing:-.5px; }
+  .big small{ font-size:14px; font-weight:700; color:#9a96ad; }
+  .bar{ height:14px; border-radius:999px; background:#eee9f3; overflow:hidden; margin:10px 0 6px; }
+  .bar > i{ display:block; height:100%; border-radius:999px;
+            background:linear-gradient(90deg,#21c17a,#ffd166); }
+  .bar.warn > i{ background:linear-gradient(90deg,#ffb020,#e0433f); }
+  .kv{ display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid #f1eef6; }
+  .kv:last-child{ border-bottom:none; } .kv b{ font-weight:800; }
+  .grid{ display:flex; gap:10px; } .grid > div{ flex:1; background:#faf8fd; border-radius:12px; padding:10px 12px; }
+  .grid .n{ font-size:20px; font-weight:900; } .grid .l{ font-size:11px; color:#9a96ad; font-weight:700; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  td{ padding:6px 4px; border-bottom:1px solid #f4f1f8; } td.r{ text-align:right; font-weight:700; }
+  .mini{ font-size:11px; color:#b0abc0; }
+  .reset{ background:none; border:1px solid #e6e1ee; color:#9a96ad; border-radius:10px; padding:9px 12px;
+          font-size:12px; font-weight:700; width:100%; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="seg">
+    <a href="/select">🛍 自動</a><a href="/manual">✋ 手動</a><a href="/review">📝 承認</a><a href="/settings">⚙️ 設定</a><a href="/ai-settings" class="on">🤖 AI</a>
+  </div>
+</div>
+{% include "_statsbar.html" %}
+<div class="wrap">
+  {% if saved=='1' %}<div class="flash">✓ 保存しました（生成・リライトに最大1分で反映）</div>{% endif %}
+  {% if saved=='reset' %}<div class="flash">↺ 消費カウンタをリセットしました</div>{% endif %}
+  {% if saved=='fail' %}<div class="flash warn">保存に失敗しました（WP接続を確認）</div>{% endif %}
+  {% if not can_save %}<div class="ro">⚠️ 保存は無効です（環境変数 <code>CONFIG_OVERRIDES=1</code>＋WP接続が必要）。閲覧のみ可。</div>{% endif %}
+
+  <!-- 消費メーター -->
+  <div class="sec">
+    <h2>💰 Gemini 消費（概算）</h2>
+    <p class="hint">自前のトークン集計×単価による<b>概算</b>です。正確な請求額は
+      <a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Google Cloud 請求</a>で確認してください。</p>
+    {% if budget_jpy > 0 %}
+    <div class="big">¥{{ '{:,.0f}'.format(remaining_jpy) }} <small>/ ¥{{ '{:,}'.format(budget_jpy) }} 残（概算）</small></div>
+    <div class="bar {{ 'warn' if pct >= 80 }}"><i style="width:{{ pct }}%"></i></div>
+    <div class="mini">消費 ¥{{ '{:,.0f}'.format(spent_jpy) }}（{{ pct }}%）{% if updated %}・最終更新 {{ updated }}{% endif %}</div>
+    {% else %}
+    <div class="big">¥{{ '{:,.0f}'.format(spent_jpy) }} <small>累計消費（概算）</small></div>
+    {% endif %}
+    <div class="grid" style="margin-top:12px;">
+      <div><div class="n">¥{{ '{:,.0f}'.format(today_jpy) }}</div><div class="l">本日</div></div>
+      <div><div class="n">{{ '{:,}'.format(calls) }}</div><div class="l">コール数</div></div>
+      <div><div class="n">{{ '{:,}'.format(tokens) }}</div><div class="l">トークン</div></div>
+    </div>
+    {% if days %}
+    <table style="margin-top:12px;">
+      <tr><td class="mini" colspan="2">日別の概算消費（直近）</td></tr>
+      {% for d in days %}<tr><td>{{ d.date }}</td><td class="r">¥{{ '{:,.1f}'.format(d.jpy) }}</td></tr>{% endfor %}
+    </table>
+    {% else %}
+    <p class="mini" style="margin-top:10px;">まだ計測データがありません（このバージョン以降の生成・リライトから集計されます）。</p>
+    {% endif %}
+    {% if can_save %}
+    <form method="post" action="/ai-settings/reset" onsubmit="return confirm('消費カウンタをゼロに戻します（請求実体には影響しません）。よろしいですか？');">
+      <button class="reset" type="submit">↺ 消費カウンタをリセット</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <!-- モデル & 予算設定 -->
+  <form method="post" action="/ai-settings">
+    <div class="sec">
+      <h2>🤖 AIモデル（記事生成・リライト）</h2>
+      <p class="hint">変更は最大1分で両サーバー（生成=Xserver / リライト=Render）に反映。
+        下ほど高品質・高コスト。現在: <b>{{ model }}</b></p>
+      <label>使用モデル</label>
+      <select name="gemini_model">
+        {% for mid, label in model_choices %}
+        <option value="{{ mid }}" {{ 'selected' if mid == model }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label>予算の目安（円・残額メーター用）</label>
+      <input type="number" name="budget_jpy" min="0" step="500" value="{{ budget_jpy }}">
+      <p class="mini">※ 表示用の目安。実際の利用上限はGoogle Cloud側の予算/上限設定で行ってください。</p>
+    </div>
+    {% if can_save %}
+    <div class="save"><button type="submit">保存する</button></div>
+    {% endif %}
+  </form>
+</div>
+</body>
+</html>
