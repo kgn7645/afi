@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core import (candidates, internal_links, overrides, pipeline, prompts,
-                  review, sheet_log, wordpress)
+                  ranking_catalog, review, sheet_log, wordpress)
 from core.config import ROOT, get_rules, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -453,15 +453,23 @@ def settings_form(request: Request, saved: str = ""):
         "extra_instructions": pr.get("extra_instructions", ""),
         "title_format": pr.get("title_format") or prompts.DEFAULT_TITLE_FORMAT,
         "keywords": "\n".join(cand.get("keywords", []) or []),
-        "ranking_nodes": "\n".join(cand.get("ranking_nodes", []) or []),
         "source_urls": "\n".join(cand.get("source_urls", []) or []),
         "per_source": cand.get("per_source", 10),
         "max_total": cand.get("max_total", 40),
     }
+    # 売れ筋ランキング: カタログ(部門→サブカテゴリ)をチェックボックス化
+    cat = ranking_catalog.get_catalog()
+    selected = set(cand.get("ranking_nodes", []) or [])
+    groups: dict[str, list[dict]] = {}
+    for it in cat["items"]:
+        groups.setdefault(it["dept"], []).append(it)
+    catalog_nodes = {it["node"] for it in cat["items"]}
+    d["ranking_nodes"] = "\n".join(n for n in selected if n not in catalog_nodes)  # 手入力=カタログ外のみ
     return templates.TemplateResponse(
         "settings.html",
         {"request": request, "d": d, "saved": saved, "can_save": overrides.enabled(),
-         "crawl": _crawl_status()})
+         "crawl": _crawl_status(), "catalog_groups": groups,
+         "selected_nodes": selected, "catalog_updated": cat["updated_at"]})
 
 
 @app.post("/settings")
@@ -474,6 +482,7 @@ def settings_save(
     style_guide: str = Form(""), extra_instructions: str = Form(""),
     title_format: str = Form(""),
     keywords: str = Form(""), ranking_nodes: str = Form(""), source_urls: str = Form(""),
+    ranking_nodes_cb: list[str] = Form([]),
     per_source: str = Form("10"), max_total: str = Form("40"),
     interval_minutes: str = Form("20"), per_run: str = Form("2"),
 ):
@@ -500,7 +509,9 @@ def settings_save(
         "prompts": {"style_guide": style_guide.strip(),
                     "extra_instructions": extra_instructions.strip(),
                     "title_format": title_format.strip()},
-        "candidates": {"keywords": _lines(keywords), "ranking_nodes": _lines(ranking_nodes),
+        "candidates": {"keywords": _lines(keywords),
+                       "ranking_nodes": list(dict.fromkeys(
+                           [*ranking_nodes_cb, *_lines(ranking_nodes)])),  # チェック＋手入力
                        "source_urls": _lines(source_urls),
                        "per_source": _int(per_source, 10), "max_total": _int(max_total, 40)},
         "generation": {"interval_minutes": max(5, _int(interval_minutes, 20)),

@@ -55,8 +55,23 @@
     {% include "_crawl_banner.html" %}
     <label>検索キーワード（1行に1つ）</label>
     <textarea name="keywords" rows="4" placeholder="ネッククーラー&#10;卓上扇風機">{{ d.keywords }}</textarea>
-    <label>売れ筋ランキング（カテゴリのノード。kitchen/4083001 形式 or フルURL。1行に1つ）</label>
-    <textarea name="ranking_nodes" rows="3" placeholder="kitchen/4083001">{{ d.ranking_nodes }}</textarea>
+    <label>売れ筋ランキング（チェックで選択）</label>
+    <p class="hint">部門を開いてチェックしたカテゴリの売れ筋から候補を集めます。{% if catalog_updated %}カタログ最終更新あり。{% else %}※サブカテゴリはAmazon取得後に増えます（今は部門のみ）。{% endif %}</p>
+    <div style="max-height:340px;overflow:auto;border:1px solid #ece9f1;border-radius:10px;padding:6px 10px;">
+      {% for dept, items in catalog_groups.items() %}
+      <details>
+        <summary style="font-weight:700;font-size:13px;padding:6px 0;cursor:pointer;">{{ dept }}（{{ items|length }}）</summary>
+        {% for it in items %}
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:4px 0 4px 8px;">
+          <input type="checkbox" name="ranking_nodes_cb" value="{{ it.node }}" {{ 'checked' if it.node in selected_nodes }} style="width:18px;height:18px;">
+          {{ it.name }}
+        </label>
+        {% endfor %}
+      </details>
+      {% endfor %}
+    </div>
+    <label>追加で手入力（上級者向け・一覧に無いノード。kitchen/4083001 形式 or フルURL）</label>
+    <textarea name="ranking_nodes" rows="2" placeholder="kitchen/4083001">{{ d.ranking_nodes }}</textarea>
     <label>参照元URL（まとめ/ランキング/トレンド記事。1行に1つ）</label>
     <textarea name="source_urls" rows="3" placeholder="https://my-best.com/...&#10;https://the360.life/...">{{ d.source_urls }}</textarea>
     <p class="hint">マイベスト・360LIFE・LDK・GET NAVI 等の記事URLを貼ると、ページ内のAmazonリンク（商品）を自動で候補化します。</p>
