@@ -126,6 +126,30 @@ prompts:
   #   【{year}】{brand}はどこの国の企業？{category}の評判・口コミを徹底レビュー
   title_format: "【{year}】{brand}の{category}は買い？評判・口コミ・実力を徹底レビュー"
 
+# --- 媒体（複数サイトへの並行量産 / #95） ---
+# media[0]=このconfigのトップレベル設定(=おうちベース)を自動で使う。
+# 2サイト目以降だけここに追加する（コンセプト/クロール語/カテゴリを媒体別に）。
+# WP接続の機密はconfigに書かず env に置く: env_prefix="WP2_" なら
+#   WP2_BASE_URL / WP2_USERNAME / WP2_APP_PASSWORD を参照（各ホストの.envに設定）。
+# 手順は docs/issue-95-multi-media.md を参照。
+media: []
+#   - id: gadget            # 媒体ID（英数）。WP投稿先・キュー・統計の識別に使う
+#     name: "ガジェット媒体"
+#     enabled: false        # 準備できたら true で量産対象に入る
+#     kind: wp
+#     env_prefix: "WP2_"    # WP2_BASE_URL / WP2_USERNAME / WP2_APP_PASSWORD
+#     concept: "在宅×ガジェットで作業効率を上げる道具を、素性まで調べて選ぶメディア"
+#     eeat:
+#       site_name: "（媒体名）"
+#       author_name: "（編集部名）"
+#       default_category_slug: "gadget"
+#     candidates:
+#       keywords: ["モバイルモニター", "左手デバイス"]
+#       rakuten_genres: []
+#       ranking_nodes: []
+#       source_urls: []
+#     note_enabled: false
+
 # --- Gemini モデル（設定画面のドロップダウンで切替・両ホスト即反映） ---
 gemini:
   # 使用モデル。空ならenv GEMINI_MODEL→既定。/settings の「AIモデル」で変更可。
