@@ -95,15 +95,50 @@ def reply(parent_id: str, text: str, *, user_id: str | None = None) -> dict:
     return _req("GET", str(pub.get("id")), {"fields": "id,permalink", "access_token": tok})
 
 
-def post_with_link(caption: str, image_url: str, link: str, *,
-                   user_id: str | None = None) -> dict:
-    """画像メイン投稿 → リンクをリプライにぶら下げる（検証済みの勝ち型）。
+def publish_carousel(caption: str, image_urls: list[str], *,
+                     user_id: str | None = None) -> dict:
+    """複数画像（カルーセル）投稿。2枚未満ならIMAGE/TEXTにフォールバック。"""
+    tok = _token()
+    uid = user_id or _user_id()
+    urls = [u for u in image_urls if u][:20]
+    if len(urls) <= 1:
+        return publish_image(caption, urls[0], user_id=uid) if urls else publish_text(caption, user_id=uid)
+    children = []
+    for u in urls:
+        c = _req("POST", f"{uid}/threads",
+                 {"access_token": tok, "media_type": "IMAGE", "image_url": u,
+                  "is_carousel_item": "true"})
+        if c.get("id"):
+            children.append(str(c["id"]))
+        time.sleep(1)
+    if len(children) < 2:
+        return publish_image(caption, urls[0], user_id=uid)
+    cont = _req("POST", f"{uid}/threads",
+                {"access_token": tok, "media_type": "CAROUSEL",
+                 "children": ",".join(children), "text": caption})
+    time.sleep(3)
+    pub = _req("POST", f"{uid}/threads_publish",
+               {"access_token": tok, "creation_id": cont.get("id")})
+    return _req("GET", str(pub.get("id")),
+                {"fields": "id,permalink,timestamp", "access_token": tok})
+
+
+def post_set(caption: str, image_urls: list[str], reply_text: str, link: str, *,
+             user_id: str | None = None) -> dict:
+    """1セット投稿: メイン(画像複数＋文章) → リプライ(軽い文章＋URL)。検証済みの勝ち型。
 
     返り: {"main": {...}, "reply": {...}}。caption は #PR を含める想定。
     """
     uid = user_id or _user_id()
-    main = publish_image(caption, image_url, user_id=uid)
+    imgs = [u for u in (image_urls or []) if u]
+    if len(imgs) >= 2:
+        main = publish_carousel(caption, imgs, user_id=uid)
+    elif len(imgs) == 1:
+        main = publish_image(caption, imgs[0], user_id=uid)
+    else:
+        main = publish_text(caption, user_id=uid)
     rep = None
-    if link:
-        rep = reply(main.get("id"), f"詳しくはこちら👇\n{link}", user_id=uid)
+    body = (reply_text.strip() + ("\n" + link if link else "")).strip()
+    if body:
+        rep = reply(main.get("id"), body, user_id=uid)
     return {"main": main, "reply": rep}

@@ -37,6 +37,12 @@
   .imgs input{ position:absolute; opacity:0; }
   .imgs input:checked + img{ outline:none; }
   .imgs label:has(input:checked){ border-color:var(--green); box-shadow:0 0 0 2px rgba(33,193,122,.3); }
+  .step{ font-size:12px; font-weight:800; color:#7a6fb0; background:#f1eef9; border-radius:8px;
+         padding:6px 10px; margin:16px 0 4px; }
+  .hint2{ font-weight:600; color:#b0abc0; font-size:11px; }
+  .cnt{ float:right; color:var(--green); }
+  .url{ font-size:12px; color:#9a96ad; background:#faf8fd; border-radius:8px; padding:8px 10px;
+        margin-top:6px; word-break:break-all; }
   .acts{ display:flex; gap:8px; margin-top:12px; }
   .approve{ flex:1; border:none; border-radius:11px; padding:13px; font-size:15px; font-weight:800; color:#fff;
             background:linear-gradient(135deg,var(--green),#13b06b); }
@@ -56,6 +62,7 @@
 </div>
 <div class="wrap">
   {% if saved=='ok' %}<div class="flash">✓ 承認しました（公開キューに追加）</div>{% endif %}
+  {% if saved=='noimg' %}<div class="flash warn">画像を1枚以上選んでください</div>{% endif %}
   {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
   {% if saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">処理に失敗しました</div>{% endif %}
@@ -72,21 +79,29 @@
 
   {% for d in drafts %}
   <div class="card">
-    <form method="post" action="/threads/approve">
+    <form method="post" action="/threads/approve" onsubmit="return chk(this)">
       <input type="hidden" name="draft_id" value="{{ d.id }}">
       <div class="head">
         <span class="pname">{{ d.product }}</span>
         <span class="meta">¥{{ d.price }} ★{{ d.review.avg }}（{{ d.review.count }}）</span>
       </div>
-      <div class="lbl">キャプション（編集可）</div>
-      <textarea name="caption" rows="5">{{ d.caption }}</textarea>
-      <div class="lbl">投稿に使う画像を選択（文字入りは避け、商品がきれいなものを）</div>
+
+      <div class="step">① メイン投稿（画像＋文章）</div>
+      <div class="lbl">画像を選択 <span class="hint2">最大3枚・カルーセル</span> <b class="cnt">0/3</b></div>
       <div class="imgs">
         {% for u in d.images %}
-        <label><input type="radio" name="image_url" value="{{ u }}" {{ 'checked' if loop.first }}>
+        <label><input type="checkbox" name="image_url" value="{{ u }}" {{ 'checked' if loop.first }} onchange="lim(this)">
           <img src="{{ u }}" loading="lazy" alt=""></label>
         {% endfor %}
       </div>
+      <div class="lbl">文章（フック＋紹介・編集可）</div>
+      <textarea name="caption" rows="5">{{ d.caption }}</textarea>
+
+      <div class="step">② リプライ（軽い文章＋URL）</div>
+      <div class="lbl">軽い一言（編集可）</div>
+      <textarea name="reply_text" rows="2">{{ d.reply }}</textarea>
+      <div class="url">🔗 {{ d.link[:54] }}…</div>
+
       <div class="acts">
         <button class="approve" type="submit">✓ 承認してキューへ</button>
       </div>
@@ -110,5 +125,23 @@
     {% endfor %}
   </div>
 </div>
+<script>
+function updateCnt(form){
+  var n = form.querySelectorAll('.imgs input:checked').length;
+  var c = form.querySelector('.cnt'); if(c) c.textContent = n+'/3';
+}
+function lim(cb){
+  var imgs = cb.closest('.imgs');
+  var checked = imgs.querySelectorAll('input[type=checkbox]:checked');
+  if(checked.length > 3){ cb.checked = false; }
+  updateCnt(cb.closest('form'));
+}
+function chk(form){
+  var n = form.querySelectorAll('.imgs input:checked').length;
+  if(n === 0){ alert('画像を1枚以上選んでください'); return false; }
+  return true;
+}
+document.querySelectorAll('form[action="/threads/approve"]').forEach(updateCnt);
+</script>
 </body>
 </html>
