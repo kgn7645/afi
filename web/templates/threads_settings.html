@@ -54,8 +54,11 @@
     <textarea name="persona" rows="3">{{ d.persona }}</textarea>
     <label>狙う楽天ジャンルID（1行に1つ・売れ筋から選定）</label>
     <textarea name="genres" rows="4">{{ d.genres }}</textarea>
-    <label>1回の生成数（ドラフト）</label>
-    <input type="number" name="per_run" min="1" value="{{ d.per_run }}">
+    <label>1回の生成数：商品PR（ドラフト）</label>
+    <input type="number" name="per_run" min="0" value="{{ d.per_run }}">
+    <label>1回の生成数：つぶやき（日常・共感）</label>
+    <input type="number" name="musing_per_run" min="0" value="{{ d.musing_per_run }}">
+    <p class="hint">参考アカ分析では「つぶやき5〜6：PR4〜5」。つぶやき多めが伸びやすい。</p>
   </div>
 
   <div class="sec">
