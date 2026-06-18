@@ -90,6 +90,25 @@ def drafts() -> list:
     return _load("_threads_drafts")
 
 
+# ---------- ラベル（登録してタップ選択） ----------
+def labels() -> list:
+    return _load("_threads_labels")
+
+
+def add_label(label: str) -> None:
+    label = (label or "").strip()
+    if not label:
+        return
+    ls = labels()
+    if label not in ls:
+        ls.append(label)
+        _save("_threads_labels", ls[-50:])
+
+
+def remove_label(label: str) -> None:
+    _save("_threads_labels", [x for x in labels() if x != (label or "").strip()])
+
+
 def queue() -> list:
     return _load("_threads_queue")
 
