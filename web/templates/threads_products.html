@@ -31,6 +31,16 @@
   .toPost{ display:block; text-align:center; text-decoration:none; color:#fff; font-weight:800; font-size:15px;
            border-radius:13px; padding:15px; background:linear-gradient(135deg,var(--green),#13b06b); margin-top:6px; }
   .warn{ background:#fff3cd; color:#8a6d1a; border-radius:10px; padding:10px 12px; font-size:12px; margin-top:8px; line-height:1.6; }
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .chip{ display:inline-flex; align-items:center; gap:5px; border:1.5px solid #e6e1ee; border-radius:999px;
+         padding:7px 13px; font-size:13px; font-weight:700; color:#6a5fb0; background:#fff; cursor:pointer; }
+  .chip:has(input:checked){ border-color:#6a5fb0; background:#f3f0fb; }
+  .chip input{ display:none; }
+  .chip .x{ border:none; background:#efeaf7; color:#9a8fc0; border-radius:50%; width:18px; height:18px;
+            font-size:12px; line-height:1; cursor:pointer; padding:0; }
+  .addlbl{ display:flex; gap:6px; }
+  .addlbl input{ flex:1; }
+  .addlbl button{ border:none; border-radius:10px; padding:0 14px; font-weight:800; color:#fff; background:#7a6fb0; }
 </style>
 </head>
 <body>
@@ -43,6 +53,7 @@
   {% if saved=='man' %}<div class="flash">✓ 商品を追加しました（投稿タブで承認）</div>{% endif %}
   {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天URLか確認／重複の可能性）</div>{% endif %}
   {% if saved.startswith('gen') %}<div class="flash">✓ {{ saved[3:] }}件 生成しました（投稿タブへ）</div>{% endif %}
+  {% if saved=='label' %}<div class="flash">✓ ラベルを更新しました</div>{% endif %}
 
   <div class="sec">
     <h2>🛍 商品URLで追加（手動選定）</h2>
@@ -50,12 +61,35 @@
     <form method="post" action="/threads/manual">
       <label>商品URL（楽天）</label>
       <input type="url" name="url" placeholder="https://item.rakuten.co.jp/店舗/商品番号/" required>
-      <label>ラベル（任意）— 紹介文に織り込む文脈</label>
-      <input type="text" name="label" placeholder="例: プチプラ / 敏感肌向け / 韓国で人気">
-      <div class="warn">⚠️ ラベルに実在の人物名を入れて「愛用/おすすめ」と書くのは、実際に本人が使っていない場合
-        <b>景表法（ステマ規制）・パブリシティ権侵害</b>のリスクがあります。本人が公言/愛用している商品にのみ使用を。</div>
+      <label>ラベル（タップで選択・任意）— 紹介文に織り込む文脈</label>
+      <div class="chips">
+        <label class="chip"><input type="radio" name="label" value="" checked>なし</label>
+        {% for l in labels %}
+        <label class="chip"><input type="radio" name="label" value="{{ l }}">{{ l }}</label>
+        {% endfor %}
+      </div>
       <button class="add" type="submit">＋ この商品を追加</button>
     </form>
+  </div>
+
+  <div class="sec">
+    <h2>🏷 ラベル管理（登録すると上でタップ選択できます）</h2>
+    <form method="post" action="/threads/labels/add" class="addlbl">
+      <input type="text" name="label" placeholder="例: プチプラ / 韓国で人気 / 敏感肌向け" required>
+      <button type="submit">＋登録</button>
+    </form>
+    <div class="chips">
+      {% for l in labels %}
+      <span class="chip">{{ l }}
+        <form method="post" action="/threads/labels/remove" style="display:inline;margin:0;">
+          <input type="hidden" name="label" value="{{ l }}"><button class="x" type="submit">×</button>
+        </form>
+      </span>
+      {% endfor %}
+      {% if not labels %}<span class="hint">まだ登録されていません</span>{% endif %}
+    </div>
+    <div class="warn">⚠️ ラベルに実在の人物名を入れて「愛用/おすすめ」と書くのは、本人が実際に使っていない場合
+      <b>景表法（ステマ規制）・パブリシティ権侵害</b>のリスク。本人が公言/愛用している商品にのみ使用を。</div>
   </div>
 
   <div class="sec">

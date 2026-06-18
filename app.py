@@ -765,8 +765,25 @@ def threads_products(request: Request, saved: str = ""):
     ds = threads_pipeline.drafts()
     return templates.TemplateResponse("threads_products.html", {
         "request": request, "saved": saved, "can_save": overrides.enabled(),
+        "labels": threads_pipeline.labels(),
         "pending": len([d for d in ds if d.get("type") == "pr"]),
         "musings": len([d for d in ds if d.get("type") == "musing"])})
+
+
+@app.post("/threads/labels/add")
+def threads_label_add(request: Request, label: str = Form("")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    threads_pipeline.add_label(label)
+    return RedirectResponse("/threads/products?saved=label", status_code=303)
+
+
+@app.post("/threads/labels/remove")
+def threads_label_remove(request: Request, label: str = Form("")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    threads_pipeline.remove_label(label)
+    return RedirectResponse("/threads/products?saved=label", status_code=303)
 
 
 @app.post("/threads/manual")
