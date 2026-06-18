@@ -87,7 +87,7 @@
       </div>
 
       <div class="step">① メイン投稿（画像＋文章）</div>
-      <div class="lbl">画像を選択 <span class="hint2">最大3枚・カルーセル</span> <b class="cnt">0/3</b></div>
+      <div class="lbl">画像を選択 <span class="hint2">複数選択可・カルーセル</span> <b class="cnt">0枚</b></div>
       <div class="imgs">
         {% for u in d.images %}
         <label><input type="checkbox" name="image_url" value="{{ u }}" {{ 'checked' if loop.first }} onchange="lim(this)">
@@ -128,14 +128,9 @@
 <script>
 function updateCnt(form){
   var n = form.querySelectorAll('.imgs input:checked').length;
-  var c = form.querySelector('.cnt'); if(c) c.textContent = n+'/3';
+  var c = form.querySelector('.cnt'); if(c) c.textContent = n+'枚';
 }
-function lim(cb){
-  var imgs = cb.closest('.imgs');
-  var checked = imgs.querySelectorAll('input[type=checkbox]:checked');
-  if(checked.length > 3){ cb.checked = false; }
-  updateCnt(cb.closest('form'));
-}
+function lim(cb){ updateCnt(cb.closest('form')); }
 function chk(form){
   var n = form.querySelectorAll('.imgs input:checked').length;
   if(n === 0){ alert('画像を1枚以上選んでください'); return false; }
