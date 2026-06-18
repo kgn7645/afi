@@ -153,6 +153,8 @@ media: []
 # --- Threads アフィリ（商品選定→投稿作成→承認→キュー→スケジュール公開） ---
 threads:
   enabled: false              # true で生成cronが対象。投稿はキュー＋スケジュールで
+  gemini_model: ""            # Threads専用モデル（空=全体設定。/threads/ai で変更）
+  # pr_prompt / musing_prompt は /threads/ai で編集（空=既定プロンプト）
   accounts:
     - id: mmmtreees           # アカウント識別（投稿先＝THREADS_ACCESS_TOKENのアカウント）
       name: "美容・コスメ"

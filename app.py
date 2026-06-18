@@ -818,6 +818,55 @@ def threads_reject(request: Request, draft_id: str = Form(...)):
     return RedirectResponse("/threads?saved=rej", status_code=303)
 
 
+def _threads_ai_ctx(request, *, model="", pr="", musing="", saved="", test=None):
+    return {
+        "request": request, "saved": saved, "test": test,
+        "can_save": overrides.enabled(),
+        "model": model or threads_pipeline.threads_model(),
+        "model_choices": gemini_client.MODEL_CHOICES,
+        "pr_prompt": pr or threads_pipeline.pr_prompt_template(),
+        "musing_prompt": musing or threads_pipeline.musing_prompt_template(),
+        "default_pr": threads_pipeline._DEFAULT_PR_PROMPT,
+        "default_musing": threads_pipeline._DEFAULT_MUSING_PROMPT,
+    }
+
+
+@app.get("/threads/ai", response_class=HTMLResponse)
+def threads_ai_form(request: Request, saved: str = ""):
+    """Threads専用のAI設定（モデル・プロンプト編集・テスト生成）。"""
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    return templates.TemplateResponse("threads_ai.html", _threads_ai_ctx(request, saved=saved))
+
+
+@app.post("/threads/ai")
+def threads_ai_save(request: Request, gemini_model: str = Form(""),
+                    pr_prompt: str = Form(""), musing_prompt: str = Form("")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    valid = {m for m, _ in gemini_client.MODEL_CHOICES}
+    g: dict = {"pr_prompt": pr_prompt.strip(), "musing_prompt": musing_prompt.strip()}
+    if gemini_model.strip() in valid:
+        g["gemini_model"] = gemini_model.strip()
+    overrides.update({"threads": g})
+    return RedirectResponse("/threads/ai?saved=1", status_code=303)
+
+
+@app.post("/threads/ai/test", response_class=HTMLResponse)
+def threads_ai_test(request: Request, gemini_model: str = Form(""),
+                    pr_prompt: str = Form(""), musing_prompt: str = Form("")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
+    acc = accounts[0] if accounts else {"id": "mmmtreees"}
+    test = threads_pipeline.test_generate(acc, model=gemini_model.strip(),
+                                          pr_tmpl=pr_prompt.strip(), musing_tmpl=musing_prompt.strip())
+    return templates.TemplateResponse("threads_ai.html", _threads_ai_ctx(
+        request, model=gemini_model, pr=pr_prompt, musing=musing_prompt, test=test))
+
+
 @app.get("/threads/settings", response_class=HTMLResponse)
 def threads_settings_form(request: Request, saved: str = ""):
     """Threads媒体の設定（アカウントのペルソナ/ジャンル/生成数・スケジュール）。"""
