@@ -753,10 +753,13 @@ def threads_generate(request: Request):
 
 @app.post("/threads/approve")
 def threads_approve(request: Request, draft_id: str = Form(...),
-                    image_url: str = Form(...), caption: str = Form("")):
+                    image_url: list[str] = Form([]), caption: str = Form(""),
+                    reply_text: str = Form("")):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    ok = threads_pipeline.approve(draft_id, image_url, caption)
+    if not image_url:
+        return RedirectResponse("/threads?saved=noimg", status_code=303)
+    ok = threads_pipeline.approve(draft_id, image_url, caption, reply_text)
     return RedirectResponse("/threads?saved=" + ("ok" if ok else "fail"), status_code=303)
 
 

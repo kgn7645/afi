@@ -91,6 +91,34 @@ def api_images(item: dict) -> list[str]:
     return dedup
 
 
+_GALLERY_RE = re.compile(
+    r"https://(?:thumbnail\.)?image\.rakuten\.co\.jp/[^\s\"'\\<>]+?\.(?:jpg|jpeg|png)",
+    re.IGNORECASE)
+
+
+def gallery_images(item: dict, limit: int = 9) -> list[str]:
+    """商品ページのギャラリー画像（文字入り含む・人が選ぶ前提）。店舗cabinet配下に限定。"""
+    shop = item.get("shopCode") or ""
+    try:
+        req = urllib.request.Request(item.get("itemUrl", ""),
+                                     headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            html = r.read().decode("utf-8", "ignore")
+    except Exception:  # noqa: BLE001
+        return []
+    out, seen = [], set()
+    for u in _GALLERY_RE.findall(html):
+        base = u.split("?")[0]
+        if "/cabinet/" not in base:
+            continue
+        if shop and f"/{shop}/" not in base and f"@0_mall/{shop}/" not in base:
+            continue
+        if base not in seen:
+            seen.add(base)
+            out.append(base)
+    return out[:limit]
+
+
 def ai_clean_image(src_url: str, e: dict) -> str | None:
     """合成画像→商品単体のクリーン画像を生成し、WPメディアに上げて公開URLを返す。
 
@@ -158,7 +186,8 @@ def _make_caption(persona: str, item: dict, e: dict) -> dict:
 # 出力(JSONのみ・コードフェンス禁止)
 {{
   "clean_name": "宣伝文句を除いた簡潔な商品名(20字以内)",
-  "caption": "Threads投稿の本文。1行目に思わず読みたくなるフック(絵文字可)。2〜4行で誰にどんな場面で役立つかを具体的に。誇大/断定(最高/絶対/必ず)禁止。URLは入れない。200字以内。改行で読みやすく。末尾は付けない(リンクと#PRは後で機械付与)。"
+  "caption": "メイン投稿(1投稿目)の本文。1行目に思わず読みたくなるフック(絵文字可)。2〜4行で誰にどんな場面で役立つかを具体的に。誇大/断定(最高/絶対/必ず)禁止。URLは入れない。200字以内。改行で読みやすく。末尾は付けない(リンクと#PRは後で機械付与)。",
+  "reply": "リプライ(2投稿目)の軽い一言(20〜40字・絵文字可)。URLは入れない。例『気になる方はこちらから🛒』『使ってみたい人はチェック👇』。商品に合わせて自然に。"
 }}
 """
     return _gemini_json(prompt, e)
@@ -193,7 +222,14 @@ def generate_drafts(account: dict, count: int) -> int:
         if not real:
             continue
         clean = ai_clean_image(real[0], e)   # AIクリーン商品画像（公開URL）を先頭候補に
-        imgs = ([clean] if clean else []) + real
+        gal = gallery_images(it)             # 商品ページのギャラリー（文字入り含む）
+        # 候補＝AIクリーン＋API実画像＋ギャラリー（重複除去・最大12枚）
+        imgs, seen_u = [], set()
+        for u in ([clean] if clean else []) + real + gal:
+            if u and u.split("?")[0] not in seen_u:
+                seen_u.add(u.split("?")[0])
+                imgs.append(u)
+        imgs = imgs[:12]
         try:
             cap = _make_caption(account.get("persona", ""), it, e)
         except Exception:  # noqa: BLE001
@@ -206,6 +242,7 @@ def generate_drafts(account: dict, count: int) -> int:
             "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
             "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
             "caption": cap.get("caption", "").strip(),
+            "reply": cap.get("reply", "気になる方はこちらから🛒").strip(),
             "images": imgs,
             "created": int(time.time()),
         })
@@ -230,17 +267,21 @@ def _next_slot(account_id: str, q: list, hours: list[int]) -> int:
 
 
 # ---------- 承認 / 却下 ----------
-def approve(draft_id: str, image_url: str, caption: str, *, when: int | None = None) -> bool:
+def approve(draft_id: str, images: list[str], caption: str, reply_text: str = "",
+            *, when: int | None = None) -> bool:
     ds = drafts()
     d = next((x for x in ds if x["id"] == draft_id), None)
     if not d:
         return False
+    imgs = [u for u in (images or []) if u][:3]   # 最大3枚（カルーセル）
     rules = (get_rules().get("threads", {}) or {})
     hours = (rules.get("schedule", {}) or {}).get("hours", [9, 13, 20])
     q = queue()
     ts = when or _next_slot(d["account"], q, hours)
     q.append({"id": draft_id, "account": d["account"], "caption": caption.strip(),
-              "image": image_url, "link": d.get("link", ""), "product": d.get("product", ""),
+              "images": imgs, "reply": (reply_text or d.get("reply", "")).strip(),
+              "image": imgs[0] if imgs else "",  # 後方互換
+              "link": d.get("link", ""), "product": d.get("product", ""),
               "scheduled_at": ts, "status": "pending", "created": int(time.time())})
     _save("_threads_queue", q)
     _save("_threads_drafts", [x for x in ds if x["id"] != draft_id])
@@ -271,8 +312,9 @@ def publish_due(*, limit: int = 1) -> list[dict]:
             caption = item["caption"]
             if "#PR" not in caption:
                 caption += "\n\n#PR"
-            res = threads_client.post_with_link(caption, item["image"], item.get("link", ""),
-                                                user_id=uid)
+            imgs = item.get("images") or ([item["image"]] if item.get("image") else [])
+            res = threads_client.post_set(caption, imgs, item.get("reply", ""),
+                                          item.get("link", ""), user_id=uid)
             item["status"] = "published"
             item["permalink"] = (res.get("main") or {}).get("permalink")
             item["published_at"] = now
