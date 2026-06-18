@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Threads設定｜運用ツール</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:40px; }
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:460px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:13px; font-weight:700;
+          color:#8a86a0; text-decoration:none; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .flash{ background:#e3f8ee; color:#149a5e; border-radius:12px; padding:11px 14px; font-weight:800; font-size:14px; margin:10px 0; }
+  .flash.warn{ background:#ffe7e7; color:#e0433f; }
+  .sec{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:16px; margin:14px 0; }
+  .sec h2{ font-size:15px; margin:0 0 4px; } .hint{ font-size:12px; color:#9a96ad; margin:0 0 12px; }
+  label{ display:block; font-size:13px; font-weight:700; margin:12px 0 5px; }
+  input[type=number],input[type=text],textarea{ width:100%; padding:11px 12px; border:1.5px solid #ece9f1;
+    border-radius:10px; font-size:15px; font-family:inherit; outline:none; }
+  input:focus,textarea:focus{ border-color:var(--orange); }
+  textarea{ resize:vertical; line-height:1.6; }
+  .chk{ display:flex; align-items:center; gap:9px; margin:6px 0; font-weight:700; font-size:14px; }
+  .chk input{ width:20px; height:20px; }
+  .save button{ width:100%; padding:15px; border:none; border-radius:14px; font-size:16px; font-weight:800;
+    color:#fff; background:linear-gradient(135deg,var(--orange),#ff7e5f); box-shadow:0 8px 20px rgba(255,126,95,.4); }
+  .ro{ background:#fff3cd; color:#8a6d1a; border-radius:12px; padding:12px 14px; font-size:13px; margin:10px 0; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="seg">
+    <a href="/">🏠 ホーム</a><a href="/threads">🧵 承認</a><a href="/threads/settings" class="on">⚙️ Threads設定</a>
+  </div>
+</div>
+<form class="wrap" method="post" action="/threads/settings">
+  {% if saved=='1' %}<div class="flash">✓ 保存しました（最大1分で反映）</div>{% endif %}
+  {% if saved=='fail' %}<div class="flash warn">保存に失敗しました</div>{% endif %}
+  {% if not can_save %}<div class="ro">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
+
+  <div class="sec">
+    <h2>🧵 Threads アカウント</h2>
+    <p class="hint">投稿先＝THREADS_ACCESS_TOKEN のアカウント。文章の人格をここで決めます。</p>
+    <div class="chk"><input type="checkbox" name="enabled" {{ 'checked' if d.enabled }}>
+      生成cronを有効にする（自動でドラフトを作る）</div>
+    <label>アカウント名（管理用）</label>
+    <input type="text" name="name" value="{{ d.name }}">
+    <label>人格・口調（ペルソナ）</label>
+    <textarea name="persona" rows="3">{{ d.persona }}</textarea>
+    <label>狙う楽天ジャンルID（1行に1つ・売れ筋から選定）</label>
+    <textarea name="genres" rows="4">{{ d.genres }}</textarea>
+    <label>1回の生成数（ドラフト）</label>
+    <input type="number" name="per_run" min="1" value="{{ d.per_run }}">
+  </div>
+
+  <div class="sec">
+    <h2>📅 公開スケジュール</h2>
+    <p class="hint">承認した投稿を、人間らしい時間帯に小出しで公開します（分はランダム）。</p>
+    <label>公開する時間帯（カンマ区切り・24h）</label>
+    <input type="text" name="hours" value="{{ d.hours }}" placeholder="8,12,20">
+    <label>1回の公開cronで出す最大数</label>
+    <input type="number" name="pub_per_run" min="1" value="{{ d.pub_per_run }}">
+  </div>
+
+  {% if can_save %}<div class="save"><button type="submit">保存する</button></div>{% endif %}
+</form>
+</body>
+</html>

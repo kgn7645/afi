@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>ホーム｜運用ツール</title>
+<style>
+  :root{ --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; }
+  .wrap{ max-width:560px; margin:0 auto; padding:30px 18px 40px; }
+  h1{ font-size:20px; margin:8px 0 4px; }
+  .sub{ font-size:13px; color:#9a96ad; margin:0 0 22px; }
+  .cards{ display:flex; flex-direction:column; gap:14px; }
+  a.card{ display:block; text-decoration:none; color:inherit; border-radius:18px; padding:22px 20px;
+          box-shadow:0 6px 20px rgba(40,30,70,.08); position:relative; overflow:hidden; }
+  a.card .t{ font-size:19px; font-weight:900; }
+  a.card .d{ font-size:13px; opacity:.85; margin-top:4px; }
+  a.card .ico{ position:absolute; right:16px; top:50%; transform:translateY(-50%); font-size:42px; opacity:.25; }
+  .ouchi{ background:linear-gradient(135deg,#fff,#fdeede); }
+  .ouchi .t{ color:#d9772a; }
+  .threads{ background:linear-gradient(135deg,#1f1f24,#34343c); color:#fff; }
+  .threads .d{ color:#cfcfe0; }
+  .row{ display:flex; gap:12px; margin-top:16px; }
+  .mini{ flex:1; text-align:center; text-decoration:none; color:#8a86a0; background:#fff; border-radius:12px;
+         padding:12px; font-size:13px; font-weight:700; box-shadow:0 3px 10px rgba(40,30,70,.06); }
+  .health{ font-size:12px; color:#9a96ad; margin-top:20px; text-align:center; }
+  .ok{ color:#21c17a; } .ng{ color:#e0433f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>運用ツール</h1>
+  <p class="sub">媒体を選んでください</p>
+  <div class="cards">
+    <a class="card ouchi" href="/review">
+      <span class="ico">🏠</span>
+      <div class="t">おうちベース</div>
+      <div class="d">ブログ記事の自動生成・選定・承認・公開（WordPress）</div>
+    </a>
+    <a class="card threads" href="/threads">
+      <span class="ico">🧵</span>
+      <div class="t">Threads</div>
+      <div class="d">商品選定→投稿作成→承認→スケジュール公開（アフィリ）</div>
+    </a>
+  </div>
+  <div class="row">
+    <a class="mini" href="/ai-settings">🤖 AI設定（共通）</a>
+    <a class="mini" href="/blog/single">📝 単品生成</a>
+  </div>
+  <div class="health">
+    Gemini: <span class="{{ 'ok' if gemini_ready else 'ng' }}">{{ '接続' if gemini_ready else '未設定' }}</span>
+    ／ WordPress: <span class="{{ 'ok' if wp_ok else 'ng' }}">{{ wp_status }}</span>
+  </div>
+</div>
+</body>
+</html>

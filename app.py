@@ -159,6 +159,23 @@ def health():
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
+    """ホーム＝媒体ハブ（おうちベース / Threads を選択）。"""
+    if review.enabled() and not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    s = get_settings()
+    wp_ok, wp_msg = (False, "未設定")
+    if s.wordpress_ready:
+        wp_ok, wp_msg = wordpress.test_connection()
+    return templates.TemplateResponse("home.html", {
+        "request": request, "gemini_ready": s.gemini_ready,
+        "wp_ok": wp_ok, "wp_status": wp_msg})
+
+
+@app.get("/blog/single", response_class=HTMLResponse)
+def blog_single(request: Request):
+    """旧・単品記事生成フォーム（補助ツール）。"""
+    if review.enabled() and not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
     s = get_settings()
     wp_ok, wp_msg = (False, "未設定")
     if s.wordpress_ready:
@@ -752,6 +769,59 @@ def threads_reject(request: Request, draft_id: str = Form(...)):
         return RedirectResponse("/review/login", status_code=303)
     threads_pipeline.reject(draft_id)
     return RedirectResponse("/threads?saved=rej", status_code=303)
+
+
+@app.get("/threads/settings", response_class=HTMLResponse)
+def threads_settings_form(request: Request, saved: str = ""):
+    """Threads媒体の設定（アカウントのペルソナ/ジャンル/生成数・スケジュール）。"""
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    t = get_rules().get("threads", {}) or {}
+    acc = (t.get("accounts") or [{}])[0]
+    sch = t.get("schedule", {}) or {}
+    d = {
+        "enabled": bool(t.get("enabled", False)),
+        "name": acc.get("name", "検証アカウント"),
+        "persona": acc.get("persona", ""),
+        "genres": "\n".join(str(g) for g in (acc.get("genres") or [])),
+        "per_run": acc.get("per_run", 3),
+        "hours": ",".join(str(h) for h in (sch.get("hours") or [8, 12, 20])),
+        "pub_per_run": sch.get("per_run", 1),
+    }
+    return templates.TemplateResponse("threads_settings.html", {
+        "request": request, "d": d, "saved": saved, "can_save": overrides.enabled()})
+
+
+@app.post("/threads/settings")
+def threads_settings_save(
+    request: Request, enabled: str = Form(""), name: str = Form(""),
+    persona: str = Form(""), genres: str = Form(""), per_run: str = Form("3"),
+    hours: str = Form("8,12,20"), pub_per_run: str = Form("1"),
+):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+
+    def _ints(v, sep):
+        out = []
+        for x in re.split(sep, v):
+            x = x.strip()
+            if x.isdigit():
+                out.append(int(x))
+        return out
+
+    t = get_rules().get("threads", {}) or {}
+    acc = dict((t.get("accounts") or [{}])[0])
+    acc.update({"id": acc.get("id", "mmmtreees"), "name": name.strip() or "検証アカウント",
+                "persona": persona.strip(),
+                "genres": [g.strip() for g in genres.splitlines() if g.strip()],
+                "per_run": int(per_run) if per_run.isdigit() else 3})
+    ov = {"threads": {"enabled": enabled == "on", "accounts": [acc],
+                      "schedule": {"hours": _ints(hours, r"[,\s]+") or [8, 12, 20],
+                                   "per_run": int(pub_per_run) if pub_per_run.isdigit() else 1}}}
+    ok = overrides.update(ov)
+    return RedirectResponse("/threads/settings?saved=" + ("1" if ok else "fail"), status_code=303)
 
 
 @app.post("/crawl/request")
