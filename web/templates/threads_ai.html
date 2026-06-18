@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Threads AI設定｜運用ツール</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:40px; }
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:520px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:12.5px; font-weight:700;
+          color:#8a86a0; text-decoration:none; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .flash{ background:#e3f8ee; color:#149a5e; border-radius:12px; padding:11px 14px; font-weight:800; font-size:14px; margin:10px 0; }
+  .sec{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:16px; margin:14px 0; }
+  .sec h2{ font-size:15px; margin:0 0 4px; } .hint{ font-size:12px; color:#9a96ad; margin:4px 0 10px; }
+  label{ display:block; font-size:13px; font-weight:700; margin:12px 0 5px; }
+  select,textarea{ width:100%; padding:11px 12px; border:1.5px solid #ece9f1; border-radius:10px;
+    font-size:13px; font-family:ui-monospace,Menlo,monospace; outline:none; }
+  select{ font-family:inherit; font-size:15px; }
+  textarea{ resize:vertical; line-height:1.55; }
+  textarea:focus,select:focus{ border-color:var(--orange); }
+  .ph{ font-size:11px; color:#9a96ad; margin-top:5px; line-height:1.7; }
+  .ph code{ background:#f1eef9; padding:1px 5px; border-radius:5px; color:#6a5fb0; }
+  .btns{ display:flex; gap:10px; margin-top:14px; }
+  .btns button{ flex:1; border:none; border-radius:13px; padding:14px; font-size:15px; font-weight:800; color:#fff; }
+  .test{ background:linear-gradient(135deg,#7a6fb0,#9b8fd0); }
+  .save{ background:linear-gradient(135deg,var(--orange),#ff7e5f); }
+  .result{ background:#faf8fd; border:1.5px solid #e9e4f5; border-radius:12px; padding:12px; margin:12px 0; }
+  .result .cap{ background:#fff; border-radius:9px; padding:9px 11px; margin:6px 0; font-size:13.5px; line-height:1.6; }
+  .result .mus{ background:#fff7ef; border-radius:9px; padding:9px 11px; margin:6px 0; font-size:13.5px; }
+  .result .meta{ font-size:11.5px; color:#9a96ad; }
+  .err{ color:#e0433f; font-size:13px; }
+  .ro{ background:#fff3cd; color:#8a6d1a; border-radius:12px; padding:12px 14px; font-size:13px; margin:10px 0; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="seg">
+    <a href="/">🏠</a><a href="/threads">🧵 承認</a><a href="/threads/settings">⚙️ 設定</a><a href="/threads/ai" class="on">🤖 AI</a>
+  </div>
+</div>
+<div class="wrap">
+  {% if saved=='1' %}<div class="flash">✓ 保存しました（生成に最大1分で反映）</div>{% endif %}
+  {% if not can_save %}<div class="ro">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
+
+  {% if test %}
+  <div class="sec">
+    <h2>🧪 テスト生成結果</h2>
+    <div class="meta">モデル: <b>{{ test.model }}</b> ／ 商品: {{ test.product }}（固定）</div>
+    {% if test.error %}<div class="err">{{ test.error }}</div>{% endif %}
+    <div class="result">
+      <div class="meta">メイン投稿・5案</div>
+      {% for c in test.captions %}<div class="cap">{{ loop.index }}. {{ c }}</div>{% endfor %}
+      <div class="meta" style="margin-top:6px;">リプライ: {{ test.reply }}</div>
+      <div class="mus">💬 つぶやき: {{ test.musing }}</div>
+    </div>
+    <div class="hint">※この結果は保存されません。良ければ下で「保存」してください。</div>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/threads/ai">
+    <div class="sec">
+      <h2>🤖 AIモデル（Threads専用）</h2>
+      <p class="hint">おうちベースとは別に、Threadsだけのモデルを設定できます。現在: <b>{{ model }}</b></p>
+      <select name="gemini_model">
+        {% for mid, label in model_choices %}
+        <option value="{{ mid }}" {{ 'selected' if mid == model }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="sec">
+      <h2>📝 PR投稿プロンプト（編集可）</h2>
+      <textarea name="pr_prompt" rows="14">{{ pr_prompt }}</textarea>
+      <div class="ph">使える差し込み: <code>[[persona]]</code> <code>[[item_name]]</code> <code>[[price]]</code>
+        <code>[[review_avg]]</code> <code>[[review_count]]</code> <code>[[styles]]</code>
+        <code>[[n]]</code> <code>[[yakkiho]]</code>（空にすると既定に戻る）</div>
+    </div>
+
+    <div class="sec">
+      <h2>💬 つぶやきプロンプト（編集可）</h2>
+      <textarea name="musing_prompt" rows="10">{{ musing_prompt }}</textarea>
+      <div class="ph">使える差し込み: <code>[[persona]]</code> <code>[[niche]]</code>
+        <code>[[type_name]]</code> <code>[[type_ex]]</code> <code>[[opener]]</code>（空で既定）</div>
+    </div>
+
+    <div class="btns">
+      <button type="submit" class="test" formaction="/threads/ai/test">🧪 テスト生成</button>
+      {% if can_save %}<button type="submit" class="save">💾 保存</button>{% endif %}
+    </div>
+  </form>
+</div>
+</body>
+</html>
