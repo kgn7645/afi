@@ -159,16 +159,13 @@ def health():
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    """ホーム＝媒体ハブ（おうちベース / Threads を選択）。"""
+    """ホーム＝媒体ハブ（おうちベース / Threads を選択）。軽量＝WP実通信はしない。"""
     if review.enabled() and not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     s = get_settings()
-    wp_ok, wp_msg = (False, "未設定")
-    if s.wordpress_ready:
-        wp_ok, wp_msg = wordpress.test_connection()
     return templates.TemplateResponse("home.html", {
         "request": request, "gemini_ready": s.gemini_ready,
-        "wp_ok": wp_ok, "wp_status": wp_msg})
+        "wp_ok": s.wordpress_ready, "wp_status": "設定済み" if s.wordpress_ready else "未設定"})
 
 
 @app.get("/blog/single", response_class=HTMLResponse)
