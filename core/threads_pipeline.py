@@ -273,7 +273,7 @@ def approve(draft_id: str, images: list[str], caption: str, reply_text: str = ""
     d = next((x for x in ds if x["id"] == draft_id), None)
     if not d:
         return False
-    imgs = [u for u in (images or []) if u][:3]   # 最大3枚（カルーセル）
+    imgs = [u for u in (images or []) if u][:20]  # Threadsカルーセル上限20枚まで
     rules = (get_rules().get("threads", {}) or {})
     hours = (rules.get("schedule", {}) or {}).get("hours", [9, 13, 20])
     q = queue()
