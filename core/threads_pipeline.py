@@ -176,21 +176,88 @@ def _gemini_json(prompt: str, e: dict) -> dict:
 
 
 def _make_caption(persona: str, item: dict, e: dict) -> dict:
-    prompt = f"""あなたはThreadsで商品を紹介する日本語アフィリエイターです。
-人格・口調: {persona or "親しみやすく絵文字を適度に使う"}
+    prompt = f"""あなたはThreadsで伸びてる日本語の暮らし系アフィリエイターです。
+人格・口調: {persona or "親しみやすく絵文字を適度に。正直でコスパ目線"}
 
 # 商品
 - 商品名(楽天生データ): {item.get('itemName','')}
 - 価格: {item.get('itemPrice')}円 / レビュー: ★{item.get('reviewAverage')}（{item.get('reviewCount')}件）
 
+# 重要: 伸びてる投稿は「スペック説明」ではなく「感情で殴る一文」で始まる。
+1行目フックは次のどれかの型で（商品に合うものを選ぶ）:
+- ブランド/店にツッコミ: 「ニトリさん、あのさ、これで{item.get('itemPrice')}円は喧嘩売ってる」
+- 値段の驚き: 「ちょ、え、これ{item.get('itemPrice')}円でいいの…？」
+- 正直な告白: 「ごめん、正直バカにしてた…」「自慢じゃないけど…」
+- 発見・中間提案: 「〇〇と〇〇の、ちょうど真ん中見つけた」
+- お節介/警告: 「これ知らずに損してる人、まだいる…？」
+超口語(ちょ/え/まじ/〜じゃない？)＋絵文字。誇大・断定(最高/絶対/必ず)はNG。
+
 # 出力(JSONのみ・コードフェンス禁止)
 {{
   "clean_name": "宣伝文句を除いた簡潔な商品名(20字以内)",
-  "caption": "メイン投稿(1投稿目)の本文。1行目に思わず読みたくなるフック(絵文字可)。2〜4行で誰にどんな場面で役立つかを具体的に。誇大/断定(最高/絶対/必ず)禁止。URLは入れない。200字以内。改行で読みやすく。末尾は付けない(リンクと#PRは後で機械付与)。",
-  "reply": "リプライ(2投稿目)の軽い一言(20〜40字・絵文字可)。URLは入れない。例『気になる方はこちらから🛒』『使ってみたい人はチェック👇』。商品に合わせて自然に。"
+  "caption": "メイン投稿の本文。上の型で感情フックの1行目→2〜3行で『誰がどんな場面で嬉しいか』を口語で。URL無し・200字以内・改行で読みやすく。末尾不要(リンクと#PRは後付け)。",
+  "reply": "リプライの軽い一言(20〜40字・絵文字可)。URL無し。例『気になる人はこちらから🛒』『売り切れる前にどうぞ👇』。"
 }}
 """
     return _gemini_json(prompt, e)
+
+
+# つぶやきのネタ型（参考アカ分析より）
+_MUSING_TYPES = [
+    "あるある共感（日常の小さな困りごと・つい笑える瞬間）",
+    "正直なグチ・本音（でも嫌味にならない軽さ）",
+    "小さな発見・幸せ（最近知って良かった豆知識や出来事）",
+    "問いかけ（みんなはどう？と聞いてコメントを誘う）",
+    "ちょっとした失敗談（共感を呼ぶ自虐）",
+    "季節・天気・時事への軽い乗っかり",
+]
+
+
+def _make_musing(account: dict, e: dict) -> dict:
+    persona = account.get("persona", "")
+    niche = account.get("name", "暮らし")
+    theme = random.choice(_MUSING_TYPES)
+    prompt = f"""あなたはThreadsで伸びてる日本語の暮らし系の“中の人”です。
+人格・口調: {persona or "親しみやすく絵文字。正直で等身大"}
+アカウントの世界観: {niche}
+
+# タスク: 商品宣伝ではない「日常の共感つぶやき」を1つ作る。
+- ネタの型: {theme}
+- 伸びてる例の空気感: 「いつまでYouTube見とるんじゃあぁぁ！！」「ごめん、正直バカにしてた…」
+  「自慢じゃないけど離乳食は炊飯器に任せてた」のような、超口語＋感情＋等身大。
+- 商品名・リンク・宣伝・#PRは入れない。ハッシュタグ不要。
+- 1〜3行・絵文字OK・思わず「わかる」と言いたくなる一言に。
+
+# 出力(JSONのみ)
+{{"caption": "つぶやき本文(80字以内目安)"}}
+"""
+    return _gemini_json(prompt, e)
+
+
+def generate_musings(account: dict, count: int) -> int:
+    """日常つぶやきドラフトを生成（画像・リンク無し）。"""
+    e = _env()
+    if not e["GEMINI_API_KEY"]:
+        return 0
+    cur, made = drafts(), 0
+    for _ in range(count):
+        try:
+            m = _make_musing(account, e)
+        except Exception:  # noqa: BLE001
+            continue
+        cap = (m.get("caption") or "").strip()
+        if not cap:
+            continue
+        cur.append({
+            "id": f"{account['id']}::musing::{int(time.time()*1000)}::{made}",
+            "account": account["id"], "type": "musing",
+            "product": "💬 つぶやき", "caption": cap, "created": int(time.time()),
+        })
+        made += 1
+        time.sleep(0.3)
+    if made:
+        _save("_threads_drafts", cur[-200:])
+    return made
 
 
 # ---------- ドラフト生成 ----------
@@ -236,7 +303,7 @@ def generate_drafts(account: dict, count: int) -> int:
             continue
         cur.append({
             "id": f"{account['id']}::{code}",
-            "account": account["id"],
+            "account": account["id"], "type": "pr",
             "product": cap.get("clean_name") or it.get("itemName", "")[:30],
             "price": it.get("itemPrice"),
             "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
@@ -273,15 +340,19 @@ def approve(draft_id: str, images: list[str], caption: str, reply_text: str = ""
     d = next((x for x in ds if x["id"] == draft_id), None)
     if not d:
         return False
+    is_musing = d.get("type") == "musing"
     imgs = [u for u in (images or []) if u][:20]  # Threadsカルーセル上限20枚まで
     rules = (get_rules().get("threads", {}) or {})
     hours = (rules.get("schedule", {}) or {}).get("hours", [9, 13, 20])
     q = queue()
     ts = when or _next_slot(d["account"], q, hours)
-    q.append({"id": draft_id, "account": d["account"], "caption": caption.strip(),
-              "images": imgs, "reply": (reply_text or d.get("reply", "")).strip(),
-              "image": imgs[0] if imgs else "",  # 後方互換
-              "link": d.get("link", ""), "product": d.get("product", ""),
+    q.append({"id": draft_id, "account": d["account"], "type": d.get("type", "pr"),
+              "caption": caption.strip(),
+              "images": [] if is_musing else imgs,
+              "reply": "" if is_musing else (reply_text or d.get("reply", "")).strip(),
+              "image": "" if is_musing else (imgs[0] if imgs else ""),  # 後方互換
+              "link": "" if is_musing else d.get("link", ""),
+              "product": d.get("product", ""),
               "scheduled_at": ts, "status": "pending", "created": int(time.time())})
     _save("_threads_queue", q)
     _save("_threads_drafts", [x for x in ds if x["id"] != draft_id])
@@ -309,12 +380,16 @@ def publish_due(*, limit: int = 1) -> list[dict]:
         try:
             if uid is None:
                 uid = threads_client.me().get("id", "me")
-            caption = item["caption"]
-            if "#PR" not in caption:
-                caption += "\n\n#PR"
-            imgs = item.get("images") or ([item["image"]] if item.get("image") else [])
-            res = threads_client.post_set(caption, imgs, item.get("reply", ""),
-                                          item.get("link", ""), user_id=uid)
+            if item.get("type") == "musing":
+                # つぶやき＝テキストのみ（#PR・リンク無し）
+                res = {"main": threads_client.publish_text(item["caption"], user_id=uid)}
+            else:
+                caption = item["caption"]
+                if "#PR" not in caption:
+                    caption += "\n\n#PR"
+                imgs = item.get("images") or ([item["image"]] if item.get("image") else [])
+                res = threads_client.post_set(caption, imgs, item.get("reply", ""),
+                                              item.get("link", ""), user_id=uid)
             item["status"] = "published"
             item["permalink"] = (res.get("main") or {}).get("permalink")
             item["published_at"] = now

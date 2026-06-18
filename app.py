@@ -738,14 +738,18 @@ def threads_review(request: Request, saved: str = ""):
 
 
 @app.post("/threads/generate")
-def threads_generate(request: Request):
+def threads_generate(request: Request, kind: str = Form("both")):
+    """kind: pr=商品のみ / musing=つぶやきのみ / both=両方（既定）。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
     made = 0
     for acc in accounts:
         try:
-            made += threads_pipeline.generate_drafts(acc, int(acc.get("per_run", 3)))
+            if kind in ("pr", "both"):
+                made += threads_pipeline.generate_drafts(acc, int(acc.get("per_run", 3)))
+            if kind in ("musing", "both"):
+                made += threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
         except Exception:  # noqa: BLE001
             pass
     return RedirectResponse(f"/threads?saved=gen{made}", status_code=303)
@@ -757,7 +761,9 @@ def threads_approve(request: Request, draft_id: str = Form(...),
                     reply_text: str = Form("")):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    if not image_url:
+    d = next((x for x in threads_pipeline.drafts() if x["id"] == draft_id), None)
+    is_musing = bool(d and d.get("type") == "musing")
+    if not is_musing and not image_url:
         return RedirectResponse("/threads?saved=noimg", status_code=303)
     ok = threads_pipeline.approve(draft_id, image_url, caption, reply_text)
     return RedirectResponse("/threads?saved=" + ("ok" if ok else "fail"), status_code=303)
@@ -787,6 +793,7 @@ def threads_settings_form(request: Request, saved: str = ""):
         "persona": acc.get("persona", ""),
         "genres": "\n".join(str(g) for g in (acc.get("genres") or [])),
         "per_run": acc.get("per_run", 3),
+        "musing_per_run": acc.get("musing_per_run", 3),
         "hours": ",".join(str(h) for h in (sch.get("hours") or [8, 12, 20])),
         "pub_per_run": sch.get("per_run", 1),
     }
@@ -798,7 +805,7 @@ def threads_settings_form(request: Request, saved: str = ""):
 def threads_settings_save(
     request: Request, enabled: str = Form(""), name: str = Form(""),
     persona: str = Form(""), genres: str = Form(""), per_run: str = Form("3"),
-    hours: str = Form("8,12,20"), pub_per_run: str = Form("1"),
+    musing_per_run: str = Form("3"), hours: str = Form("8,12,20"), pub_per_run: str = Form("1"),
 ):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
@@ -816,7 +823,8 @@ def threads_settings_save(
     acc.update({"id": acc.get("id", "mmmtreees"), "name": name.strip() or "検証アカウント",
                 "persona": persona.strip(),
                 "genres": [g.strip() for g in genres.splitlines() if g.strip()],
-                "per_run": int(per_run) if per_run.isdigit() else 3})
+                "per_run": int(per_run) if per_run.isdigit() else 3,
+                "musing_per_run": int(musing_per_run) if musing_per_run.isdigit() else 3})
     ov = {"threads": {"enabled": enabled == "on", "accounts": [acc],
                       "schedule": {"hours": _ints(hours, r"[,\s]+") or [8, 12, 20],
                                    "per_run": int(pub_per_run) if pub_per_run.isdigit() else 1}}}

@@ -20,8 +20,9 @@
   .flash.warn{ background:#ffe7e7; color:#e0433f; }
   .bar{ display:flex; gap:8px; align-items:center; margin:10px 0; }
   .bar h2{ font-size:15px; margin:0; flex:1; }
-  .genbtn{ border:none; border-radius:10px; padding:10px 14px; font-size:13px; font-weight:800; color:#fff;
+  .genbtn{ border:none; border-radius:10px; padding:10px 12px; font-size:13px; font-weight:800; color:#fff;
            background:linear-gradient(135deg,var(--orange),#ff7e5f); }
+  .genbtn.musing{ background:linear-gradient(135deg,#7a6fb0,#9b8fd0); }
   .card{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:14px; margin:14px 0; }
   .head{ display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
   .pname{ font-size:14px; font-weight:800; }
@@ -69,8 +70,11 @@
   {% if not can_save %}<div class="flash warn">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
 
   <div class="bar">
-    <h2>🧵 Threads 承認待ち（{{ drafts|length }}）</h2>
-    <form method="post" action="/threads/generate"><button class="genbtn" type="submit">＋ ドラフト生成</button></form>
+    <h2>🧵 承認待ち（{{ drafts|length }}）</h2>
+    <form method="post" action="/threads/generate" style="display:flex;gap:6px;">
+      <button class="genbtn" type="submit" name="kind" value="pr">＋商品</button>
+      <button class="genbtn musing" type="submit" name="kind" value="musing">＋つぶやき</button>
+    </form>
   </div>
 
   {% if not drafts %}
@@ -78,11 +82,26 @@
   {% endif %}
 
   {% for d in drafts %}
+  {% if d.type == 'musing' %}
+  <div class="card">
+    <form method="post" action="/threads/approve">
+      <input type="hidden" name="draft_id" value="{{ d.id }}">
+      <div class="head"><span class="pname">💬 つぶやき</span><span class="meta">日常・共感</span></div>
+      <div class="lbl">本文（編集可・画像/リンク無し）</div>
+      <textarea name="caption" rows="3">{{ d.caption }}</textarea>
+      <div class="acts"><button class="approve" type="submit">✓ 承認してキューへ</button></div>
+    </form>
+    <form method="post" action="/threads/reject" style="margin-top:8px;">
+      <input type="hidden" name="draft_id" value="{{ d.id }}">
+      <button class="reject" type="submit">却下</button>
+    </form>
+  </div>
+  {% else %}
   <div class="card">
     <form method="post" action="/threads/approve" onsubmit="return chk(this)">
       <input type="hidden" name="draft_id" value="{{ d.id }}">
       <div class="head">
-        <span class="pname">{{ d.product }}</span>
+        <span class="pname">🛒 {{ d.product }}</span>
         <span class="meta">¥{{ d.price }} ★{{ d.review.avg }}（{{ d.review.count }}）</span>
       </div>
 
@@ -111,6 +130,7 @@
       <button class="reject" type="submit">却下</button>
     </form>
   </div>
+  {% endif %}
   {% endfor %}
 
   <div class="bar" style="margin-top:22px;"><h2>📅 公開キュー（{{ queued|length }}）</h2></div>
