@@ -194,10 +194,16 @@ function openCrop(el){
   var label = el.closest('label');
   cropInput = label.querySelector('input');
   var im = document.getElementById('cropImg');
-  im.src = cropInput.value;
+  if(cropper){ cropper.destroy(); cropper=null; }
   document.getElementById('cropModal').style.display='flex';
-  if(cropper) cropper.destroy();
-  cropper = new Cropper(im, {viewMode:1, autoCropArea:0.85, background:false});
+  im.onload = function(){
+    if(cropper){ cropper.destroy(); }
+    cropper = new Cropper(im, {viewMode:1, autoCropArea:0.85, background:false,
+      checkCrossOrigin:false, checkOrientation:false, zoomable:false});
+  };
+  // キャッシュ事故防止＋onload確実発火のためタイムスタンプ付与
+  var u = cropInput.value;
+  im.src = u + (u.indexOf('?')>=0 ? '&' : '?') + '_c=' + Date.now();
 }
 function closeCrop(){
   if(cropper){ cropper.destroy(); cropper=null; }
