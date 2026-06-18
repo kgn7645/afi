@@ -18,8 +18,25 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
 
-from . import overrides, threads_client, wordpress
+from . import image_pick, overrides, threads_client, wordpress
 from .config import get_rules, get_settings
+
+
+def _hosted_trimmed(urls: list[str]) -> list[str]:
+    """選択画像を白ふちトリムしてWPメディアに上げ公開URL化（失敗は原URLで温存）。"""
+    out = []
+    for u in (urls or [])[:20]:
+        try:
+            png = image_pick.trim_white_bytes(u)
+            if png:
+                fn = f"th_{int(time.time()*1000)}.png"
+                res = wordpress.upload_image_bytes(png, filename=fn, content_type="image/png")
+                out.append(res.get("source_url") or u)
+            else:
+                out.append(u)
+        except Exception:  # noqa: BLE001
+            out.append(u)
+    return out
 
 _RAKUTEN = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
 _GEMINI = ("https://generativelanguage.googleapis.com/v1beta/"
@@ -288,15 +305,19 @@ def generate_drafts(account: dict, count: int) -> int:
         real = api_images(it)
         if not real:
             continue
-        clean = ai_clean_image(real[0], e)   # AIクリーン商品画像（公開URL）を先頭候補に
-        gal = gallery_images(it)             # 商品ページのギャラリー（文字入り含む）
-        # 候補＝AIクリーン＋API実画像＋ギャラリー（重複除去・最大12枚）
-        imgs, seen_u = [], set()
-        for u in ([clean] if clean else []) + real + gal:
+        gal = gallery_images(it)             # 商品ページのギャラリー
+        # 候補＝API実画像＋ギャラリー（重複除去）→ AI不使用で文字バナー除外＋きれい順
+        dedup, seen_u = [], set()
+        for u in real + gal:
             if u and u.split("?")[0] not in seen_u:
                 seen_u.add(u.split("?")[0])
-                imgs.append(u)
-        imgs = imgs[:12]
+                dedup.append(u)
+        try:
+            imgs = image_pick.rank_urls(dedup, limit=10)
+        except Exception:  # noqa: BLE001
+            imgs = dedup[:10]
+        if not imgs:
+            continue
         try:
             cap = _make_caption(account.get("persona", ""), it, e)
         except Exception:  # noqa: BLE001
@@ -388,6 +409,7 @@ def publish_due(*, limit: int = 1) -> list[dict]:
                 if "#PR" not in caption:
                     caption += "\n\n#PR"
                 imgs = item.get("images") or ([item["image"]] if item.get("image") else [])
+                imgs = _hosted_trimmed(imgs)   # 公開直前に白ふちトリム＋ホスティング
                 res = threads_client.post_set(caption, imgs, item.get("reply", ""),
                                               item.get("link", ""), user_id=uid)
             item["status"] = "published"

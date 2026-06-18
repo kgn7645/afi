@@ -63,8 +63,9 @@
 
   <div class="sec">
     <h2>📅 公開スケジュール</h2>
-    <p class="hint">承認した投稿を、人間らしい時間帯に小出しで公開します（分はランダム）。</p>
-    <label>公開する時間帯（カンマ区切り・24h）</label>
+    <p class="hint">承認した投稿を、ここで決めた時間帯に小出しで公開します（分はランダム）。
+      <b>枠の数＝1日の公開数</b>。例: 「8,12,20」で1日3投稿、「8,11,13,16,19,21」で1日6投稿。</p>
+    <label>公開する時間帯（カンマ区切り・24h）＝1日の投稿数</label>
     <input type="text" name="hours" value="{{ d.hours }}" placeholder="8,12,20">
     <label>1回の公開cronで出す最大数</label>
     <input type="number" name="pub_per_run" min="1" value="{{ d.pub_per_run }}">
