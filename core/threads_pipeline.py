@@ -22,6 +22,35 @@ from . import image_pick, overrides, threads_client, wordpress
 from .config import get_rules, get_settings
 
 
+def crop_image(draft_id: str, image_url: str, x: float, y: float, w: float, h: float) -> str | None:
+    """画像を指定領域(ピクセル)でトリミング→WPに上げ公開URL化→ドラフトの該当画像を差し替え。"""
+    import io
+    try:
+        img = image_pick._fetch(image_url, timeout=20)
+        if img is None:
+            return None
+        x, y, w, h = int(x), int(y), int(w), int(h)
+        box = (max(0, x), max(0, y), min(img.width, x + w), min(img.height, y + h))
+        if box[2] - box[0] < 10 or box[3] - box[1] < 10:
+            return None
+        buf = io.BytesIO()
+        img.crop(box).save(buf, format="PNG")
+        res = wordpress.upload_image_bytes(buf.getvalue(),
+                                           filename=f"thcrop_{int(time.time()*1000)}.png",
+                                           content_type="image/png")
+        new = res.get("source_url")
+        if not new:
+            return None
+        ds = drafts()
+        for d in ds:
+            if d.get("id") == draft_id and image_url in (d.get("images") or []):
+                d["images"] = [new if u == image_url else u for u in d["images"]]
+        _save("_threads_drafts", ds)
+        return new
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _hosted_trimmed(urls: list[str]) -> list[str]:
     """選択画像を白ふちトリムしてWPメディアに上げ公開URL化（失敗は原URLで温存）。"""
     out = []
@@ -340,6 +369,100 @@ def generate_musings(account: dict, count: int) -> int:
 
 
 # ---------- ドラフト生成 ----------
+def _pr_draft_from_item(account: dict, it: dict, e: dict) -> dict | None:
+    """楽天itemから PRドラフト(画像ランク＋5案キャプション) を組み立てる。"""
+    code = it.get("itemCode", "")
+    real = api_images(it)
+    if not real:
+        return None
+    gal = gallery_images(it)
+    dedup, seen_u = [], set()
+    for u in real + gal:
+        if u and u.split("?")[0] not in seen_u:
+            seen_u.add(u.split("?")[0])
+            dedup.append(u)
+    try:
+        imgs = image_pick.rank_urls(dedup, limit=10)
+    except Exception:  # noqa: BLE001
+        imgs = dedup[:10]
+    if not imgs:
+        return None
+    try:
+        cap = _make_captions(account.get("persona", ""), it, e, n=5)
+    except Exception:  # noqa: BLE001
+        return None
+    opts = [o.strip() for o in (cap.get("captions") or []) if o.strip()]
+    if not opts:
+        return None
+    return {
+        "id": f"{account['id']}::{code}",
+        "account": account["id"], "type": "pr",
+        "product": cap.get("clean_name") or it.get("itemName", "")[:30],
+        "price": it.get("itemPrice"),
+        "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
+        "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
+        "caption": opts[0], "caption_options": opts,
+        "reply": cap.get("reply", "気になる方はこちらから🛒").strip(),
+        "images": imgs, "created": int(time.time()),
+    }
+
+
+def _rakuten_by_code(item_code: str, e: dict) -> dict | None:
+    p = {"applicationId": e["RAKUTEN_APP_ID"], "accessKey": e["RAKUTEN_ACCESS_KEY"],
+         "affiliateId": e.get("RAKUTEN_AFFILIATE_ID", ""), "itemCode": item_code,
+         "hits": 1, "format": "json"}
+    try:
+        with urllib.request.urlopen(f"{_RAKUTEN}?{urllib.parse.urlencode(p)}", timeout=30) as r:
+            items = [w.get("Item", w) for w in json.load(r).get("Items", [])]
+        return items[0] if items else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _page_item_id(url: str) -> str:
+    """楽天商品ページから数値itemIdを抽出（EUC-JP/UTF-8両対応）。"""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        raw = urllib.request.urlopen(req, timeout=20).read()
+    except Exception:  # noqa: BLE001
+        return ""
+    for enc in ("euc-jp", "utf-8", "shift_jis"):
+        try:
+            h = raw.decode(enc)
+        except Exception:  # noqa: BLE001
+            continue
+        for pat in (r'"itemId"\s*:\s*"?(\d{3,})', r'item_id["\'\s:=]+(\d{3,})'):
+            mm = re.search(pat, h)
+            if mm:
+                return mm.group(1)
+    return ""
+
+
+def add_manual_url(account: dict, url: str) -> tuple[bool, str]:
+    """楽天の商品URLを貼ると、AIで記事化してPRドラフトに追加。返り (ok, message)。"""
+    e = _env()
+    m = re.search(r"item\.rakuten\.co\.jp/([^/?#]+)/", url)
+    if not m:
+        return False, "楽天の商品URL(item.rakuten.co.jp/店舗/...)を貼ってください"
+    shop = m.group(1)
+    item_id = _page_item_id(url)
+    if not item_id:
+        return False, "商品ページから商品IDを取得できませんでした（URLを確認）"
+    code = f"{shop}:{item_id}"
+    if any(d.get("id") == f"{account['id']}::{code}" for d in drafts() + queue()):
+        return False, "この商品は既にリストにあります"
+    it = _rakuten_by_code(code, e)
+    if not it:
+        return False, "商品が取得できませんでした（在庫切れ/販売終了の可能性）"
+    d = _pr_draft_from_item(account, it, e)
+    if not d:
+        return False, "記事化に失敗しました"
+    cur = drafts()
+    cur.append(d)
+    _save("_threads_drafts", cur[-200:])
+    return True, f"追加: {d['product']}"
+
+
 def generate_drafts(account: dict, count: int) -> int:
     e = _env()
     if not (e["RAKUTEN_APP_ID"] and e["GEMINI_API_KEY"]):
@@ -372,42 +495,10 @@ def generate_drafts(account: dict, count: int) -> int:
         if not code or code in seen_codes:
             continue
         seen_codes.add(code)
-        real = api_images(it)
-        if not real:
+        d = _pr_draft_from_item(account, it, e)
+        if not d:
             continue
-        gal = gallery_images(it)             # 商品ページのギャラリー
-        # 候補＝API実画像＋ギャラリー（重複除去）→ AI不使用で文字バナー除外＋きれい順
-        dedup, seen_u = [], set()
-        for u in real + gal:
-            if u and u.split("?")[0] not in seen_u:
-                seen_u.add(u.split("?")[0])
-                dedup.append(u)
-        try:
-            imgs = image_pick.rank_urls(dedup, limit=10)
-        except Exception:  # noqa: BLE001
-            imgs = dedup[:10]
-        if not imgs:
-            continue
-        try:
-            cap = _make_captions(account.get("persona", ""), it, e, n=5)
-        except Exception:  # noqa: BLE001
-            continue
-        opts = cap.get("captions") or []
-        if not opts:
-            continue
-        cur.append({
-            "id": f"{account['id']}::{code}",
-            "account": account["id"], "type": "pr",
-            "product": cap.get("clean_name") or it.get("itemName", "")[:30],
-            "price": it.get("itemPrice"),
-            "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
-            "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
-            "caption": opts[0].strip(),
-            "caption_options": [o.strip() for o in opts],
-            "reply": cap.get("reply", "気になる方はこちらから🛒").strip(),
-            "images": imgs,
-            "created": int(time.time()),
-        })
+        cur.append(d)
         made += 1
     if made:
         _save("_threads_drafts", cur[-200:])
