@@ -78,7 +78,7 @@
 <body>
 <div class="nav">
   <div class="seg">
-    <a href="/">🏠</a><a href="/threads" class="on">🧵 承認</a><a href="/threads/settings">⚙️ 設定</a><a href="/threads/ai">🤖 AI</a>
+    <a href="/">🏠</a><a href="/threads/products">🛍 商品選定</a><a href="/threads" class="on">🧵 投稿</a><a href="/threads/settings">⚙️ 設定</a><a href="/threads/ai">🤖 AI</a>
   </div>
 </div>
 <div class="wrap">
@@ -92,16 +92,9 @@
   {% if not can_save %}<div class="flash warn">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
 
   <div class="bar">
-    <h2>🧵 承認待ち（{{ drafts|length }}）</h2>
-    <form method="post" action="/threads/generate" style="display:flex;gap:6px;">
-      <button class="genbtn" type="submit" name="kind" value="pr">＋商品</button>
-      <button class="genbtn musing" type="submit" name="kind" value="musing">＋つぶやき</button>
-    </form>
+    <h2>🧵 投稿（承認待ち {{ drafts|length }}）</h2>
+    <a href="/threads/products" class="genbtn" style="text-decoration:none;line-height:2.6;">🛍 商品選定へ</a>
   </div>
-  <form method="post" action="/threads/manual" class="manual">
-    <input type="url" name="url" placeholder="楽天の商品URLを貼って手動追加（AIで記事化）" required>
-    <button type="submit">＋追加</button>
-  </form>
 
   {% if not drafts %}
     <div class="card empty">承認待ちのドラフトはありません。「＋ドラフト生成」で商品を取り込みます。</div>
@@ -130,6 +123,7 @@
         <span class="pname">🛒 {{ d.product }}</span>
         <span class="meta">¥{{ d.price }} ★{{ d.review.avg }}（{{ d.review.count }}）</span>
       </div>
+      {% if d.label %}<div class="url" style="color:#6a5fb0;background:#f3f0fb;">🏷 ラベル「{{ d.label }}」を紹介文に反映済み</div>{% endif %}
 
       <div class="step">① メイン投稿（画像＋文章）</div>
       <div class="lbl">画像を選択 <span class="hint2">複数選択可・カルーセル</span> <b class="cnt">0枚</b></div>
