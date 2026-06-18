@@ -10,7 +10,7 @@ import json
 import re
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -764,6 +764,27 @@ def threads_manual(request: Request, url: str = Form("")):
     acc = accounts[0] if accounts else {"id": "mmmtreees"}
     ok, _msg = threads_pipeline.add_manual_url(acc, url.strip())
     return RedirectResponse("/threads?saved=" + ("man" if ok else "manfail"), status_code=303)
+
+
+@app.get("/threads/img-proxy")
+def threads_img_proxy(request: Request, url: str):
+    """画像を同一オリジンで配信（cropper.jsのCORS回避用）。楽天/自社ドメインのみ許可。"""
+    if not _authed(request):
+        return Response(status_code=401)
+    import urllib.parse
+    import urllib.request
+    host = urllib.parse.urlparse(url).netloc
+    if not (host.endswith("rakuten.co.jp") or host.endswith("ouchibase.com")):
+        return Response(status_code=403)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = r.read()
+            ctype = r.headers.get("Content-Type", "image/jpeg")
+        return Response(content=data, media_type=ctype,
+                        headers={"Cache-Control": "public, max-age=600"})
+    except Exception:  # noqa: BLE001
+        return Response(status_code=502)
 
 
 @app.post("/threads/crop")

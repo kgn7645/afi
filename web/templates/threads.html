@@ -199,11 +199,10 @@ function openCrop(el){
   im.onload = function(){
     if(cropper){ cropper.destroy(); }
     cropper = new Cropper(im, {viewMode:1, autoCropArea:0.85, background:false,
-      checkCrossOrigin:false, checkOrientation:false, zoomable:false});
+      checkOrientation:false, zoomable:false});
   };
-  // キャッシュ事故防止＋onload確実発火のためタイムスタンプ付与
-  var u = cropInput.value;
-  im.src = u + (u.indexOf('?')>=0 ? '&' : '?') + '_c=' + Date.now();
+  // 同一オリジンのプロキシ経由で読み込み（楽天画像のCORS回避）
+  im.src = '/threads/img-proxy?url=' + encodeURIComponent(cropInput.value);
 }
 function closeCrop(){
   if(cropper){ cropper.destroy(); cropper=null; }
