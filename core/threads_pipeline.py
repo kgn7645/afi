@@ -18,12 +18,13 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
 
-from . import overrides, threads_client
+from . import overrides, threads_client, wordpress
 from .config import get_rules, get_settings
 
 _RAKUTEN = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
 _GEMINI = ("https://generativelanguage.googleapis.com/v1beta/"
            "models/{m}:generateContent?key={k}")
+_GEMINI_IMG = "gemini-2.5-flash-image"   # 合成画像→クリーン商品画像の生成（nano-banana）
 _NG = ["名入れ", "名前入り", "オーダー", "ギフト", "プレゼント", "記念", "中古", "訳あり",
        "医薬品", "薬", "育毛", "増毛", "サプリ", "化粧水", "美容液"]  # 薬機法リスクも除外
 
@@ -73,37 +74,60 @@ def _env() -> dict:
             "GEMINI_MODEL": s.gemini_model}
 
 
-# ---------- 画像候補（商品ページから複数取得） ----------
-_IMG_RE = re.compile(r"https://(?:thumbnail\.)?image\.rakuten\.co\.jp/[^\s\"'\\<>]+?\.(?:jpg|jpeg|png)",
-                     re.IGNORECASE)
-
-
-def image_candidates(item: dict, *, limit: int = 12) -> list[str]:
-    """API画像＋商品ページのギャラリー画像を集めて候補URL配列に（文字入りも含む）。"""
-    cands: list[str] = []
+# ---------- 画像候補 ----------
+def api_images(item: dict) -> list[str]:
+    """商品自身の画像（楽天APIのmediumImageUrls）を大きめURLで返す。"""
+    out = []
     for img in item.get("mediumImageUrls", []):
         u = (img.get("imageUrl") if isinstance(img, dict) else img) or ""
         if u:
-            cands.append(u.split("?_ex=")[0] + "?_ex=500x500")
+            out.append(u.split("?_ex=")[0] + "?_ex=600x600")
+    seen, dedup = set(), []
+    for u in out:
+        k = u.split("?")[0]
+        if k not in seen:
+            seen.add(k)
+            dedup.append(u)
+    return dedup
+
+
+def ai_clean_image(src_url: str, e: dict) -> str | None:
+    """合成画像→商品単体のクリーン画像を生成し、WPメディアに上げて公開URLを返す。
+
+    Threads投稿は公開URL必須のため WP(ouchibase.com) メディアにホスティングする。失敗時 None。
+    """
     try:
-        req = urllib.request.Request(item.get("itemUrl", ""),
-                                     headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=20) as r:
-            html = r.read().decode("utf-8", "ignore")
-        for u in _IMG_RE.findall(html):
-            base = u.split("?")[0]
-            if "/cabinet/" in base or "/" + str(item.get("shopCode", "x")) + "/" in base:
-                cands.append(base)
+        import base64
+        req = urllib.request.Request(src_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=25) as r:
+            src_b64 = base64.b64encode(r.read()).decode()
+        prompt = (
+            "From this product listing image, isolate ONLY the single main product (one unit, "
+            "primary color). Remove ALL text, badges, price labels, watermarks, banners and other "
+            "color variants. Place that product centered on a clean minimal soft-gradient studio "
+            "background with gentle shadow, photorealistic high-end product photo. Keep its exact "
+            "shape, proportions, color and any display/screen accurate. Square composition.")
+        body = {"contents": [{"parts": [
+            {"inline_data": {"mime_type": "image/jpeg", "data": src_b64}},
+            {"text": prompt}]}]}
+        rq = urllib.request.Request(_GEMINI.format(m=_GEMINI_IMG, k=e["GEMINI_API_KEY"]),
+                                    data=json.dumps(body).encode(),
+                                    headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(rq, timeout=120) as r:
+            d = json.load(r)
+        png = None
+        for p in d["candidates"][0]["content"]["parts"]:
+            idata = p.get("inline_data") or p.get("inlineData")
+            if idata and idata.get("data"):
+                png = base64.b64decode(idata["data"])
+                break
+        if not png:
+            return None
+        fn = f"th_{int(time.time())}_{random.randint(100,999)}.png"
+        res = wordpress.upload_image_bytes(png, filename=fn, content_type="image/png")
+        return res.get("source_url") or None
     except Exception:  # noqa: BLE001
-        pass
-    # 正規化＆重複除去（拡張子前のサイズ指定差を吸収）
-    seen, out = set(), []
-    for u in cands:
-        key = u.split("?")[0]
-        if key not in seen:
-            seen.add(key)
-            out.append(u)
-    return out[:limit]
+        return None
 
 
 # ---------- キャプション生成 ----------
@@ -165,9 +189,11 @@ def generate_drafts(account: dict, count: int) -> int:
         if not code or code in seen_codes:
             continue
         seen_codes.add(code)
-        imgs = image_candidates(it)
-        if not imgs:
+        real = api_images(it)
+        if not real:
             continue
+        clean = ai_clean_image(real[0], e)   # AIクリーン商品画像（公開URL）を先頭候補に
+        imgs = ([clean] if clean else []) + real
         try:
             cap = _make_caption(account.get("persona", ""), it, e)
         except Exception:  # noqa: BLE001
