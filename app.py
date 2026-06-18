@@ -755,6 +755,26 @@ def threads_generate(request: Request, kind: str = Form("both")):
     return RedirectResponse(f"/threads?saved=gen{made}", status_code=303)
 
 
+@app.post("/threads/manual")
+def threads_manual(request: Request, url: str = Form("")):
+    """楽天の商品URLを貼ると、AIで記事化してPRドラフトに追加。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
+    acc = accounts[0] if accounts else {"id": "mmmtreees"}
+    ok, _msg = threads_pipeline.add_manual_url(acc, url.strip())
+    return RedirectResponse("/threads?saved=" + ("man" if ok else "manfail"), status_code=303)
+
+
+@app.post("/threads/crop")
+def threads_crop(request: Request, draft_id: str = Form(...), image_url: str = Form(...),
+                 x: float = Form(0), y: float = Form(0), w: float = Form(0), h: float = Form(0)):
+    if not _authed(request):
+        return JSONResponse({"ok": False}, status_code=401)
+    new = threads_pipeline.crop_image(draft_id, image_url, x, y, w, h)
+    return JSONResponse({"ok": bool(new), "url": new})
+
+
 @app.post("/threads/approve")
 def threads_approve(request: Request, draft_id: str = Form(...),
                     image_url: list[str] = Form([]), caption: str = Form(""),

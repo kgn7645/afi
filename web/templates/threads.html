@@ -58,7 +58,22 @@
   .qrow img{ width:46px; height:46px; object-fit:contain; border-radius:8px; background:#f4f1f8; }
   .qwhen{ font-weight:800; color:var(--orange); white-space:nowrap; }
   .empty{ color:#9a96ad; font-size:13px; padding:18px; text-align:center; }
+  .manual{ display:flex; gap:6px; margin:8px 0 4px; }
+  .manual input{ flex:1; padding:10px 12px; border:1.5px solid #ece9f1; border-radius:10px; font-size:13px; }
+  .manual button{ border:none; border-radius:10px; padding:0 14px; font-weight:800; font-size:13px; color:#fff;
+                  background:linear-gradient(135deg,#4a8fe0,#6aa9f0); }
+  .imgs .crop{ position:absolute; top:3px; right:3px; background:rgba(255,255,255,.92); border-radius:7px;
+               padding:1px 5px; font-size:13px; z-index:3; line-height:1.4; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+  #cropModal{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.88); z-index:99;
+              align-items:center; justify-content:center; flex-direction:column; padding:16px; }
+  #cropImg{ max-width:92vw; max-height:70vh; display:block; }
+  #cropModal .mbtns{ display:flex; gap:10px; margin-top:14px; }
+  #cropModal .mbtns button{ border:none; border-radius:12px; padding:13px 24px; font-size:15px; font-weight:800; }
+  #cropApply{ color:#fff; background:linear-gradient(135deg,var(--green),#13b06b); }
+  #cropCancel{ background:#fff; color:#555; }
 </style>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 </head>
 <body>
 <div class="nav">
@@ -69,6 +84,8 @@
 <div class="wrap">
   {% if saved=='ok' %}<div class="flash">✓ 承認しました（公開キューに追加）</div>{% endif %}
   {% if saved=='noimg' %}<div class="flash warn">画像を1枚以上選んでください</div>{% endif %}
+  {% if saved=='man' %}<div class="flash">✓ URLから商品を追加しました（下に表示）</div>{% endif %}
+  {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天の商品URLか確認／重複の可能性）</div>{% endif %}
   {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
   {% if saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">処理に失敗しました</div>{% endif %}
@@ -81,6 +98,10 @@
       <button class="genbtn musing" type="submit" name="kind" value="musing">＋つぶやき</button>
     </form>
   </div>
+  <form method="post" action="/threads/manual" class="manual">
+    <input type="url" name="url" placeholder="楽天の商品URLを貼って手動追加（AIで記事化）" required>
+    <button type="submit">＋追加</button>
+  </form>
 
   {% if not drafts %}
     <div class="card empty">承認待ちのドラフトはありません。「＋ドラフト生成」で商品を取り込みます。</div>
@@ -115,7 +136,8 @@
       <div class="imgs">
         {% for u in d.images %}
         <label><input type="checkbox" name="image_url" value="{{ u }}" {{ 'checked' if loop.first }} onchange="lim(this)">
-          <img src="{{ u }}" loading="lazy" alt=""></label>
+          <img src="{{ u }}" loading="lazy" alt="">
+          <span class="crop" onclick="event.preventDefault();event.stopPropagation();openCrop(this)">✂️</span></label>
         {% endfor %}
       </div>
       {% if d.caption_options and d.caption_options|length > 1 %}
@@ -159,7 +181,48 @@
     {% endfor %}
   </div>
 </div>
+<div id="cropModal">
+  <div class="box"><img id="cropImg" src="" alt=""></div>
+  <div class="mbtns">
+    <button type="button" id="cropApply" onclick="applyCrop()">適用</button>
+    <button type="button" id="cropCancel" onclick="closeCrop()">キャンセル</button>
+  </div>
+</div>
 <script>
+var cropper=null, cropInput=null;
+function openCrop(el){
+  var label = el.closest('label');
+  cropInput = label.querySelector('input');
+  var im = document.getElementById('cropImg');
+  im.src = cropInput.value;
+  document.getElementById('cropModal').style.display='flex';
+  if(cropper) cropper.destroy();
+  cropper = new Cropper(im, {viewMode:1, autoCropArea:0.85, background:false});
+}
+function closeCrop(){
+  if(cropper){ cropper.destroy(); cropper=null; }
+  document.getElementById('cropModal').style.display='none';
+}
+async function applyCrop(){
+  if(!cropper || !cropInput){ closeCrop(); return; }
+  var d = cropper.getData(true);
+  var form = cropInput.closest('form');
+  var did = form.querySelector('[name=draft_id]').value;
+  var btn = document.getElementById('cropApply'); btn.textContent='処理中…'; btn.disabled=true;
+  try{
+    var body = new URLSearchParams({draft_id:did, image_url:cropInput.value,
+      x:d.x, y:d.y, w:d.width, h:d.height});
+    var r = await fetch('/threads/crop', {method:'POST', body:body});
+    var j = await r.json();
+    if(j.ok && j.url){
+      cropInput.value = j.url;
+      var im2 = cropInput.parentElement.querySelector('img'); if(im2) im2.src = j.url + '?t=' + Date.now();
+      cropInput.checked = true; updateCnt(form);
+    } else { alert('トリミングに失敗しました'); }
+  }catch(e){ alert('通信エラー'); }
+  btn.textContent='適用'; btn.disabled=false;
+  closeCrop();
+}
 function updateCnt(form){
   var n = form.querySelectorAll('.imgs input:checked').length;
   var c = form.querySelector('.cnt'); if(c) c.textContent = n+'枚';
