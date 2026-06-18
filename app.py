@@ -752,18 +752,32 @@ def threads_generate(request: Request, kind: str = Form("both")):
                 made += threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
         except Exception:  # noqa: BLE001
             pass
-    return RedirectResponse(f"/threads?saved=gen{made}", status_code=303)
+    return RedirectResponse(f"/threads/products?saved=gen{made}", status_code=303)
+
+
+@app.get("/threads/products", response_class=HTMLResponse)
+def threads_products(request: Request, saved: str = ""):
+    """商品選定タブ：URL＋ラベルで手動追加・一括生成。"""
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    ds = threads_pipeline.drafts()
+    return templates.TemplateResponse("threads_products.html", {
+        "request": request, "saved": saved, "can_save": overrides.enabled(),
+        "pending": len([d for d in ds if d.get("type") == "pr"]),
+        "musings": len([d for d in ds if d.get("type") == "musing"])})
 
 
 @app.post("/threads/manual")
-def threads_manual(request: Request, url: str = Form("")):
-    """楽天の商品URLを貼ると、AIで記事化してPRドラフトに追加。"""
+def threads_manual(request: Request, url: str = Form(""), label: str = Form("")):
+    """楽天の商品URL（＋ラベル）を貼ると、AIで記事化してPRドラフトに追加。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
     acc = accounts[0] if accounts else {"id": "mmmtreees"}
-    ok, _msg = threads_pipeline.add_manual_url(acc, url.strip())
-    return RedirectResponse("/threads?saved=" + ("man" if ok else "manfail"), status_code=303)
+    ok, _msg = threads_pipeline.add_manual_url(acc, url.strip(), label.strip())
+    return RedirectResponse("/threads/products?saved=" + ("man" if ok else "manfail"), status_code=303)
 
 
 @app.get("/threads/img-proxy")

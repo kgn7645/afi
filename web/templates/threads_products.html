@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>商品選定｜Threads</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:40px; }
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:540px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:12px; font-weight:700;
+          color:#8a86a0; text-decoration:none; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .flash{ background:#e3f8ee; color:#149a5e; border-radius:12px; padding:11px 14px; font-weight:800; font-size:14px; margin:10px 0; }
+  .flash.warn{ background:#ffe7e7; color:#e0433f; }
+  .sec{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:16px; margin:14px 0; }
+  .sec h2{ font-size:15px; margin:0 0 4px; } .hint{ font-size:12px; color:#9a96ad; margin:4px 0 10px; }
+  label{ display:block; font-size:13px; font-weight:700; margin:11px 0 5px; }
+  input[type=url],input[type=text]{ width:100%; padding:11px 12px; border:1.5px solid #ece9f1; border-radius:10px; font-size:14px; }
+  input:focus{ border-color:var(--orange); outline:none; }
+  .add{ width:100%; margin-top:12px; border:none; border-radius:13px; padding:14px; font-size:15px; font-weight:800;
+        color:#fff; background:linear-gradient(135deg,#4a8fe0,#6aa9f0); }
+  .genrow{ display:flex; gap:8px; }
+  .genrow button{ flex:1; border:none; border-radius:12px; padding:13px; font-size:14px; font-weight:800; color:#fff; }
+  .gpr{ background:linear-gradient(135deg,var(--orange),#ff7e5f); } .gmu{ background:linear-gradient(135deg,#7a6fb0,#9b8fd0); }
+  .toPost{ display:block; text-align:center; text-decoration:none; color:#fff; font-weight:800; font-size:15px;
+           border-radius:13px; padding:15px; background:linear-gradient(135deg,var(--green),#13b06b); margin-top:6px; }
+  .warn{ background:#fff3cd; color:#8a6d1a; border-radius:10px; padding:10px 12px; font-size:12px; margin-top:8px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="seg">
+    <a href="/">🏠</a><a href="/threads/products" class="on">🛍 商品選定</a><a href="/threads">🧵 投稿</a><a href="/threads/settings">⚙️ 設定</a><a href="/threads/ai">🤖 AI</a>
+  </div>
+</div>
+<div class="wrap">
+  {% if saved=='man' %}<div class="flash">✓ 商品を追加しました（投稿タブで承認）</div>{% endif %}
+  {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天URLか確認／重複の可能性）</div>{% endif %}
+  {% if saved.startswith('gen') %}<div class="flash">✓ {{ saved[3:] }}件 生成しました（投稿タブへ）</div>{% endif %}
+
+  <div class="sec">
+    <h2>🛍 商品URLで追加（手動選定）</h2>
+    <p class="hint">楽天の商品ページURLを貼ると、AIで5案の紹介文を生成して投稿候補に追加します。</p>
+    <form method="post" action="/threads/manual">
+      <label>商品URL（楽天）</label>
+      <input type="url" name="url" placeholder="https://item.rakuten.co.jp/店舗/商品番号/" required>
+      <label>ラベル（任意）— 紹介文に織り込む文脈</label>
+      <input type="text" name="label" placeholder="例: プチプラ / 敏感肌向け / 韓国で人気">
+      <div class="warn">⚠️ ラベルに実在の人物名を入れて「愛用/おすすめ」と書くのは、実際に本人が使っていない場合
+        <b>景表法（ステマ規制）・パブリシティ権侵害</b>のリスクがあります。本人が公言/愛用している商品にのみ使用を。</div>
+      <button class="add" type="submit">＋ この商品を追加</button>
+    </form>
+  </div>
+
+  <div class="sec">
+    <h2>⚡ 自動で一括生成</h2>
+    <p class="hint">設定のキーワード/ペルソナから、売れ筋を自動で記事化します。</p>
+    <form method="post" action="/threads/generate" class="genrow">
+      <button class="gpr" type="submit" name="kind" value="pr">＋商品（PR）</button>
+      <button class="gmu" type="submit" name="kind" value="musing">＋つぶやき</button>
+    </form>
+  </div>
+
+  <a class="toPost" href="/threads">🧵 投稿タブで承認する（PR {{ pending }}・つぶやき {{ musings }}）→</a>
+</div>
+</body>
+</html>

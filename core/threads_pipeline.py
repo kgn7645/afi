@@ -314,8 +314,12 @@ def pr_prompt_template() -> str:
     return ((get_rules().get("threads", {}) or {}).get("pr_prompt") or "").strip() or _DEFAULT_PR_PROMPT
 
 
-def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *, tmpl: str = "") -> dict:
-    """1商品につき n 案（異なるフック型）のキャプションを生成。返り {clean_name, captions[], reply}。"""
+def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *,
+                   tmpl: str = "", label: str = "") -> dict:
+    """1商品につき n 案（異なるフック型）のキャプションを生成。返り {clean_name, captions[], reply}。
+
+    label を指定すると、n案のうち最低1案に label の文脈（例『{label}愛用/おすすめ』）を入れる。
+    """
     styles = random.sample(_PR_HOOKS, min(n, len(_PR_HOOKS)))
     style_lines = "\n".join(f"  案{i+1}「{nm}」型: {ex}" for i, (nm, ex) in enumerate(styles))
     prompt = _render_prompt(
@@ -324,6 +328,11 @@ def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *, tmpl: str =
         item_name=item.get("itemName", ""), price=item.get("itemPrice"),
         review_avg=item.get("reviewAverage"), review_count=item.get("reviewCount"),
         n=n, styles=style_lines, yakkiho=_YAKKIHO)
+    if label.strip():
+        lb = label.strip()
+        prompt += (f"\n\n# ラベル指定（重要）\n{n}案のうち**最低1案**は「{lb}」を自然に織り込む"
+                   f"（例『{lb}も愛用してるらしい』『{lb}おすすめの』『{lb}っぽい雰囲気』）。"
+                   f"全案には入れない。文脈に無理がないように。")
     out = _gemini_json(prompt, e)
     caps = [c.strip() for c in (out.get("captions") or []) if c and c.strip()]
     out["captions"] = caps[:n] or [out.get("caption", "")]
@@ -424,7 +433,7 @@ def generate_musings(account: dict, count: int) -> int:
 
 
 # ---------- ドラフト生成 ----------
-def _pr_draft_from_item(account: dict, it: dict, e: dict) -> dict | None:
+def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "") -> dict | None:
     """楽天itemから PRドラフト(画像ランク＋5案キャプション) を組み立てる。"""
     code = it.get("itemCode", "")
     real = api_images(it)
@@ -443,7 +452,7 @@ def _pr_draft_from_item(account: dict, it: dict, e: dict) -> dict | None:
     if not imgs:
         return None
     try:
-        cap = _make_captions(account.get("persona", ""), it, e, n=5)
+        cap = _make_captions(account.get("persona", ""), it, e, n=5, label=label)
     except Exception:  # noqa: BLE001
         return None
     opts = [o.strip() for o in (cap.get("captions") or []) if o.strip()]
@@ -451,7 +460,7 @@ def _pr_draft_from_item(account: dict, it: dict, e: dict) -> dict | None:
         return None
     return {
         "id": f"{account['id']}::{code}",
-        "account": account["id"], "type": "pr",
+        "account": account["id"], "type": "pr", "label": label.strip(),
         "product": cap.get("clean_name") or it.get("itemName", "")[:30],
         "price": it.get("itemPrice"),
         "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
@@ -493,8 +502,8 @@ def _page_item_id(url: str) -> str:
     return ""
 
 
-def add_manual_url(account: dict, url: str) -> tuple[bool, str]:
-    """楽天の商品URLを貼ると、AIで記事化してPRドラフトに追加。返り (ok, message)。"""
+def add_manual_url(account: dict, url: str, label: str = "") -> tuple[bool, str]:
+    """楽天の商品URLを貼ると、AIで記事化してPRドラフトに追加。label指定でその文脈を文章に。"""
     e = _env()
     m = re.search(r"item\.rakuten\.co\.jp/([^/?#]+)/", url)
     if not m:
@@ -509,7 +518,7 @@ def add_manual_url(account: dict, url: str) -> tuple[bool, str]:
     it = _rakuten_by_code(code, e)
     if not it:
         return False, "商品が取得できませんでした（在庫切れ/販売終了の可能性）"
-    d = _pr_draft_from_item(account, it, e)
+    d = _pr_draft_from_item(account, it, e, label=label)
     if not d:
         return False, "記事化に失敗しました"
     cur = drafts()
