@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 
 from core import (candidates, gemini_client, internal_links, overrides, pipeline,
                   prompts, ranking_catalog, rakuten_catalog, review, reviser,
-                  sheet_log, wordpress)
+                  sheet_log, threads_pipeline, wordpress)
 from core.config import ROOT, get_rules, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -703,6 +703,55 @@ def ai_settings_reset(request: Request):
     data["_gemini_usage"] = {"calls": 0, "tokens": 0, "cost_usd": 0.0, "by_day": {}, "updated": ""}
     overrides.save(data)
     return RedirectResponse("/ai-settings?saved=reset", status_code=303)
+
+
+@app.get("/threads", response_class=HTMLResponse)
+def threads_review(request: Request, saved: str = ""):
+    """Threads投稿の承認UI（ドラフトの画像候補から選択して承認）。"""
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    ds = threads_pipeline.drafts()
+    q = [x for x in threads_pipeline.queue() if x.get("status") == "pending"]
+    q.sort(key=lambda x: x.get("scheduled_at", 0))
+    import datetime as _dt
+    for x in q:
+        x["when"] = _dt.datetime.fromtimestamp(x.get("scheduled_at", 0)).strftime("%m/%d %H:%M")
+    return templates.TemplateResponse("threads.html", {
+        "request": request, "drafts": ds, "queued": q, "saved": saved,
+        "can_save": overrides.enabled()})
+
+
+@app.post("/threads/generate")
+def threads_generate(request: Request):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
+    made = 0
+    for acc in accounts:
+        try:
+            made += threads_pipeline.generate_drafts(acc, int(acc.get("per_run", 3)))
+        except Exception:  # noqa: BLE001
+            pass
+    return RedirectResponse(f"/threads?saved=gen{made}", status_code=303)
+
+
+@app.post("/threads/approve")
+def threads_approve(request: Request, draft_id: str = Form(...),
+                    image_url: str = Form(...), caption: str = Form("")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    ok = threads_pipeline.approve(draft_id, image_url, caption)
+    return RedirectResponse("/threads?saved=" + ("ok" if ok else "fail"), status_code=303)
+
+
+@app.post("/threads/reject")
+def threads_reject(request: Request, draft_id: str = Form(...)):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    threads_pipeline.reject(draft_id)
+    return RedirectResponse("/threads?saved=rej", status_code=303)
 
 
 @app.post("/crawl/request")

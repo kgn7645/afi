@@ -42,6 +42,9 @@ class Settings:
         self.rakuten_access_key = os.getenv("RAKUTEN_ACCESS_KEY", "").strip()
         self.rakuten_affiliate_id = os.getenv("RAKUTEN_AFFILIATE_ID", "").strip()
 
+        # Threads(Meta): アフィリ投稿用アクセストークン（graph.threads.net）
+        self.threads_access_token = os.getenv("THREADS_ACCESS_TOKEN", "").strip()
+
         # LINE: 商品ページを公式アカウントへ共有→選定リストに追加（Messaging API）
         self.line_channel_secret = os.getenv("LINE_CHANNEL_SECRET", "").strip()
         self.line_channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
