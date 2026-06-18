@@ -150,6 +150,19 @@ media: []
 #       source_urls: []
 #     note_enabled: false
 
+# --- Threads アフィリ（商品選定→投稿作成→承認→キュー→スケジュール公開） ---
+threads:
+  enabled: false              # true で生成cronが対象。投稿はキュー＋スケジュールで
+  accounts:
+    - id: mmmtreees           # アカウント識別（投稿先＝THREADS_ACCESS_TOKENのアカウント）
+      name: "検証アカウント"
+      persona: "親しみやすく絵文字を適度に。コスパ・実用目線で正直に紹介"
+      genres: ["564277", "502835", "402279", "208522"]  # 楽天ジャンルID（売れ筋から選定）
+      per_run: 3              # 1回の生成で作るドラフト数
+  schedule:
+    hours: [8, 12, 20]        # 公開する時間帯（分はランダムで人間らしく分散）
+    per_run: 1                # publish cron 1回で出す最大数
+
 # --- Gemini モデル（設定画面のドロップダウンで切替・両ホスト即反映） ---
 gemini:
   # 使用モデル。空ならenv GEMINI_MODEL→既定。/settings の「AIモデル」で変更可。

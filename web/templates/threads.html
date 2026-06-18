@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Threads承認｜おうちベース</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:40px; }
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:540px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:13px; font-weight:700;
+          color:#8a86a0; text-decoration:none; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .flash{ background:#e3f8ee; color:#149a5e; border-radius:12px; padding:11px 14px; font-weight:800; font-size:14px; margin:10px 0; }
+  .flash.warn{ background:#ffe7e7; color:#e0433f; }
+  .bar{ display:flex; gap:8px; align-items:center; margin:10px 0; }
+  .bar h2{ font-size:15px; margin:0; flex:1; }
+  .genbtn{ border:none; border-radius:10px; padding:10px 14px; font-size:13px; font-weight:800; color:#fff;
+           background:linear-gradient(135deg,var(--orange),#ff7e5f); }
+  .card{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:14px; margin:14px 0; }
+  .head{ display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+  .pname{ font-size:14px; font-weight:800; }
+  .meta{ font-size:12px; color:#9a96ad; white-space:nowrap; }
+  textarea{ width:100%; padding:10px 12px; border:1.5px solid #ece9f1; border-radius:10px; font-size:14px;
+            font-family:inherit; line-height:1.6; resize:vertical; outline:none; }
+  textarea:focus{ border-color:var(--orange); }
+  .lbl{ font-size:12px; font-weight:700; color:#8a86a0; margin:10px 0 6px; }
+  .imgs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .imgs label{ position:relative; cursor:pointer; border-radius:10px; overflow:hidden;
+               border:3px solid transparent; aspect-ratio:1; background:#f4f1f8; }
+  .imgs img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .imgs input{ position:absolute; opacity:0; }
+  .imgs input:checked + img{ outline:none; }
+  .imgs label:has(input:checked){ border-color:var(--green); box-shadow:0 0 0 2px rgba(33,193,122,.3); }
+  .acts{ display:flex; gap:8px; margin-top:12px; }
+  .approve{ flex:1; border:none; border-radius:11px; padding:13px; font-size:15px; font-weight:800; color:#fff;
+            background:linear-gradient(135deg,var(--green),#13b06b); }
+  .reject{ border:1.5px solid #e6e1ee; background:#fff; color:#b0445f; border-radius:11px; padding:13px 16px;
+           font-size:14px; font-weight:700; }
+  .qrow{ display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid #f1eef6; font-size:13px; }
+  .qrow img{ width:46px; height:46px; object-fit:contain; border-radius:8px; background:#f4f1f8; }
+  .qwhen{ font-weight:800; color:var(--orange); white-space:nowrap; }
+  .empty{ color:#9a96ad; font-size:13px; padding:18px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="seg">
+    <a href="/select">🛍 自動</a><a href="/manual">✋ 手動</a><a href="/review">📝 承認</a><a href="/threads" class="on">🧵 Threads</a><a href="/settings">⚙️</a>
+  </div>
+</div>
+<div class="wrap">
+  {% if saved=='ok' %}<div class="flash">✓ 承認しました（公開キューに追加）</div>{% endif %}
+  {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
+  {% if saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
+  {% if saved=='fail' %}<div class="flash warn">処理に失敗しました</div>{% endif %}
+  {% if not can_save %}<div class="flash warn">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
+
+  <div class="bar">
+    <h2>🧵 Threads 承認待ち（{{ drafts|length }}）</h2>
+    <form method="post" action="/threads/generate"><button class="genbtn" type="submit">＋ ドラフト生成</button></form>
+  </div>
+
+  {% if not drafts %}
+    <div class="card empty">承認待ちのドラフトはありません。「＋ドラフト生成」で商品を取り込みます。</div>
+  {% endif %}
+
+  {% for d in drafts %}
+  <div class="card">
+    <form method="post" action="/threads/approve">
+      <input type="hidden" name="draft_id" value="{{ d.id }}">
+      <div class="head">
+        <span class="pname">{{ d.product }}</span>
+        <span class="meta">¥{{ d.price }} ★{{ d.review.avg }}（{{ d.review.count }}）</span>
+      </div>
+      <div class="lbl">キャプション（編集可）</div>
+      <textarea name="caption" rows="5">{{ d.caption }}</textarea>
+      <div class="lbl">投稿に使う画像を選択（文字入りは避け、商品がきれいなものを）</div>
+      <div class="imgs">
+        {% for u in d.images %}
+        <label><input type="radio" name="image_url" value="{{ u }}" {{ 'checked' if loop.first }}>
+          <img src="{{ u }}" loading="lazy" alt=""></label>
+        {% endfor %}
+      </div>
+      <div class="acts">
+        <button class="approve" type="submit">✓ 承認してキューへ</button>
+      </div>
+    </form>
+    <form method="post" action="/threads/reject" style="margin-top:8px;">
+      <input type="hidden" name="draft_id" value="{{ d.id }}">
+      <button class="reject" type="submit">却下</button>
+    </form>
+  </div>
+  {% endfor %}
+
+  <div class="bar" style="margin-top:22px;"><h2>📅 公開キュー（{{ queued|length }}）</h2></div>
+  <div class="card">
+    {% if not queued %}<div class="empty">公開予定はありません。</div>{% endif %}
+    {% for q in queued %}
+    <div class="qrow">
+      <img src="{{ q.image }}" loading="lazy" alt="">
+      <div style="flex:1;">{{ q.product }}<br><span class="meta">{{ q.caption[:36] }}…</span></div>
+      <span class="qwhen">{{ q.when }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+</body>
+</html>
