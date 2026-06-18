@@ -44,6 +44,11 @@
   .cnt{ float:right; color:var(--green); }
   .url{ font-size:12px; color:#9a96ad; background:#faf8fd; border-radius:8px; padding:8px 10px;
         margin-top:6px; word-break:break-all; }
+  .capopts{ display:flex; flex-direction:column; gap:6px; }
+  .capopt{ display:block; cursor:pointer; border:1.5px solid #ece9f1; border-radius:10px; padding:9px 11px;
+           font-size:13px; line-height:1.5; }
+  .capopt:has(input:checked){ border-color:var(--green); background:#f1fbf6; }
+  .capopt input{ display:none; }
   .acts{ display:flex; gap:8px; margin-top:12px; }
   .approve{ flex:1; border:none; border-radius:11px; padding:13px; font-size:15px; font-weight:800; color:#fff;
             background:linear-gradient(135deg,var(--green),#13b06b); }
@@ -113,8 +118,17 @@
           <img src="{{ u }}" loading="lazy" alt=""></label>
         {% endfor %}
       </div>
-      <div class="lbl">文章（フック＋紹介・編集可）</div>
-      <textarea name="caption" rows="5">{{ d.caption }}</textarea>
+      {% if d.caption_options and d.caption_options|length > 1 %}
+      <div class="lbl">文章を選ぶ（{{ d.caption_options|length }}案・タップで採用）</div>
+      <div class="capopts">
+        {% for c in d.caption_options %}
+        <label class="capopt"><input type="radio" name="capsel" {{ 'checked' if loop.first }} onchange="pickCap(this)">
+          <span>{{ c }}</span></label>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="lbl">採用文（編集可）</div>
+      <textarea name="caption" rows="4">{{ d.caption }}</textarea>
 
       <div class="step">② リプライ（軽い文章＋URL）</div>
       <div class="lbl">軽い一言（編集可）</div>
@@ -151,6 +165,12 @@ function updateCnt(form){
   var c = form.querySelector('.cnt'); if(c) c.textContent = n+'枚';
 }
 function lim(cb){ updateCnt(cb.closest('form')); }
+function pickCap(radio){
+  var span = radio.parentElement.querySelector('span');
+  var form = radio.closest('form');
+  var ta = form.querySelector('textarea[name=caption]');
+  if(span && ta) ta.value = span.innerText.trim();
+}
 function chk(form){
   var n = form.querySelectorAll('.imgs input:checked').length;
   if(n === 0){ alert('画像を1枚以上選んでください'); return false; }

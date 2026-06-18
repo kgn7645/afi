@@ -791,6 +791,7 @@ def threads_settings_form(request: Request, saved: str = ""):
         "enabled": bool(t.get("enabled", False)),
         "name": acc.get("name", "検証アカウント"),
         "persona": acc.get("persona", ""),
+        "keywords": "\n".join(acc.get("keywords") or []),
         "genres": "\n".join(str(g) for g in (acc.get("genres") or [])),
         "per_run": acc.get("per_run", 3),
         "musing_per_run": acc.get("musing_per_run", 3),
@@ -804,8 +805,9 @@ def threads_settings_form(request: Request, saved: str = ""):
 @app.post("/threads/settings")
 def threads_settings_save(
     request: Request, enabled: str = Form(""), name: str = Form(""),
-    persona: str = Form(""), genres: str = Form(""), per_run: str = Form("3"),
-    musing_per_run: str = Form("3"), hours: str = Form("8,12,20"), pub_per_run: str = Form("1"),
+    persona: str = Form(""), keywords: str = Form(""), genres: str = Form(""),
+    per_run: str = Form("3"), musing_per_run: str = Form("3"),
+    hours: str = Form("8,12,20"), pub_per_run: str = Form("1"),
 ):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
@@ -822,6 +824,7 @@ def threads_settings_save(
     acc = dict((t.get("accounts") or [{}])[0])
     acc.update({"id": acc.get("id", "mmmtreees"), "name": name.strip() or "検証アカウント",
                 "persona": persona.strip(),
+                "keywords": [k.strip() for k in keywords.splitlines() if k.strip()],
                 "genres": [g.strip() for g in genres.splitlines() if g.strip()],
                 "per_run": int(per_run) if per_run.isdigit() else 3,
                 "musing_per_run": int(musing_per_run) if musing_per_run.isdigit() else 3})

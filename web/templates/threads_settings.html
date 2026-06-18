@@ -52,8 +52,10 @@
     <input type="text" name="name" value="{{ d.name }}">
     <label>人格・口調（ペルソナ）</label>
     <textarea name="persona" rows="3">{{ d.persona }}</textarea>
-    <label>狙う楽天ジャンルID（1行に1つ・売れ筋から選定）</label>
-    <textarea name="genres" rows="4">{{ d.genres }}</textarea>
+    <label>狙うキーワード（1行に1つ・美容はこちら主体）</label>
+    <textarea name="keywords" rows="5" placeholder="リップ ティント&#10;アイシャドウ パレット&#10;チーク">{{ d.keywords }}</textarea>
+    <label>楽天ジャンルID（任意・1行に1つ・併用可）</label>
+    <textarea name="genres" rows="2">{{ d.genres }}</textarea>
     <label>1回の生成数：商品PR（ドラフト）</label>
     <input type="number" name="per_run" min="0" value="{{ d.per_run }}">
     <label>1回の生成数：つぶやき（日常・共感）</label>

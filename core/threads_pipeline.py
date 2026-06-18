@@ -42,8 +42,10 @@ _RAKUTEN = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/2026040
 _GEMINI = ("https://generativelanguage.googleapis.com/v1beta/"
            "models/{m}:generateContent?key={k}")
 _GEMINI_IMG = "gemini-2.5-flash-image"   # 合成画像→クリーン商品画像の生成（nano-banana）
-_NG = ["名入れ", "名前入り", "オーダー", "ギフト", "プレゼント", "記念", "中古", "訳あり",
-       "医薬品", "薬", "育毛", "増毛", "サプリ", "化粧水", "美容液"]  # 薬機法リスクも除外
+# 美容特化のNG。化粧水/美容液/コスメは許可、薬機法リスク高(医薬品/育毛/サプリ)＋非美容を除外
+_NG = ["名入れ", "名前入り", "オーダー", "中古", "訳あり", "ジャンク",
+       "医薬品", "第1類", "第2類", "第3類", "育毛", "増毛", "発毛", "サプリメント",
+       "木製", "無垢材", "チーク材", "家具", "フレーム", "ポスター", "テーブル", "収納"]
 
 
 # ---------- 共有ストア ----------
@@ -64,11 +66,21 @@ def queue() -> list:
 
 
 # ---------- 楽天 商品選定 ----------
-def _rakuten_search(genre: str, e: dict) -> list[dict]:
+# 美容の既定キーワード（アカウントにkeywords/genres未指定時に使用）
+_BEAUTY_KEYWORDS = ["リップティント", "アイシャドウ パレット", "チーク 頬紅", "マスカラ コスメ",
+                    "フェイスパウダー", "化粧下地", "アイブロウ ペンシル", "コンシーラー コスメ",
+                    "ハイライター コスメ", "クレンジングバーム", "美容液 スキンケア", "ヘアオイル 洗い流さない"]
+
+
+def _rakuten_search(genre_or_kw: str, e: dict, *, by_keyword: bool = False) -> list[dict]:
     p = {"applicationId": e["RAKUTEN_APP_ID"], "accessKey": e["RAKUTEN_ACCESS_KEY"],
-         "affiliateId": e.get("RAKUTEN_AFFILIATE_ID", ""), "genreId": str(genre),
+         "affiliateId": e.get("RAKUTEN_AFFILIATE_ID", ""),
          "hits": 30, "format": "json", "imageFlag": 1, "availability": 1,
          "sort": "-reviewCount"}
+    if by_keyword:
+        p["keyword"] = genre_or_kw
+    else:
+        p["genreId"] = str(genre_or_kw)
     url = f"{_RAKUTEN}?{urllib.parse.urlencode(p)}"
     with urllib.request.urlopen(url, timeout=30) as r:
         return [w.get("Item", w) for w in json.load(r).get("Items", [])]
@@ -192,54 +204,77 @@ def _gemini_json(prompt: str, e: dict) -> dict:
     return json.loads(t[t.find("{"):t.rfind("}") + 1])
 
 
-# PR投稿のフック型（参考6アカの実分析。毎回ランダムに1つ割り当てて単調化を防ぐ）
+# 美容PR投稿のフック型30種（美容系9アカの実分析。毎回ランダムに割り当て単調化を防ぐ）
 _PR_HOOKS = [
-    ("ブランドに物申す/ツッコミ",
-     "例: 『ニトリさん、あのさ、これはちょっと本気出しすぎでは…？』ブランド名に話しかけ、愛あるツッコミで。"),
-    ("【ご報告】型",
-     "例: 『【ご報告】◯◯と△△の、ちょうど良いとこ取り、見つけました。』淡々と発見を報告する温度感。"),
-    ("正直告白・自虐",
-     "例: 『自慢じゃないけど、これ買ってからQOL爆上がりした』『ごめん、正直ナメてた…』等身大の本音から。"),
-    ("ここだけの話・秘密",
-     "例: 『ここだけの話、もう◯◯はこれ一択でいい気がしてる』こっそり打ち明ける口調。"),
-    ("発見の後悔",
-     "例: 『うそ…これ、もっと早く出会いたかった』『引っ越し前に知りたかった…』もっと早く知りたかった系。"),
-    ("興奮ニュース",
-     "例: 『やばい、これ見つけてしまった…！』『◯◯、とんでもないの出してきた』テンション高めの第一声。"),
-    ("あるある/問いかけ",
-     "例: 『◯◯な人、これ無いと無理じゃない？』読者の生活あるあるに刺し、共感で引き込む。"),
-    ("詩的・感覚",
-     "例: 『使うたびに、ちょっと機嫌が直る』『◯◯してる時間が、いちばん好き』情景・感覚でそっと。"),
-    ("値段の驚き（※たまに）",
-     "例: 『え、この値段は流石にバグでは…？』値段はたまに。毎回使わない。"),
+    ("全女子へ宣言", "『全女子へ。◯◯したいときは これを塗るのです。』全女子/全人類への呼びかけ＋断定"),
+    ("逆説・買わないで", "『良すぎるから、これマジで買わないで…✋』良すぎて困る、の逆説で煽る"),
+    ("先生の証言", "『ピラティス(エステ/皮膚科)の先生に教わったこれ、』プロからの又聞きで権威付け"),
+    ("店員の証言", "『◯◯のスタッフに絶対使ってって勧められたやつ、』店員のおすすめ体で"),
+    ("美人の証言", "『職場の爆モテ美女が使ってたやつ、』身近な美人が使ってた設定"),
+    ("質問された設定", "『「それ何使ってるの？」って聞かれるようになった…』他人に褒められた証明"),
+    ("競合名指し全否定", "『これ買ってから、◯◯も△△も存在忘れた😂』他ブランドを忘れた＝最強宣言"),
+    ("即効性の驚き", "『使った瞬間から◯◯が変わる』『秒で盛れる』即効性を強調"),
+    ("ビフォーアフター実感", "『毎日続けてたら見え方変わってきた』続けた結果の変化を実感ベースで"),
+    ("今までの◯◯は何だったの", "『今までの◯◯ってなんだったんだろう…』過去を否定するほどの感動"),
+    ("メタ・このアカ褒め", "『このアカ、美容の裏話ぶっちゃけすぎ』アカウント自体を推す型"),
+    ("多幸感・感動", "『良いなんてもんじゃない、日に日に怖いくらい』語彙が追いつかない感動"),
+    ("コスパ/タイパ最強", "『プチプラなのにこの仕上がり、タイパもコスパも優勝』安いのに高見え"),
+    ("バズ乗っかり", "『◯◯でバズってるアレ、知ってる？🥹』話題化を入口に"),
+    ("正直レビュー", "『正直レビューします。◯◯は△△だけど…』忖度なし宣言から"),
+    ("悩み提起", "『毛穴(くすみ/乾燥/クマ)、もう諦めてた人だけ見て』悩みを名指しで刺す"),
+    ("プロ vs プチプラ", "『デパコス級なのにこの値段は反則…』高級品と比較して持ち上げる"),
+    ("こんな人に刺さる", "『一重さん(ブルベ/敏感肌)に全力でおすすめしたい』属性を名指しで"),
+    ("ぶっちゃけ結論", "『結論、もう◯◯はこれでいい。』先に結論を言い切る"),
+    ("時短・ズボラ", "『忙しい朝でも5秒で完成、ズボラの救世主』手抜きでも盛れる"),
+    ("リピート告白", "『何個リピしたか分からん…無くなると不安になるやつ』リピ買いの愛"),
+    ("意外性ギャップ", "『見た目地味なのに、実力えぐい』地味だけど強い、のギャップ"),
+    ("季節の必需品", "『この時期これ無いと無理、毎年戻ってくる』季節×定番"),
+    ("自分史上最高", "『人生で一番◯◯だったかも』自分史上更新の主観マックス"),
+    ("詩的・感覚", "『鏡を見るのが、ちょっと楽しみになる』情景・感覚でそっと"),
+    ("お祝い・ご褒美", "『頑張った自分へのご褒美、これにした』自分へのご褒美文脈"),
+    ("失敗からの救済", "『何回失敗したか…やっと辿り着いた正解がこれ』遠回りの末の正解"),
+    ("みんな使ってる安心", "『気づいたら周りみんな持ってた』社会的証明で安心させる"),
+    ("ツッコミ・ブランドへ", "『◯◯さん、あのさ、これはやりすぎでは…？』ブランドに愛のツッコミ"),
+    ("値段の驚き(たまに)", "『え、この値段で良いの…？二度見した』値段はたまに、毎回使わない"),
 ]
 
 
-def _make_caption(persona: str, item: dict, e: dict) -> dict:
-    hook_name, hook_ex = random.choice(_PR_HOOKS)
-    prompt = f"""あなたはThreadsでバズってる日本語の暮らし/ガジェット系の“中の人”です。
-人格・口調: {persona or "親しみやすく絵文字。正直で等身大、コスパ目線"}
+_YAKKIHO = ("【薬機法・厳守】医薬品的な効果効能の断定は禁止。NG例『シミ/シワが消える』『毛穴がなくなる』"
+            "『治る』『アンチエイジング』『細胞が〜』『美白(医薬部外品以外)』。"
+            "メイクの仕上がり表現(盛れる/血色感/ツヤ/透明感)は可。スキンケアは『うるおう/個人の感想』の体に留める。")
+
+
+def _make_captions(persona: str, item: dict, e: dict, n: int = 5) -> dict:
+    """1商品につき n 案（異なるフック型）のキャプションを生成。返り {clean_name, captions[], reply}。"""
+    styles = random.sample(_PR_HOOKS, min(n, len(_PR_HOOKS)))
+    style_lines = "\n".join(f"  案{i+1}「{nm}」型: {ex}" for i, (nm, ex) in enumerate(styles))
+    prompt = f"""あなたはThreadsでバズってる日本語の美容系インフルエンサーの“中の人”です。
+人格・口調: {persona or "美容好きの等身大。正直レビュー、絵文字多め(✨🥹🥰)、盛れる/血色感などの美容語彙"}
 
 # 商品
 - 商品名(楽天生データ): {item.get('itemName','')}
 - 価格: {item.get('itemPrice')}円 / レビュー: ★{item.get('reviewAverage')}（{item.get('reviewCount')}件）
 
-# 伸びてる投稿の鉄則（参考アカ分析より）
-- **書き出しの型は毎回変える**。今回は必ず「{hook_name}」の型で書くこと。{hook_ex}
-- **短く・具体的に**。1〜3行。説明しすぎない。商品の“その商品ならではの一点”だけ刺す。
-- **値段で始めない**（指定が値段型のときだけ可）。スペック羅列も禁止。
-- **余韻で次を読ませる**: 文末をあえて「…」「、、」「なんだけど、」で途切れさせ、続きをリプライ(2投稿目)に。
-- 感嘆は多彩に(ちょ/うそ/ねぇ/やば/ぇえ 等)。同じ語の繰り返しを避ける。誇大・断定(最高/絶対/必ず)はNG。
-- 良い実例の温度感: 「セリアさん、喧嘩売る相手間違えてない？だって、」「自慢じゃないけど離乳食は炊飯器に任せてた」「ここだけの話、もうこれでいい」
+# タスク: メイン投稿(1投稿目)の本文を {n}案、それぞれ別のフック型で作る。
+{style_lines}
+
+# 鉄則（美容系9アカ分析より）
+- 各案、指定の型で書き出しを変える。**短く(50〜90字・最大2行)**、説明しすぎない。
+- 値段で始めない(値段型のときだけ可)。スペック羅列禁止。
+- **余韻で次を読ませる**: 文末を「…」「、、」「んだけど,」で途切れさせ続きをリプライへ。
+- 美容語彙(盛れる/血色感/透明感/濡れツヤ/多幸感)＋絵文字。{_YAKKIHO}
 
 # 出力(JSONのみ・コードフェンス禁止)
 {{
-  "clean_name": "宣伝文句を除いた簡潔な商品名(20字以内)",
-  "caption": "メイン投稿(1投稿目)。上の「{hook_name}」型で。**フック＋ひと言だけ・60〜90字・最大2行**。説明は画像とリプに任せ最小限に。必ず余韻(…/、、/んだけど,)で締めて続きを読ませる。URL無し。",
-  "reply": "リプライ(2投稿目)の軽い一言(15〜35字・絵文字可)。URL無し。1投稿目の続き/オチっぽく。例『これです🛒』『気になる人だけどうぞ👇』『詳細はここに置いとくね』。"
+  "clean_name": "簡潔な商品名(20字以内・宣伝文句除く)",
+  "captions": ["案1の本文","案2の本文","案3の本文","案4の本文","案5の本文"],
+  "reply": "リプライ(2投稿目)の軽い一言(15〜35字・絵文字可・URL無し)。例『これです🛒』『気になる人だけどうぞ👇』"
 }}
 """
-    return _gemini_json(prompt, e)
+    out = _gemini_json(prompt, e)
+    caps = [c.strip() for c in (out.get("captions") or []) if c and c.strip()]
+    out["captions"] = caps[:n] or [out.get("caption", "")]
+    return out
 
 
 # つぶやきのネタ型（参考アカ分析より・毎回ランダムで単調化を防ぐ）
@@ -309,11 +344,19 @@ def generate_drafts(account: dict, count: int) -> int:
     e = _env()
     if not (e["RAKUTEN_APP_ID"] and e["GEMINI_API_KEY"]):
         raise RuntimeError("RAKUTEN/GEMINI のキーが未設定です。")
-    genres = account.get("genres") or ["564277"]
+    keywords = account.get("keywords") or []
+    genres = account.get("genres") or []
+    if not keywords and not genres:
+        keywords = _BEAUTY_KEYWORDS  # 既定=美容キーワード
     existing = drafts() + queue()
     seen_codes = {d.get("id", "").split("::")[-1] for d in existing}
 
     items: list[dict] = []
+    for kw in keywords:
+        try:
+            items += [it for it in _rakuten_search(kw, e, by_keyword=True) if _score(it) > 0]
+        except Exception:  # noqa: BLE001
+            continue
     for g in genres:
         try:
             items += [it for it in _rakuten_search(g, e) if _score(it) > 0]
@@ -346,8 +389,11 @@ def generate_drafts(account: dict, count: int) -> int:
         if not imgs:
             continue
         try:
-            cap = _make_caption(account.get("persona", ""), it, e)
+            cap = _make_captions(account.get("persona", ""), it, e, n=5)
         except Exception:  # noqa: BLE001
+            continue
+        opts = cap.get("captions") or []
+        if not opts:
             continue
         cur.append({
             "id": f"{account['id']}::{code}",
@@ -356,7 +402,8 @@ def generate_drafts(account: dict, count: int) -> int:
             "price": it.get("itemPrice"),
             "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
             "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
-            "caption": cap.get("caption", "").strip(),
+            "caption": opts[0].strip(),
+            "caption_options": [o.strip() for o in opts],
             "reply": cap.get("reply", "気になる方はこちらから🛒").strip(),
             "images": imgs,
             "created": int(time.time()),
