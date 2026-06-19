@@ -602,11 +602,67 @@ def account_publish_mode(acc) -> str:
     return m if m in ("live", "draft_only") else publish_mode()
 
 
+# ---------- スタイル型（フック/ネタ型）の管理：UIから確認・追加・削除 ----------
+def style_types(kind: str) -> list:
+    """スタイル型のdictリスト [{name,ex},...]。設定にあればそれ、無ければ既定（コード）。
+
+    kind: 'pr'=PR投稿のフック型 / 'musing'=つぶやきのネタ型。
+    """
+    key = "pr_hooks" if kind == "pr" else "musing_types"
+    cfg = (get_rules().get("threads", {}) or {}).get(key)
+    if cfg:
+        out = [{"name": (h.get("name") or "").strip(), "ex": (h.get("ex") or "").strip()}
+               for h in cfg if (h.get("name") or "").strip()]
+        if out:
+            return out
+    defaults = _PR_HOOKS if kind == "pr" else _MUSING_TYPES
+    return [{"name": n, "ex": e} for n, e in defaults]
+
+
+def _save_style(kind: str, lst: list) -> bool:
+    key = "pr_hooks" if kind == "pr" else "musing_types"
+    return overrides.update({"threads": {key: lst}})
+
+
+def add_style(kind: str, name: str, ex: str) -> bool:
+    """スタイル型を追加（同名は上書き）。未設定時は既定を確定してから追加。"""
+    name = (name or "").strip()
+    if not name:
+        return False
+    cur = style_types(kind)
+    for h in cur:
+        if h["name"] == name:
+            h["ex"] = (ex or "").strip()
+            return _save_style(kind, cur)
+    cur.append({"name": name, "ex": (ex or "").strip()})
+    return _save_style(kind, cur)
+
+
+def delete_style(kind: str, name: str) -> bool:
+    cur = [h for h in style_types(kind) if h["name"] != name]
+    if not cur:                                  # 全消し防止
+        return False
+    return _save_style(kind, cur)
+
+
+def reset_style(kind: str) -> bool:
+    """設定を消して既定（コードの30種/8種）に戻す。"""
+    key = "pr_hooks" if kind == "pr" else "musing_types"
+    data = overrides.load(force=True)
+    th = data.get("threads", {}) or {}
+    if key in th:
+        th.pop(key)
+        data["threads"] = th
+        return overrides.save(data)
+    return True
+
+
 def build_pr_prompt(persona: str, item: dict, n: int = 5, *,
                     tmpl: str = "", label: str = "", review_gist: str = "") -> str:
     """PR投稿の最終プロンプト文字列を組み立てる（Gemini/Claude共通）。"""
-    styles = random.sample(_PR_HOOKS, min(n, len(_PR_HOOKS)))
-    style_lines = "\n".join(f"  案{i+1}「{nm}」型: {ex}" for i, (nm, ex) in enumerate(styles))
+    hooks = style_types("pr") or [{"name": n, "ex": e} for n, e in _PR_HOOKS]
+    styles = random.sample(hooks, min(n, len(hooks)))
+    style_lines = "\n".join(f"  案{i+1}「{h['name']}」型: {h['ex']}" for i, h in enumerate(styles))
     prompt = _render_prompt(
         tmpl or pr_prompt_template(),
         persona=persona or "美容好きの等身大。正直レビュー、絵文字多め。盛れる/血色感などの美容語彙",
@@ -675,7 +731,9 @@ def musing_prompt_template() -> str:
 
 def build_musing_prompt(account: dict, *, tmpl: str = "") -> str:
     """つぶやきの最終プロンプト文字列を組み立てる（毎回ネタ型/書き出しをランダム）。"""
-    name, ex = random.choice(_MUSING_TYPES)
+    types = style_types("musing") or [{"name": n, "ex": e} for n, e in _MUSING_TYPES]
+    pick = random.choice(types)
+    name, ex = pick["name"], pick["ex"]
     opener = random.choice(["結局/つまり以外で", "問いかけで", "情景描写で", "感情の一言で",
                             "『え、』『うそ、』等の驚きで", "ぼやき/ひとりごとで"])
     return _render_prompt(

@@ -1131,7 +1131,25 @@ def _threads_ai_ctx(request, *, model="", saved="", test=None):
         "model_choices": gemini_client.MODEL_CHOICES,
         "pr_preset": prompt_presets.view("th_pr_prompt"),
         "musing_preset": prompt_presets.view("th_musing_prompt"),
+        "pr_styles": threads_pipeline.style_types("pr"),
+        "musing_styles": threads_pipeline.style_types("musing"),
     }
+
+
+@app.post("/threads/style/{op}")
+def threads_style_op(op: str, request: Request, kind: str = Form("pr"),
+                     name: str = Form(""), ex: str = Form("")):
+    """スタイル型（フック/ネタ型）の追加・削除・既定リセット。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    k = "pr" if kind == "pr" else "musing"
+    if op == "add":
+        threads_pipeline.add_style(k, name, ex)
+    elif op == "delete":
+        threads_pipeline.delete_style(k, name)
+    elif op == "reset":
+        threads_pipeline.reset_style(k)
+    return RedirectResponse("/threads/ai?saved=style", status_code=303)
 
 
 @app.get("/threads/ai", response_class=HTMLResponse)
