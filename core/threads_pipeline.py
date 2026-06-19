@@ -124,7 +124,8 @@ def _trim_item(it: dict) -> dict:
                                    "mediumImageUrls", "shopCode")}
 
 
-def _add_product(account: dict, it: dict, label: str = "", source: str = "rakuten") -> bool:
+def _add_product(account: dict, it: dict, label: str = "", source: str = "rakuten",
+                 review_gist: str = "") -> bool:
     code = it.get("itemCode", "")
     if not code:
         return False
@@ -141,6 +142,7 @@ def _add_product(account: dict, it: dict, label: str = "", source: str = "rakute
         "image": imgs[0] if imgs else "",
         "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
         "label": (label or "").strip(), "source": source,
+        "review_gist": (review_gist or "").strip(),
         "item": _trim_item(it), "created": int(time.time()),
     })
     _save("_threads_products", cur[-80:])
@@ -162,7 +164,8 @@ def articleize(account: dict, product_id: str) -> bool:
     it = p.get("item") or _rakuten_by_code(p.get("itemCode", ""), e)
     if not it:
         return False
-    d = _pr_draft_from_item(account, it, e, label=p.get("label", ""))
+    d = _pr_draft_from_item(account, it, e, label=p.get("label", ""),
+                            review_gist=p.get("review_gist", ""))
     if not d:
         return False
     d["source"] = p.get("source", "")
@@ -418,11 +421,63 @@ def pr_prompt_template() -> str:
     return ((get_rules().get("threads", {}) or {}).get("pr_prompt") or "").strip() or _DEFAULT_PR_PROMPT
 
 
+# 口コミ→傾向の抽象要約（原文は保持しない＝転載回避。事実/傾向のみ・薬機法配慮）
+_REVIEW_SUMMARY_PROMPT = """以下は美容商品「[[name]]」への第三者の口コミ（@cosme/LIPS等）の断片です。
+これを参考に、**事実・傾向だけ**を日本語で抽出してください。
+
+# 厳守
+- 原文の言い回し・文をそのまま使わない（引用・転載は禁止）。固有の表現は捨て、傾向だけ一般化する。
+- 多くの人が触れている点を優先。少数の極端な意見・無関係なノイズは除く。
+- 化粧品の使用感（発色/色持ち/うるおい/質感/香り/塗り心地/コスパ 等）に限定。
+- [[yakkiho]]
+
+# 出力(JSONのみ・コードフェンス禁止)
+{"pros":["良い点を一般化した短句",... 最大4],"cons":["気になる点",... 最大2],"gist":"全体傾向を中立に1〜2文"}
+
+# 口コミ断片
+[[snippets]]
+"""
+
+
+def summarize_reviews(name: str, snippets: list, e: dict) -> dict:
+    """口コミ断片 → 傾向の抽象要約。原文は保持・返却しない。返り {pros[],cons[],gist}。"""
+    clean = [re.sub(r"\s+", " ", str(s)).strip()[:200] for s in (snippets or []) if s and str(s).strip()]
+    clean = [s for s in clean if len(s) >= 8][:30]
+    if len(clean) < 3:
+        return {}
+    prompt = _render_prompt(_REVIEW_SUMMARY_PROMPT, name=name, yakkiho=_YAKKIHO,
+                            snippets="\n".join(f"- {s}" for s in clean))
+    try:
+        out = _gemini_json(prompt, e)
+    except Exception:  # noqa: BLE001
+        return {}
+    return {"pros": [str(x).strip() for x in (out.get("pros") or [])][:4],
+            "cons": [str(x).strip() for x in (out.get("cons") or [])][:2],
+            "gist": (out.get("gist") or "").strip()}
+
+
+def gist_text(g) -> str:
+    """要約dict → プロンプト/保存用のテキスト1本に整形。"""
+    if not g:
+        return ""
+    if isinstance(g, str):
+        return g.strip()
+    parts = []
+    if g.get("gist"):
+        parts.append(g["gist"])
+    if g.get("pros"):
+        parts.append("◎良い点: " + " / ".join(g["pros"]))
+    if g.get("cons"):
+        parts.append("△気になる点: " + " / ".join(g["cons"]))
+    return "\n".join(parts)
+
+
 def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *,
-                   tmpl: str = "", label: str = "") -> dict:
+                   tmpl: str = "", label: str = "", review_gist: str = "") -> dict:
     """1商品につき n 案（異なるフック型）のキャプションを生成。返り {clean_name, captions[], reply}。
 
     label を指定すると、n案のうち最低1案に label の文脈（例『{label}愛用/おすすめ』）を入れる。
+    review_gist（口コミ傾向の要約）があれば、リアルさの素材として渡す（原文引用はさせない）。
     """
     styles = random.sample(_PR_HOOKS, min(n, len(_PR_HOOKS)))
     style_lines = "\n".join(f"  案{i+1}「{nm}」型: {ex}" for i, (nm, ex) in enumerate(styles))
@@ -432,6 +487,11 @@ def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *,
         item_name=item.get("itemName", ""), price=item.get("itemPrice"),
         review_avg=item.get("reviewAverage"), review_count=item.get("reviewCount"),
         n=n, styles=style_lines, yakkiho=_YAKKIHO)
+    if review_gist.strip():
+        prompt += ("\n\n# 口コミの傾向（@cosme/LIPSの多数意見をAIが要約した参考メモ。"
+                   "**原文の引用・転載は禁止。自分の言葉で書く**。効能効果の断定もしない）\n"
+                   + review_gist.strip()
+                   + "\n→ この傾向を踏まえて具体性とリアルさを出す（例: 色持ち・発色・質感など実際に支持されている点）。")
     if label.strip():
         lb = label.strip()
         prompt += (f"\n\n# ラベル指定（重要）\n{n}案のうち**最低1案**は「{lb}」を自然に織り込む"
@@ -494,10 +554,13 @@ def test_generate(account: dict, *, model: str = "", pr_tmpl: str = "",
     e = _env(model or None)
     item = {"itemName": "ロムアンド ジューシーラスティングティント 06 フィグフィグ 韓国コスメ",
             "itemPrice": 1100, "reviewAverage": 4.6, "reviewCount": 12000}
+    demo_gist = ("発色が良く色持ちも高評価。みずみずしい質感で唇が荒れにくいという声が多い。\n"
+                 "◎良い点: 色持ちが良い / みずみずしいツヤ感 / 落ちにくい\n△気になる点: 乾燥を感じる人も")
     result = {"model": e["GEMINI_MODEL"], "product": item["itemName"][:24],
               "captions": [], "reply": "", "musing": "", "error": ""}
     try:
-        cap = _make_captions(account.get("persona", ""), item, e, n=5, tmpl=pr_tmpl)
+        cap = _make_captions(account.get("persona", ""), item, e, n=5, tmpl=pr_tmpl,
+                             review_gist=demo_gist)
         result["captions"] = cap.get("captions", [])
         result["reply"] = cap.get("reply", "")
     except Exception as ex:  # noqa: BLE001
@@ -537,7 +600,8 @@ def generate_musings(account: dict, count: int) -> int:
 
 
 # ---------- ドラフト生成 ----------
-def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "") -> dict | None:
+def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
+                        review_gist: str = "") -> dict | None:
     """楽天itemから PRドラフト(画像ランク＋5案キャプション) を組み立てる。"""
     code = it.get("itemCode", "")
     real = api_images(it)
@@ -556,7 +620,8 @@ def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "") ->
     if not imgs:
         return None
     try:
-        cap = _make_captions(account.get("persona", ""), it, e, n=5, label=label)
+        cap = _make_captions(account.get("persona", ""), it, e, n=5, label=label,
+                             review_gist=review_gist)
     except Exception:  # noqa: BLE001
         return None
     opts = [o.strip() for o in (cap.get("captions") or []) if o.strip()]
@@ -571,7 +636,7 @@ def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "") ->
         "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
         "caption": opts[0], "caption_options": opts,
         "reply": cap.get("reply", "気になる方はこちらから🛒").strip(),
-        "images": imgs, "created": int(time.time()),
+        "images": imgs, "review_gist": review_gist.strip(), "created": int(time.time()),
     }
 
 
