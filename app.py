@@ -890,12 +890,11 @@ def threads_account_add(request: Request, name: str = Form("")):
         return RedirectResponse("/review/login", status_code=303)
     accs = list(_threads_accounts())
     existing = {a.get("id") for a in accs}
-    i = len(accs) + 1
-    new_id = f"acc{i}"
-    while new_id in existing:
-        i += 1
-        new_id = f"acc{i}"
-    accs.append({"id": new_id, "name": (name.strip() or f"アカウント{i}"),
+    n = 1                                       # 内部id=m{n}（アカウント名に紐づけない）
+    while f"m{n}" in existing:
+        n += 1
+    new_id = f"m{n}"
+    accs.append({"id": new_id, "name": (name.strip() or f"媒体{n}"),
                  "persona": "", "keywords": [], "genres": [], "per_run": 3,
                  "musing_per_run": 3, "token": "", "publish_mode": "draft_only"})
     _save_accounts(accs)
