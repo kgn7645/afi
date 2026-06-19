@@ -20,6 +20,11 @@
   .flash.warn{ background:#ffe7e7; color:#e0433f; }
   .bar{ display:flex; gap:8px; align-items:center; margin:10px 0; }
   .bar h2{ font-size:15px; margin:0; flex:1; }
+  .subseg{ display:flex; gap:8px; margin:12px 0 4px; }
+  .subseg a{ flex:1; text-align:center; padding:11px 0; border-radius:12px; font-size:14px; font-weight:800;
+             text-decoration:none; color:#8a86a0; background:#ece9f1; }
+  .subseg a.on{ color:#fff; background:linear-gradient(135deg,var(--orange),#ff7e5f); box-shadow:0 4px 12px rgba(255,126,95,.3); }
+  .subseg a b{ font-size:12px; opacity:.85; }
   .genbtn{ border:none; border-radius:10px; padding:10px 12px; font-size:13px; font-weight:800; color:#fff;
            background:linear-gradient(135deg,var(--orange),#ff7e5f); }
   .genbtn.musing{ background:linear-gradient(135deg,#7a6fb0,#9b8fd0); }
@@ -87,17 +92,32 @@
   {% if saved=='man' %}<div class="flash">✓ URLから商品を追加しました（下に表示）</div>{% endif %}
   {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天の商品URLか確認／重複の可能性）</div>{% endif %}
   {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
-  {% if saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
+  {% if saved.startswith('genmu') %}<div class="flash">✓ つぶやきを {{ saved[5:] }} 件生成しました</div>
+  {% elif saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">処理に失敗しました</div>{% endif %}
   {% if not can_save %}<div class="flash warn">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
 
+  <div class="subseg">
+    <a href="/threads?view=pr" class="{{ 'on' if view!='musing' }}">🛒 商品PR <b>{{ pr_count }}</b></a>
+    <a href="/threads?view=musing" class="{{ 'on' if view=='musing' }}">💬 つぶやき <b>{{ mu_count }}</b></a>
+  </div>
   <div class="bar">
-    <h2>🧵 投稿（承認待ち {{ drafts|length }}）</h2>
+    <h2>{{ '💬 つぶやき' if view=='musing' else '🛒 商品PR' }}（承認待ち {{ drafts|length }}）</h2>
+    {% if view=='musing' %}
+    <form method="post" action="/threads/generate" style="margin:0;">
+      <button class="genbtn" type="submit" style="line-height:2.4;">＋つぶやき生成</button>
+    </form>
+    {% else %}
     <a href="/threads/select" class="genbtn" style="text-decoration:none;line-height:2.6;">🛍 商品選定へ</a>
+    {% endif %}
   </div>
 
   {% if not drafts %}
-    <div class="card empty">承認待ちのドラフトはありません。「＋ドラフト生成」で商品を取り込みます。</div>
+    {% if view=='musing' %}
+    <div class="card empty">承認待ちのつぶやきはありません。「＋つぶやき生成」で作成します。</div>
+    {% else %}
+    <div class="card empty">承認待ちの商品PRはありません。「🛍 商品選定」で記事化すると、ここに並びます。</div>
+    {% endif %}
   {% endif %}
 
   {% for d in drafts %}
@@ -163,13 +183,15 @@
   {% endif %}
   {% endfor %}
 
-  <div class="bar" style="margin-top:22px;"><h2>📅 公開キュー（{{ queued|length }}）</h2></div>
+  {% set qv = queued|selectattr('type','equalto','musing')|list if view=='musing' else queued|rejectattr('type','equalto','musing')|list %}
+  <div class="bar" style="margin-top:22px;"><h2>📅 公開キュー（{{ qv|length }}）</h2></div>
   <div class="card">
-    {% if not queued %}<div class="empty">公開予定はありません。</div>{% endif %}
-    {% for q in queued %}
+    {% if not qv %}<div class="empty">公開予定はありません。</div>{% endif %}
+    {% for q in qv %}
     <div class="qrow">
-      <img src="{{ q.image }}" loading="lazy" alt="">
-      <div style="flex:1;">{{ q.product }}<br><span class="meta">{{ q.caption[:36] }}…</span></div>
+      {% if view=='musing' %}<div style="flex:1;">💬 <span class="meta">{{ q.caption[:46] }}…</span></div>
+      {% else %}<img src="{{ q.image }}" loading="lazy" alt="">
+      <div style="flex:1;">{{ q.product }}<br><span class="meta">{{ q.caption[:36] }}…</span></div>{% endif %}
       <span class="qwhen">{{ q.when }}</span>
     </div>
     {% endfor %}
