@@ -747,6 +747,24 @@ def threads_review(request: Request, saved: str = "", view: str = "pr"):
         "view": view, "pr_count": len(pr_d), "mu_count": len(mu_d)})
 
 
+@app.get("/threads/stats")
+def threads_stats(request: Request):
+    """Threadsの各数値（ヘッダーのチップ／タブのバッジ表示用・JS が取得）。"""
+    if not _authed(request):
+        return JSONResponse({"ok": False}, status_code=401)
+    ds = threads_pipeline.drafts()
+    pr_d = sum(1 for d in ds if d.get("type") != "musing")
+    mu_d = sum(1 for d in ds if d.get("type") == "musing")
+    qn = sum(1 for x in threads_pipeline.queue() if x.get("status") == "pending")
+    return JSONResponse({"ok": True, "stats": {
+        "select": len(threads_pipeline.products()),     # 選定中の候補
+        "gen": len(threads_pipeline.genqueue()),         # 生成待ち（Claude Code）
+        "drafts": pr_d + mu_d, "pr": pr_d, "musing": mu_d,  # 承認待ち
+        "queue": qn,                                     # 公開待ち（予約済み）
+        "fetch": len(threads_pipeline.fetchqueue()),     # 取得待ち（@cosme/LIPS）
+    }})
+
+
 def _threads_accounts() -> list:
     return (get_rules().get("threads", {}) or {}).get("accounts", []) or []
 
