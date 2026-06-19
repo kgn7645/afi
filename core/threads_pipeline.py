@@ -869,6 +869,38 @@ def _is_product_image(u: str) -> bool:
     return bool(u) and u.startswith("http") and "/api/og/" not in u
 
 
+# 口コミ本文の抽出条件（Playwrightの_PW_REVIEW_JSと同条件のPython版）。傾向要約の材料用。
+_REV_OPN = re.compile(r"(思|使っ|塗っ|発色|色持ち|似合|高見え|落ち|乾燥|うるお|質感|テクスチャ|なじ|"
+                      r"リピ|可愛|くすま|ヨレ|密着|ラメ|粉|ぼかし|香り|しっとり|サラサラ|お気に入り|"
+                      r"買っ|つっぱ|毛穴|スクラブ|ツルツル|なめらか|ハリ|もっちり)")
+_REV_END = re.compile(r"[。！!？?…♡♥]")
+_REV_NG = re.compile(r"(ログイン|会員登録|アプリ|ランキング|クーポン|送料|利用規約|GooglePlay|AppStore|"
+                     r"もっと見る|ピックアップ|バリエーション|肌質|ユーザー|色見本|チェック|動画|"
+                     r"使い方|並び替|検索|カテゴリ|公式|通報|規約|プライバシー)")
+
+
+def _extract_review_snippets(html: str, limit: int = 30) -> list:
+    """HTMLから口コミ本文らしい行を抽出（意見語＋文末必須・UI/広告除外）。原文は要約の材料のみ。"""
+    import html as _html
+    t = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.S)
+    t = re.sub(r"<style[^>]*>.*?</style>", "", t, flags=re.S)
+    t = _html.unescape(re.sub(r"<[^>]+>", "\n", t))
+    out, seen = [], set()
+    for ln in t.split("\n"):
+        ln = re.sub(r"\s+", " ", ln).strip()
+        if not (25 <= len(ln) <= 400):
+            continue
+        if not _REV_OPN.search(ln) or not _REV_END.search(ln) or _REV_NG.search(ln):
+            continue
+        if ln in seen:
+            continue
+        seen.add(ln)
+        out.append(ln)
+        if len(out) >= limit:
+            break
+    return out
+
+
 _BROWSER_HEADERS = {
     "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
@@ -935,6 +967,18 @@ def _crawl_review_http(url: str) -> dict:
         if _is_product_image(u) and k and k not in seen:
             seen.add(k)
             uniq.append(u)
+    # @cosmeは商品ページに口コミ本文が無い→ /review/ ページをHTTP取得して傾向材料にする
+    # （Playwright不要でXserverでも口コミ傾向を拾える）。LIPSはJSON-LDで取得済み。
+    if not snippets and "cosme.net" in url:
+        m = re.search(r"/products?/(?:product_id/)?(\d+)", url)
+        if m:
+            rev = "https://www.cosme.net/products/{0}/review/".format(m.group(1))
+            try:
+                rr = s.get(rev, headers={**_BROWSER_HEADERS, "Referer": url}, timeout=20)
+                if rr.status_code == 200:
+                    snippets += _extract_review_snippets(rr.text)
+            except Exception:  # noqa: BLE001
+                pass
     full = (brand + " " + name).strip() if brand and brand not in name else name
     return {"name": full[:60], "images": uniq[:4],
             "snippets": [re.sub(r"\s+", " ", s).strip() for s in snippets if s][:30]}
