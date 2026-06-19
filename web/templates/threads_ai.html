@@ -162,6 +162,10 @@
   </div>
   {% endmacro %}
 
+  <div class="sec" style="background:#f1eef9;border:1.5px solid #ded6f0;">
+    <b style="font-size:14px;">🎚 スタイル型は媒体ごと</b>
+    <p class="hint" style="margin:4px 0 0;">いま編集中の媒体：<b style="color:#6a5fb0;">{{ acc_name }}</b>（上部の媒体スイッチャーで切替）。下の型はこの媒体だけに適用されます。</p>
+  </div>
   {{ styleblock('🎣 PR投稿のスタイル型（フック）', '参考アカウント分析から作った“書き出しの型”。', 'pr', pr_styles) }}
   {{ styleblock('💬 つぶやきのネタ型', 'つぶやきの“切り口”の型。', 'musing', musing_styles) }}
 

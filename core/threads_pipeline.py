@@ -167,7 +167,8 @@ def _enqueue_pr(account: dict, p: dict) -> None:
     """PR記事化を生成待ちへ。プロンプトと画像/口コミ素材を保持（Gemini不使用）。"""
     it = p.get("item") or {}
     prompt = build_pr_prompt(account.get("persona", ""), it, n=5,
-                             label=p.get("label", ""), review_gist=p.get("review_gist", ""))
+                             label=p.get("label", ""), review_gist=p.get("review_gist", ""),
+                             acc_id=account.get("id", ""))
     q = genqueue()
     q.append({
         "id": p["id"], "account": account["id"], "type": "pr",
@@ -602,65 +603,73 @@ def account_publish_mode(acc) -> str:
     return m if m in ("live", "draft_only") else publish_mode()
 
 
-# ---------- スタイル型（フック/ネタ型）の管理：UIから確認・追加・削除 ----------
-def style_types(kind: str) -> list:
-    """スタイル型のdictリスト [{name,ex},...]。設定にあればそれ、無ければ既定（コード）。
+# ---------- スタイル型（フック/ネタ型）の管理：媒体ごと・UIから確認/追加/削除 ----------
+def style_types(kind: str, acc=None) -> list:
+    """スタイル型のdictリスト [{name,ex},...]。媒体の設定があればそれ、無ければ既定（コード）。
 
-    kind: 'pr'=PR投稿のフック型 / 'musing'=つぶやきのネタ型。
+    kind: 'pr'=PR投稿のフック型 / 'musing'=つぶやきのネタ型。acc=媒体id or dict（媒体別）。
     """
     key = "pr_hooks" if kind == "pr" else "musing_types"
-    cfg = (get_rules().get("threads", {}) or {}).get(key)
-    if cfg:
-        out = [{"name": (h.get("name") or "").strip(), "ex": (h.get("ex") or "").strip()}
-               for h in cfg if (h.get("name") or "").strip()]
-        if out:
-            return out
+    if acc is not None:
+        a = get_account(acc) if isinstance(acc, str) else acc
+        cfg = (a or {}).get(key)
+        if cfg:
+            out = [{"name": (h.get("name") or "").strip(), "ex": (h.get("ex") or "").strip()}
+                   for h in cfg if (h.get("name") or "").strip()]
+            if out:
+                return out
     defaults = _PR_HOOKS if kind == "pr" else _MUSING_TYPES
     return [{"name": n, "ex": e} for n, e in defaults]
 
 
-def _save_style(kind: str, lst: list) -> bool:
+def _save_account_styles(acc_id: str, kind: str, lst: list) -> bool:
     key = "pr_hooks" if kind == "pr" else "musing_types"
-    return overrides.update({"threads": {key: lst}})
+    accts = accounts()
+    for a in accts:
+        if a.get("id") == acc_id:
+            a[key] = lst
+            return overrides.update({"threads": {"accounts": accts}})
+    return False
 
 
-def add_style(kind: str, name: str, ex: str) -> bool:
-    """スタイル型を追加（同名は上書き）。未設定時は既定を確定してから追加。"""
+def add_style(acc_id: str, kind: str, name: str, ex: str) -> bool:
+    """媒体にスタイル型を追加（同名は上書き）。未設定時は既定を確定してから追加。"""
     name = (name or "").strip()
     if not name:
         return False
-    cur = style_types(kind)
+    cur = style_types(kind, acc_id)
     for h in cur:
         if h["name"] == name:
             h["ex"] = (ex or "").strip()
-            return _save_style(kind, cur)
+            return _save_account_styles(acc_id, kind, cur)
     cur.append({"name": name, "ex": (ex or "").strip()})
-    return _save_style(kind, cur)
+    return _save_account_styles(acc_id, kind, cur)
 
 
-def delete_style(kind: str, name: str) -> bool:
-    cur = [h for h in style_types(kind) if h["name"] != name]
+def delete_style(acc_id: str, kind: str, name: str) -> bool:
+    cur = [h for h in style_types(kind, acc_id) if h["name"] != name]
     if not cur:                                  # 全消し防止
         return False
-    return _save_style(kind, cur)
+    return _save_account_styles(acc_id, kind, cur)
 
 
-def reset_style(kind: str) -> bool:
-    """設定を消して既定（コードの30種/8種）に戻す。"""
+def reset_style(acc_id: str, kind: str) -> bool:
+    """媒体の設定を消して既定（コードの30種/8種）に戻す。"""
     key = "pr_hooks" if kind == "pr" else "musing_types"
-    data = overrides.load(force=True)
-    th = data.get("threads", {}) or {}
-    if key in th:
-        th.pop(key)
-        data["threads"] = th
-        return overrides.save(data)
-    return True
+    accts = accounts()
+    changed = False
+    for a in accts:
+        if a.get("id") == acc_id and key in a:
+            a.pop(key)
+            changed = True
+    return overrides.update({"threads": {"accounts": accts}}) if changed else True
 
 
 def build_pr_prompt(persona: str, item: dict, n: int = 5, *,
-                    tmpl: str = "", label: str = "", review_gist: str = "") -> str:
-    """PR投稿の最終プロンプト文字列を組み立てる（Gemini/Claude共通）。"""
-    hooks = style_types("pr") or [{"name": n, "ex": e} for n, e in _PR_HOOKS]
+                    tmpl: str = "", label: str = "", review_gist: str = "",
+                    acc_id: str = "") -> str:
+    """PR投稿の最終プロンプト文字列を組み立てる（Gemini/Claude共通）。媒体別スタイル型を使用。"""
+    hooks = style_types("pr", acc_id or None) or [{"name": n, "ex": e} for n, e in _PR_HOOKS]
     styles = random.sample(hooks, min(n, len(hooks)))
     style_lines = "\n".join(f"  案{i+1}「{h['name']}」型: {h['ex']}" for i, h in enumerate(styles))
     prompt = _render_prompt(
@@ -689,9 +698,10 @@ def _norm_caps(out: dict, n: int = 5) -> dict:
 
 
 def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *,
-                   tmpl: str = "", label: str = "", review_gist: str = "") -> dict:
+                   tmpl: str = "", label: str = "", review_gist: str = "", acc_id: str = "") -> dict:
     """1商品につき n 案（異なるフック型）のキャプションをGeminiで生成。返り {clean_name, captions[], reply}。"""
-    prompt = build_pr_prompt(persona, item, n, tmpl=tmpl, label=label, review_gist=review_gist)
+    prompt = build_pr_prompt(persona, item, n, tmpl=tmpl, label=label,
+                             review_gist=review_gist, acc_id=acc_id)
     return _norm_caps(_gemini_json(prompt, e), n)
 
 
@@ -731,7 +741,7 @@ def musing_prompt_template() -> str:
 
 def build_musing_prompt(account: dict, *, tmpl: str = "") -> str:
     """つぶやきの最終プロンプト文字列を組み立てる（毎回ネタ型/書き出しをランダム）。"""
-    types = style_types("musing") or [{"name": n, "ex": e} for n, e in _MUSING_TYPES]
+    types = style_types("musing", account.get("id")) or [{"name": n, "ex": e} for n, e in _MUSING_TYPES]
     pick = random.choice(types)
     name, ex = pick["name"], pick["ex"]
     opener = random.choice(["結局/つまり以外で", "問いかけで", "情景描写で", "感情の一言で",
@@ -759,7 +769,7 @@ def test_generate(account: dict, *, model: str = "", pr_tmpl: str = "",
               "captions": [], "reply": "", "musing": "", "error": ""}
     try:
         cap = _make_captions(account.get("persona", ""), item, e, n=5, tmpl=pr_tmpl,
-                             review_gist=demo_gist)
+                             review_gist=demo_gist, acc_id=account.get("id", ""))
         result["captions"] = cap.get("captions", [])
         result["reply"] = cap.get("reply", "")
     except Exception as ex:  # noqa: BLE001
@@ -875,7 +885,7 @@ def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
     else:
         try:
             cap = _make_captions(account.get("persona", ""), it, e, n=5, label=label,
-                                 review_gist=review_gist)
+                                 review_gist=review_gist, acc_id=account.get("id", ""))
         except Exception:  # noqa: BLE001
             return None
     opts = [o.strip() for o in (cap.get("captions") or []) if o.strip()]

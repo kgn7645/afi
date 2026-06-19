@@ -1121,6 +1121,7 @@ def threads_withdraw(request: Request, item_id: str = Form(...)):
 
 def _threads_ai_ctx(request, *, model="", saved="", test=None):
     from core import prompt_presets
+    _aid = _active_acc_id(request)
     return {
         "request": request, "saved": saved, "test": test,
         "can_save": overrides.enabled(),
@@ -1130,24 +1131,26 @@ def _threads_ai_ctx(request, *, model="", saved="", test=None):
         "model_choices": gemini_client.MODEL_CHOICES,
         "pr_preset": prompt_presets.view("th_pr_prompt"),
         "musing_preset": prompt_presets.view("th_musing_prompt"),
-        "pr_styles": threads_pipeline.style_types("pr"),
-        "musing_styles": threads_pipeline.style_types("musing"),
+        "pr_styles": threads_pipeline.style_types("pr", _aid),
+        "musing_styles": threads_pipeline.style_types("musing", _aid),
+        "acc_name": _threads_acc(_aid).get("name", _aid),
     }
 
 
 @app.post("/threads/style/{op}")
 def threads_style_op(op: str, request: Request, kind: str = Form("pr"),
                      name: str = Form(""), ex: str = Form("")):
-    """スタイル型（フック/ネタ型）の追加・削除・既定リセット。"""
+    """操作中の媒体のスタイル型（フック/ネタ型）を追加・削除・既定リセット。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
+    aid = _active_acc_id(request)
     k = "pr" if kind == "pr" else "musing"
     if op == "add":
-        threads_pipeline.add_style(k, name, ex)
+        threads_pipeline.add_style(aid, k, name, ex)
     elif op == "delete":
-        threads_pipeline.delete_style(k, name)
+        threads_pipeline.delete_style(aid, k, name)
     elif op == "reset":
-        threads_pipeline.reset_style(k)
+        threads_pipeline.reset_style(aid, k)
     return RedirectResponse("/threads/ai?saved=style", status_code=303)
 
 
