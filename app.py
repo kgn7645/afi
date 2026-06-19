@@ -779,8 +779,34 @@ def ai_settings_reset(request: Request):
 
 
 @app.get("/threads", response_class=HTMLResponse)
+def threads_home(request: Request):
+    """Threadsトップ＝アカウント（媒体）選択。媒体を選ぶ→各媒体のメニューへ。追加もここ。"""
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    aid = _active_acc_id(request)
+    cards = []
+    prods, drs, q = (threads_pipeline.products(), threads_pipeline.drafts(),
+                     threads_pipeline.queue())
+    for a in _threads_accounts():
+        i = a.get("id")
+        cards.append({
+            "id": i, "name": a.get("name", i),
+            "mode": threads_pipeline.account_publish_mode(a),
+            "has_token": bool(threads_pipeline.account_token(a)),
+            "select": sum(1 for p in prods if p.get("account") == i),
+            "drafts": sum(1 for d in drs if d.get("account") == i),
+            "queue": sum(1 for x in q if x.get("status") == "pending" and x.get("account") == i),
+        })
+    return templates.TemplateResponse("threads_accounts.html", {
+        "request": request, "accounts": cards, "active": aid,
+        "can_save": overrides.enabled()})
+
+
+@app.get("/threads/posts", response_class=HTMLResponse)
 def threads_review(request: Request, saved: str = "", view: str = "pr"):
-    """Threads投稿の承認UI。view=pr=商品PR / musing=つぶやき でタブ分け。"""
+    """Threads投稿の承認UI（媒体ごと）。view=pr=商品PR / musing=つぶやき でタブ分け。"""
     if not review.enabled():
         return RedirectResponse("/review", status_code=303)
     if not _authed(request):
@@ -917,7 +943,7 @@ def threads_generate(request: Request, kind: str = Form("musing")):
         made = threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
     except Exception:  # noqa: BLE001
         made = 0
-    return RedirectResponse(f"/threads?view=musing&saved=genmu{made}", status_code=303)
+    return RedirectResponse(f"/threads/posts?view=musing&saved=genmu{made}", status_code=303)
 
 
 @app.post("/threads/collect")
@@ -1057,9 +1083,9 @@ def threads_approve(request: Request, draft_id: str = Form(...),
     is_musing = bool(d and d.get("type") == "musing")
     v = "musing" if is_musing else "pr"
     if not is_musing and not image_url:
-        return RedirectResponse(f"/threads?view={v}&saved=noimg", status_code=303)
+        return RedirectResponse(f"/threads/posts?view={v}&saved=noimg", status_code=303)
     ok = threads_pipeline.approve(draft_id, image_url, caption, reply_text)
-    return RedirectResponse(f"/threads?view={v}&saved=" + ("ok" if ok else "fail"), status_code=303)
+    return RedirectResponse(f"/threads/posts?view={v}&saved=" + ("ok" if ok else "fail"), status_code=303)
 
 
 @app.post("/threads/reject")
@@ -1069,7 +1095,7 @@ def threads_reject(request: Request, draft_id: str = Form(...)):
     d = next((x for x in threads_pipeline.drafts() if x["id"] == draft_id), None)
     v = "musing" if (d and d.get("type") == "musing") else "pr"
     threads_pipeline.reject(draft_id)
-    return RedirectResponse(f"/threads?view={v}&saved=rej", status_code=303)
+    return RedirectResponse(f"/threads/posts?view={v}&saved=rej", status_code=303)
 
 
 @app.post("/threads/withdraw")
@@ -1080,7 +1106,7 @@ def threads_withdraw(request: Request, item_id: str = Form(...)):
     item = next((x for x in threads_pipeline.queue() if x.get("id") == item_id), None)
     v = "musing" if (item and item.get("type") == "musing") else "pr"
     ok = threads_pipeline.withdraw(item_id)
-    return RedirectResponse(f"/threads?view={v}&saved=" + ("wd" if ok else "fail"), status_code=303)
+    return RedirectResponse(f"/threads/posts?view={v}&saved=" + ("wd" if ok else "fail"), status_code=303)
 
 
 def _threads_ai_ctx(request, *, model="", saved="", test=None):

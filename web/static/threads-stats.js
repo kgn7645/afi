@@ -96,7 +96,7 @@
         switcher(d.accounts, d.active);
         header(s);
         setBadge('/threads/select', s.select);            // 選定: 候補数
-        setBadge('/threads', s.drafts);                   // 投稿: 承認待ち
+        setBadge('/threads/posts', s.drafts);                   // 投稿: 承認待ち
         setBadge('/threads/add', s.fetch, '#f59e0b');     // 追加: 取得待ち(処理中=橙)
       })
       .catch(function () {});

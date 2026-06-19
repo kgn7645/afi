@@ -97,7 +97,7 @@
 <body>
 <div class="nav">
   <div class="seg">
-    <a href="/">🏠</a><a href="/threads/add">＋追加</a><a href="/threads/select">🛍 選定</a><a href="/threads" class="on">🧵 投稿</a><a href="/threads/settings">⚙️</a><a href="/threads/ai">🤖</a>
+    <a href="/threads">📋 媒体</a><a href="/threads/add">＋追加</a><a href="/threads/select">🛍 選定</a><a href="/threads/posts" class="on">🧵 投稿</a><a href="/threads/settings">⚙️</a><a href="/threads/ai">🤖</a>
   </div>
 </div>
 <div class="wrap">
@@ -114,8 +114,8 @@
   {% if publish_mode != 'live' %}<div class="flash" style="background:#fff3cd;color:#8a6d1a;">📥 下書きストックモード：承認しても<b>Threadsへは投稿されません</b>（溜めるだけ）。公開を始めるには <a href="/threads/settings" style="color:#8a6d1a;font-weight:800;">⚙️設定</a> で「ライブ公開」に切替。</div>{% endif %}
 
   <div class="subseg">
-    <a href="/threads?view=pr" class="{{ 'on' if view!='musing' }}">🛒 商品PR <b>{{ pr_count }}</b></a>
-    <a href="/threads?view=musing" class="{{ 'on' if view=='musing' }}">💬 つぶやき <b>{{ mu_count }}</b></a>
+    <a href="/threads/posts?view=pr" class="{{ 'on' if view!='musing' }}">🛒 商品PR <b>{{ pr_count }}</b></a>
+    <a href="/threads/posts?view=musing" class="{{ 'on' if view=='musing' }}">💬 つぶやき <b>{{ mu_count }}</b></a>
   </div>
   <div class="bar">
     <h2>{{ '💬 つぶやき' if view=='musing' else '🛒 商品PR' }}（承認待ち {{ drafts|length }}）</h2>

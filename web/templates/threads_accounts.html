@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>媒体選択｜Threads</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --red:#e0433f; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:40px; }
+  .top{ display:flex; align-items:center; gap:10px; max-width:680px; margin:0 auto; padding:14px 16px 4px; }
+  .top a.home{ font-size:13px; font-weight:800; color:#8a86a0; text-decoration:none; background:#fff;
+               border-radius:999px; padding:7px 13px; box-shadow:0 1px 4px rgba(40,30,70,.06); }
+  .top h1{ font-size:17px; margin:0; flex:1; }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .hint{ font-size:12px; color:#9a96ad; margin:2px 2px 12px; }
+  .card{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:15px;
+         margin:12px 0; border:2px solid transparent; }
+  .card.on{ border-color:#bbaef0; }
+  .chead{ display:flex; align-items:center; gap:9px; }
+  .cname{ font-size:16px; font-weight:800; flex:1; }
+  .badge{ font-size:11px; font-weight:800; border-radius:999px; padding:3px 9px; white-space:nowrap; }
+  .b-draft{ color:#8a6d1a; background:#fff3cd; } .b-live{ color:#0d8a6a; background:#e3f8ee; }
+  .b-cur{ color:#fff; background:#7a6fb0; }
+  .ctok{ font-size:11.5px; margin-top:6px; }
+  .tok-ok{ color:#0d8a6a; } .tok-no{ color:#c2410c; }
+  .stats{ display:flex; gap:8px; margin:10px 0; }
+  .stat{ flex:1; text-align:center; background:#faf8fd; border-radius:10px; padding:8px 4px; }
+  .stat b{ display:block; font-size:17px; color:var(--ink); } .stat span{ font-size:11px; color:#9a96ad; }
+  .acts{ display:flex; gap:8px; }
+  .acts form{ flex:1; margin:0; }
+  .acts button{ width:100%; border:none; border-radius:11px; padding:12px; font-size:13px; font-weight:800; cursor:pointer; }
+  .enter{ color:#fff; background:linear-gradient(135deg,var(--orange),#ff7e5f); }
+  .gear{ color:#6a5fb0; background:#f3f0fb; }
+  .addbox{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:15px; margin:16px 0; }
+  .addbox h2{ font-size:14px; margin:0 0 8px; }
+  .addrow{ display:flex; gap:8px; }
+  .addrow input{ flex:1; padding:11px 12px; border:1.5px solid #ece9f1; border-radius:10px; font-size:14px; }
+  .addrow button{ border:none; border-radius:10px; padding:0 16px; font-weight:800; color:#fff;
+                  background:linear-gradient(135deg,#7a6fb0,#9b8fd0); cursor:pointer; }
+  .ro{ background:#fff3cd; color:#8a6d1a; border-radius:12px; padding:11px 14px; font-size:13px; margin:10px 0; }
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="home" href="/">🏠 おうちベース</a>
+  <h1>🧵 Threads 媒体</h1>
+</div>
+<div class="wrap">
+  {% if not can_save %}<div class="ro">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）。媒体の追加・編集はWP接続が必要です。</div>{% endif %}
+  <p class="hint">運用する媒体（アカウント）を選んでください。媒体ごとに投稿先・ペルソナ・公開設定を分けて管理できます。</p>
+
+  {% for a in accounts %}
+  <div class="card {{ 'on' if a.id==active }}">
+    <div class="chead">
+      <span class="cname">{{ a.name }}</span>
+      {% if a.id==active %}<span class="badge b-cur">操作中</span>{% endif %}
+      {% if a.mode=='live' %}<span class="badge b-live">🚀 ライブ公開</span>
+      {% else %}<span class="badge b-draft">📥 下書きストック</span>{% endif %}
+    </div>
+    <div class="ctok">{% if a.has_token %}<span class="tok-ok">🔑 トークン設定済み</span>{% else %}<span class="tok-no">🔑 トークン未設定（公開不可）</span>{% endif %}</div>
+    <div class="stats">
+      <div class="stat"><b>{{ a.select }}</b><span>選定候補</span></div>
+      <div class="stat"><b>{{ a.drafts }}</b><span>承認待ち</span></div>
+      <div class="stat"><b>{{ a.queue }}</b><span>公開待ち</span></div>
+    </div>
+    <div class="acts">
+      <form method="post" action="/threads/account/switch">
+        <input type="hidden" name="acc_id" value="{{ a.id }}">
+        <input type="hidden" name="back" value="/threads/posts">
+        <button class="enter" type="submit">▶ この媒体で操作する</button>
+      </form>
+      <form method="post" action="/threads/account/switch" style="flex:none;">
+        <input type="hidden" name="acc_id" value="{{ a.id }}">
+        <input type="hidden" name="back" value="/threads/settings?acc={{ a.id }}">
+        <button class="gear" type="submit">⚙️ 設定</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if can_save %}
+  <div class="addbox">
+    <h2>＋ 媒体を追加</h2>
+    <form class="addrow" method="post" action="/threads/account/add">
+      <input type="text" name="name" placeholder="媒体名（例: 美容B / 暮らし）" required>
+      <button type="submit">追加</button>
+    </form>
+    <p class="hint" style="margin-top:8px;">追加後、その媒体の⚙️設定でペルソナ・キーワード・公開トークンを設定してください。</p>
+  </div>
+  {% endif %}
+</div>
+<script src="/static/ui.js" defer></script>
+<script src="/static/ux.js" defer></script>
+</body>
+</html>
