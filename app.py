@@ -785,11 +785,13 @@ def threads_review(request: Request, saved: str = "", view: str = "pr"):
         return RedirectResponse("/review", status_code=303)
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    ds = threads_pipeline.drafts()
+    aid = _active_acc_id(request)
+    ds = [d for d in threads_pipeline.drafts() if d.get("account") == aid]
     pr_d = [d for d in ds if d.get("type") != "musing"]
     mu_d = [d for d in ds if d.get("type") == "musing"]
     view = "musing" if view == "musing" else "pr"
-    q = [x for x in threads_pipeline.queue() if x.get("status") == "pending"]
+    q = [x for x in threads_pipeline.queue()
+         if x.get("status") == "pending" and x.get("account") == aid]
     q.sort(key=lambda x: x.get("scheduled_at", 0))
     import datetime as _dt
     for x in q:
@@ -798,37 +800,111 @@ def threads_review(request: Request, saved: str = "", view: str = "pr"):
         "request": request, "drafts": (mu_d if view == "musing" else pr_d),
         "queued": q, "saved": saved, "can_save": overrides.enabled(),
         "view": view, "pr_count": len(pr_d), "mu_count": len(mu_d),
-        "publish_mode": threads_pipeline.publish_mode()})
+        "publish_mode": threads_pipeline.account_publish_mode(aid)})
 
 
 @app.get("/threads/stats")
 def threads_stats(request: Request):
-    """Threadsの各数値（ヘッダーのチップ／タブのバッジ表示用・JS が取得）。"""
+    """Threadsの各数値（ヘッダーのチップ／タブのバッジ／媒体切替・JS が取得）。操作中アカウントで集計。"""
     if not _authed(request):
         return JSONResponse({"ok": False}, status_code=401)
-    ds = threads_pipeline.drafts()
+    aid = _active_acc_id(request)
+    ds = [d for d in threads_pipeline.drafts() if d.get("account") == aid]
     pr_d = sum(1 for d in ds if d.get("type") != "musing")
     mu_d = sum(1 for d in ds if d.get("type") == "musing")
-    qn = sum(1 for x in threads_pipeline.queue() if x.get("status") == "pending")
-    return JSONResponse({"ok": True, "stats": {
-        "select": len(threads_pipeline.products()),     # 選定中の候補
-        "gen": len(threads_pipeline.genqueue()),         # 生成待ち（Claude Code）
-        "drafts": pr_d + mu_d, "pr": pr_d, "musing": mu_d,  # 承認待ち
-        "queue": qn,                                     # 公開待ち（予約済み）
-        "fetch": len(threads_pipeline.fetchqueue()),     # 取得待ち（@cosme/LIPS）
-    }})
+    qn = sum(1 for x in threads_pipeline.queue()
+             if x.get("status") == "pending" and x.get("account") == aid)
+    return JSONResponse({"ok": True,
+        "accounts": [{"id": a.get("id"), "name": a.get("name", a.get("id"))}
+                     for a in _threads_accounts()],
+        "active": aid,
+        "stats": {
+            "select": sum(1 for p in threads_pipeline.products() if p.get("account") == aid),
+            "gen": sum(1 for g in threads_pipeline.genqueue() if g.get("account") == aid),
+            "drafts": pr_d + mu_d, "pr": pr_d, "musing": mu_d,
+            "queue": qn,
+            "fetch": sum(1 for f in threads_pipeline.fetchqueue() if f.get("account") == aid),
+        }})
 
 
 def _threads_accounts() -> list:
-    return (get_rules().get("threads", {}) or {}).get("accounts", []) or []
+    return threads_pipeline.accounts()
 
 
 def _threads_acc(account_id: str = "") -> dict:
-    accounts = _threads_accounts()
-    for a in accounts:
-        if a.get("id") == account_id:
-            return a
-    return accounts[0] if accounts else {"id": "mmmtreees"}
+    return threads_pipeline.get_account(account_id)
+
+
+def _active_acc_id(request: Request) -> str:
+    """操作中アカウント。Cookie th_acc 優先・無効なら先頭。"""
+    ids = [a.get("id") for a in _threads_accounts()]
+    cid = request.cookies.get("th_acc", "")
+    return cid if cid in ids else (ids[0] if ids else "mmmtreees")
+
+
+def _save_accounts(accs: list) -> bool:
+    return overrides.update({"threads": {"accounts": accs}})
+
+
+@app.post("/threads/account/switch")
+def threads_account_switch(request: Request, acc_id: str = Form(""), back: str = Form("/threads")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    dest = back if back.startswith("/threads") else "/threads"
+    resp = RedirectResponse(dest, status_code=303)
+    if acc_id in [a.get("id") for a in _threads_accounts()]:
+        resp.set_cookie("th_acc", acc_id, max_age=60 * 60 * 24 * 365, httponly=True, samesite="lax")
+    return resp
+
+
+@app.post("/threads/account/add")
+def threads_account_add(request: Request, name: str = Form("")):
+    """新しい媒体（アカウント）を追加。idは自動採番。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    accs = list(_threads_accounts())
+    existing = {a.get("id") for a in accs}
+    i = len(accs) + 1
+    new_id = f"acc{i}"
+    while new_id in existing:
+        i += 1
+        new_id = f"acc{i}"
+    accs.append({"id": new_id, "name": (name.strip() or f"アカウント{i}"),
+                 "persona": "", "keywords": [], "genres": [], "per_run": 3,
+                 "musing_per_run": 3, "token": "", "publish_mode": "draft_only"})
+    _save_accounts(accs)
+    resp = RedirectResponse(f"/threads/settings?acc={new_id}&saved=1", status_code=303)
+    resp.set_cookie("th_acc", new_id, max_age=60 * 60 * 24 * 365, httponly=True, samesite="lax")
+    return resp
+
+
+@app.post("/threads/account/delete")
+def threads_account_delete(request: Request, acc_id: str = Form("")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    accs = [a for a in _threads_accounts() if a.get("id") != acc_id]
+    if accs:                                   # 最後の1つは消さない
+        _save_accounts(accs)
+    return RedirectResponse("/threads/settings?saved=del", status_code=303)
+
+
+@app.post("/threads/account/check")
+def threads_account_check(request: Request, acc_id: str = Form(""), token: str = Form("")):
+    """アカウントのトークン接続確認（me()でユーザー名取得・投稿しない）。入力中トークンを優先。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    acc = _threads_acc(acc_id)
+    tok = token.strip() or threads_pipeline.account_token(acc)
+    from core import threads_client
+    try:
+        info = threads_client.me(tok)
+        un = info.get("username") or info.get("id") or "?"
+        msg = f"ok:@{un}"
+    except Exception as ex:  # noqa: BLE001
+        msg = "ng:" + str(ex)[:120]
+    import urllib.parse
+    return RedirectResponse(f"/threads/settings?acc={acc_id}&chk=" + urllib.parse.quote(msg),
+                            status_code=303)
 
 
 @app.post("/threads/generate")
@@ -836,12 +912,11 @@ def threads_generate(request: Request, kind: str = Form("musing")):
     """つぶやき生成（商品は段階分離のため /threads/collect で候補収集→商品選定）。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    made = 0
-    for acc in _threads_accounts():
-        try:
-            made += threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
-        except Exception:  # noqa: BLE001
-            pass
+    acc = _threads_acc(_active_acc_id(request))    # 操作中の媒体に生成
+    try:
+        made = threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
+    except Exception:  # noqa: BLE001
+        made = 0
     return RedirectResponse(f"/threads?view=musing&saved=genmu{made}", status_code=303)
 
 
@@ -850,12 +925,11 @@ def threads_collect(request: Request):
     """楽天キーワードから商品候補を収集 → 商品選定リストへ（キャプション未生成）。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    made = 0
-    for acc in _threads_accounts():
-        try:
-            made += threads_pipeline.collect_products_rakuten(acc, int(acc.get("per_run", 6)))
-        except Exception:  # noqa: BLE001
-            pass
+    acc = _threads_acc(_active_acc_id(request))    # 操作中の媒体へ収集
+    try:
+        made = threads_pipeline.collect_products_rakuten(acc, int(acc.get("per_run", 6)))
+    except Exception:  # noqa: BLE001
+        made = 0
     return RedirectResponse(f"/threads/select?saved=col{made}", status_code=303)
 
 
@@ -866,12 +940,14 @@ def threads_select(request: Request, saved: str = "", m: str = ""):
         return RedirectResponse("/review", status_code=303)
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    ps = sorted(threads_pipeline.products(), key=lambda p: p.get("created", 0), reverse=True)
-    ds = threads_pipeline.drafts()
+    aid = _active_acc_id(request)
+    ps = sorted([p for p in threads_pipeline.products() if p.get("account") == aid],
+                key=lambda p: p.get("created", 0), reverse=True)
+    ds = [d for d in threads_pipeline.drafts() if d.get("account") == aid]
     return templates.TemplateResponse("threads_select.html", {
         "request": request, "saved": saved, "msg": m, "products": ps,
         "gen_mode": threads_pipeline.gen_mode(),
-        "gen_pending": len(threads_pipeline.genqueue()),
+        "gen_pending": sum(1 for g in threads_pipeline.genqueue() if g.get("account") == aid),
         "pending": len([d for d in ds if d.get("type") == "pr"]),
         "musings": len([d for d in ds if d.get("type") == "musing"])})
 
@@ -934,7 +1010,7 @@ def threads_manual(request: Request, url: str = Form(""), label: str = Form(""))
     """楽天 / @cosme / LIPS の商品URL（＋ラベル）を貼ると、クロールして商品選定リストに追加。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    acc = _threads_acc()
+    acc = _threads_acc(_active_acc_id(request))
     ok, msg = threads_pipeline.add_manual_url(acc, url.strip(), label.strip())
     import urllib.parse
     qs = "saved=" + ("man" if ok else "manfail") + "&m=" + urllib.parse.quote(msg or "")
@@ -1061,64 +1137,75 @@ def threads_ai_test(request: Request, gemini_model: str = Form("")):
 
 
 @app.get("/threads/settings", response_class=HTMLResponse)
-def threads_settings_form(request: Request, saved: str = ""):
-    """Threads媒体の設定（アカウントのペルソナ/ジャンル/生成数・スケジュール）。"""
+def threads_settings_form(request: Request, saved: str = "", acc: str = "", chk: str = ""):
+    """Threads媒体の設定（複数アカウント＝媒体ごとに編集・切替・追加・削除）。"""
     if not review.enabled():
         return RedirectResponse("/review", status_code=303)
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     t = get_rules().get("threads", {}) or {}
-    acc = (t.get("accounts") or [{}])[0]
+    accts = _threads_accounts()
+    cur_id = acc if acc in [a.get("id") for a in accts] else _active_acc_id(request)
+    a = _threads_acc(cur_id)
     sch = t.get("schedule", {}) or {}
     d = {
         "enabled": bool(t.get("enabled", False)),
-        "name": acc.get("name", "検証アカウント"),
-        "persona": acc.get("persona", ""),
-        "keywords": "\n".join(acc.get("keywords") or []),
-        "genres": "\n".join(str(g) for g in (acc.get("genres") or [])),
-        "per_run": acc.get("per_run", 3),
-        "musing_per_run": acc.get("musing_per_run", 3),
+        "acc_id": a.get("id"), "name": a.get("name", "アカウント"),
+        "persona": a.get("persona", ""),
+        "keywords": "\n".join(a.get("keywords") or []),
+        "genres": "\n".join(str(g) for g in (a.get("genres") or [])),
+        "per_run": a.get("per_run", 3),
+        "musing_per_run": a.get("musing_per_run", 3),
+        "token": a.get("token", ""),
+        "publish_mode": threads_pipeline.account_publish_mode(a),
         "hours": ",".join(str(h) for h in (sch.get("hours") or [8, 12, 20])),
         "pub_per_run": sch.get("per_run", 1),
-        "publish_mode": threads_pipeline.publish_mode(),
     }
     return templates.TemplateResponse("threads_settings.html", {
-        "request": request, "d": d, "saved": saved, "can_save": overrides.enabled()})
+        "request": request, "d": d, "saved": saved, "chk": chk,
+        "accounts": [{"id": x.get("id"), "name": x.get("name", x.get("id"))} for x in accts],
+        "can_save": overrides.enabled()})
 
 
 @app.post("/threads/settings")
 def threads_settings_save(
-    request: Request, enabled: str = Form(""), name: str = Form(""),
+    request: Request, acc_id: str = Form(""), enabled: str = Form(""), name: str = Form(""),
     persona: str = Form(""), keywords: str = Form(""), genres: str = Form(""),
     per_run: str = Form("3"), musing_per_run: str = Form("3"),
+    token: str = Form(""), publish_mode: str = Form("draft_only"),
     hours: str = Form("8,12,20"), pub_per_run: str = Form("1"),
-    publish_mode: str = Form("draft_only"),
 ):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
 
     def _ints(v, sep):
-        out = []
-        for x in re.split(sep, v):
-            x = x.strip()
-            if x.isdigit():
-                out.append(int(x))
-        return out
+        return [int(x) for x in re.split(sep, v) if x.strip().isdigit()]
 
-    t = get_rules().get("threads", {}) or {}
-    acc = dict((t.get("accounts") or [{}])[0])
-    acc.update({"id": acc.get("id", "mmmtreees"), "name": name.strip() or "検証アカウント",
-                "persona": persona.strip(),
-                "keywords": [k.strip() for k in keywords.splitlines() if k.strip()],
-                "genres": [g.strip() for g in genres.splitlines() if g.strip()],
-                "per_run": int(per_run) if per_run.isdigit() else 3,
-                "musing_per_run": int(musing_per_run) if musing_per_run.isdigit() else 3})
-    ov = {"threads": {"enabled": enabled == "on", "accounts": [acc],
-                      "publish_mode": "live" if publish_mode == "live" else "draft_only",
+    accts = list(_threads_accounts())
+    fields = {"name": name.strip() or "アカウント", "persona": persona.strip(),
+              "keywords": [k.strip() for k in keywords.splitlines() if k.strip()],
+              "genres": [g.strip() for g in genres.splitlines() if g.strip()],
+              "per_run": int(per_run) if per_run.isdigit() else 3,
+              "musing_per_run": int(musing_per_run) if musing_per_run.isdigit() else 3,
+              "token": token.strip(),
+              "publish_mode": "live" if publish_mode == "live" else "draft_only"}
+    found = False
+    for a in accts:
+        if a.get("id") == acc_id:
+            a.update(fields)
+            found = True
+            break
+    if not found:                              # 該当が無ければ先頭を更新（後方互換）
+        if accts:
+            accts[0].update(fields)
+        else:
+            accts = [{"id": acc_id or "mmmtreees", **fields}]
+    ov = {"threads": {"enabled": enabled == "on", "accounts": accts,
                       "schedule": {"hours": _ints(hours, r"[,\s]+") or [8, 12, 20],
                                    "per_run": int(pub_per_run) if pub_per_run.isdigit() else 1}}}
     ok = overrides.update(ov)
-    return RedirectResponse("/threads/settings?saved=" + ("1" if ok else "fail"), status_code=303)
+    dest = f"/threads/settings?acc={acc_id}&saved=" + ("1" if ok else "fail")
+    return RedirectResponse(dest, status_code=303)
 
 
 @app.post("/crawl/request")

@@ -38,21 +38,46 @@
     <a href="/">🏠</a><a href="/threads/add">＋追加</a><a href="/threads/select">🛍 選定</a><a href="/threads">🧵 投稿</a><a href="/threads/settings" class="on">⚙️</a><a href="/threads/ai">🤖</a>
   </div>
 </div>
-<form class="wrap" method="post" action="/threads/settings">
+<div class="wrap">
   {% if saved=='1' %}<div class="flash">✓ 保存しました（最大1分で反映）</div>{% endif %}
+  {% if saved=='del' %}<div class="flash">✓ アカウントを削除しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">保存に失敗しました</div>{% endif %}
   {% if not can_save %}<div class="ro">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
+  {% if chk.startswith('ok:') %}<div class="flash">✅ 接続OK：{{ chk[3:] }} に紐付いています（投稿はしていません）</div>{% endif %}
+  {% if chk.startswith('ng:') %}<div class="flash warn">❌ 接続NG：{{ chk[3:] }}</div>{% endif %}
 
   <div class="sec">
-    <h2>🧵 Threads アカウント</h2>
-    <p class="hint">投稿先＝THREADS_ACCESS_TOKEN のアカウント。文章の人格をここで決めます。</p>
+    <h2>🧵 媒体（アカウント）を選ぶ・増やす</h2>
+    <p class="hint">媒体ごとにペルソナ・キーワード・公開トークン・公開モードを分けて管理できます。</p>
+    <div class="chips" style="display:flex;flex-wrap:wrap;gap:7px;">
+      {% for a in accounts %}
+      <form method="post" action="/threads/account/switch" style="margin:0;">
+        <input type="hidden" name="acc_id" value="{{ a.id }}">
+        <input type="hidden" name="back" value="/threads/settings?acc={{ a.id }}">
+        <button type="submit" style="border:1.5px solid {{ '#7a6fb0' if a.id==d.acc_id else '#e6e1ee' }};
+          background:{{ '#7a6fb0' if a.id==d.acc_id else '#fff' }};color:{{ '#fff' if a.id==d.acc_id else '#6a5fb0' }};
+          border-radius:999px;padding:8px 14px;font-size:13px;font-weight:800;cursor:pointer;">{{ a.name }}</button>
+      </form>
+      {% endfor %}
+      <form method="post" action="/threads/account/add" style="margin:0;">
+        <button type="submit" style="border:1.5px dashed #9a8fc0;background:#fff;color:#9a8fc0;
+          border-radius:999px;padding:8px 14px;font-size:13px;font-weight:800;cursor:pointer;">＋ 媒体を追加</button>
+      </form>
+    </div>
+  </div>
+
+<form class="" method="post" action="/threads/settings">
+  <input type="hidden" name="acc_id" value="{{ d.acc_id }}">
+
+  <div class="sec">
+    <h2>✏️ 「{{ d.name }}」の設定</h2>
     <div class="chk"><input type="checkbox" name="enabled" {{ 'checked' if d.enabled }}>
-      生成cronを有効にする（自動でドラフトを作る）</div>
-    <label>アカウント名（管理用）</label>
+      生成cronを有効にする（全媒体共通・自動でドラフトを作る）</div>
+    <label>媒体名（管理用）</label>
     <input type="text" name="name" value="{{ d.name }}">
     <label>人格・口調（ペルソナ）</label>
     <textarea name="persona" rows="3">{{ d.persona }}</textarea>
-    <label>狙うキーワード（1行に1つ・美容はこちら主体）</label>
+    <label>狙うキーワード（1行に1つ）</label>
     <textarea name="keywords" rows="5" placeholder="リップ ティント&#10;アイシャドウ パレット&#10;チーク">{{ d.keywords }}</textarea>
     <label>楽天ジャンルID（任意・1行に1つ・併用可）</label>
     <textarea name="genres" rows="2">{{ d.genres }}</textarea>
@@ -60,11 +85,23 @@
     <input type="number" name="per_run" min="0" value="{{ d.per_run }}">
     <label>1回の生成数：つぶやき（日常・共感）</label>
     <input type="number" name="musing_per_run" min="0" value="{{ d.musing_per_run }}">
-    <p class="hint">参考アカ分析では「つぶやき5〜6：PR4〜5」。つぶやき多めが伸びやすい。</p>
   </div>
 
   <div class="sec">
-    <h2>🚦 公開モード</h2>
+    <h2>🔑 公開トークン（この媒体専用）</h2>
+    <p class="hint">この媒体のThreads投稿に使うアクセストークン（THAA…）。媒体ごとに別々に設定します。
+      空の場合は env の THREADS_ACCESS_TOKEN を使用。</p>
+    <label>アクセストークン</label>
+    <input type="text" name="token" value="{{ d.token }}" placeholder="THAA…（この媒体のトークン）" autocomplete="off">
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button type="submit" formaction="/threads/account/check"
+        style="flex:1;border:1.5px solid #4a8fe0;background:#fff;color:#4a8fe0;border-radius:11px;padding:11px;font-weight:800;cursor:pointer;">🔌 接続確認（投稿しない）</button>
+    </div>
+    <p class="hint">※「接続確認」は入力中のトークンで@ユーザー名を取得して確かめます（投稿はしません）。</p>
+  </div>
+
+  <div class="sec">
+    <h2>🚦 公開モード（この媒体）</h2>
     <p class="hint">アカウントを温める間は「下書きストックのみ」にして実投稿を止められます（BAN対策）。
       承認済みは公開キューに溜まり、ライブ公開に切替えた時にスケジュールどおり出ます。</p>
     <label style="display:block;border:1.5px solid #ece9f1;border-radius:11px;padding:11px 13px;margin:7px 0;cursor:pointer;">
@@ -89,8 +126,17 @@
     <input type="number" name="pub_per_run" min="1" value="{{ d.pub_per_run }}">
   </div>
 
-  {% if can_save %}<div class="save"><button type="submit">保存する</button></div>{% endif %}
+  {% if can_save %}<div class="save"><button type="submit">「{{ d.name }}」を保存する</button></div>{% endif %}
 </form>
+
+{% if accounts|length > 1 %}
+<form class="wrap" method="post" action="/threads/account/delete" style="margin-top:0;"
+      data-confirm="媒体「{{ d.name }}」を削除しますか？（この媒体の設定が消えます）" data-confirm-ok="削除する">
+  <input type="hidden" name="acc_id" value="{{ d.acc_id }}">
+  <button type="submit" style="width:100%;border:1.5px solid #f0d0d0;background:#fff;color:#c2410c;
+    border-radius:12px;padding:12px;font-weight:800;cursor:pointer;">🗑 この媒体「{{ d.name }}」を削除</button>
+</form>
+{% endif %}
 <script src="/static/ui.js" defer></script>
 <script src="/static/ux.js" defer></script>
 <script src="/static/threads-stats.js" defer></script>

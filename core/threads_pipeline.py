@@ -572,6 +572,36 @@ def publish_mode() -> str:
     return "live" if m == "live" else "draft_only"
 
 
+# ---------- アカウント（媒体）管理 ----------
+def accounts() -> list:
+    """Threadsアカウント（媒体）一覧。"""
+    accs = (get_rules().get("threads", {}) or {}).get("accounts") or []
+    return accs if accs else [{"id": "mmmtreees", "name": "アカウント1"}]
+
+
+def get_account(acc_id: str = "") -> dict:
+    accs = accounts()
+    for a in accs:
+        if a.get("id") == acc_id:
+            return a
+    return accs[0]
+
+
+def account_token(acc) -> str:
+    """アカウント別の公開トークン。空なら threads_client が env にフォールバック。"""
+    if isinstance(acc, str):
+        acc = get_account(acc)
+    return (acc.get("token") or "").strip()
+
+
+def account_publish_mode(acc) -> str:
+    """アカウント別の公開モード。未設定は全体設定にフォールバック。"""
+    if isinstance(acc, str):
+        acc = get_account(acc)
+    m = (acc.get("publish_mode") or "").strip()
+    return m if m in ("live", "draft_only") else publish_mode()
+
+
 def build_pr_prompt(persona: str, item: dict, n: int = 5, *,
                     tmpl: str = "", label: str = "", review_gist: str = "") -> str:
     """PR投稿の最終プロンプト文字列を組み立てる（Gemini/Claude共通）。"""
@@ -1413,24 +1443,33 @@ def reject(draft_id: str) -> bool:
 
 # ---------- 公開（スケジューラ） ----------
 def publish_due(*, limit: int = 1) -> list[dict]:
-    """scheduled_at<=now の pending を公開（画像メイン＋リンクをリプライ）。"""
-    if publish_mode() != "live":
-        return []   # 下書きストックモード: 実投稿しない（承認済みはキューに溜まる）
-    if not threads_client.enabled():
-        return []
+    """scheduled_at<=now の pending を公開（画像メイン＋リンクをリプライ）。
+
+    アカウント別: そのアカウントの公開モードが live のものだけ、アカウント別トークンで公開。
+    """
     q = queue()
     now = int(time.time())
     due = [x for x in q if x.get("status") == "pending" and x.get("scheduled_at", 0) <= now]
     due.sort(key=lambda x: x.get("scheduled_at", 0))
     results = []
-    uid = None
-    for item in due[:limit]:
+    uids: dict = {}                 # account_id -> user_id キャッシュ
+    published = 0
+    for item in due:
+        if published >= limit:
+            break
+        acc = get_account(item.get("account", ""))
+        if account_publish_mode(acc) != "live":
+            continue                # 下書きストックモードのアカウントはスキップ（溜めるだけ）
+        tok = account_token(acc)
         try:
-            if uid is None:
-                uid = threads_client.me().get("id", "me")
+            if not (tok or threads_client.enabled()):
+                raise RuntimeError("このアカウントの公開トークンが未設定です")
+            acc_id = acc.get("id", "")
+            if acc_id not in uids:
+                uids[acc_id] = threads_client.me(tok).get("id", "me")
+            uid = uids[acc_id]
             if item.get("type") == "musing":
-                # つぶやき＝テキストのみ（#PR・リンク無し）
-                res = {"main": threads_client.publish_text(item["caption"], user_id=uid)}
+                res = {"main": threads_client.publish_text(item["caption"], user_id=uid, token=tok)}
             else:
                 caption = item["caption"]
                 if "#PR" not in caption:
@@ -1438,10 +1477,11 @@ def publish_due(*, limit: int = 1) -> list[dict]:
                 imgs = item.get("images") or ([item["image"]] if item.get("image") else [])
                 imgs = _hosted_trimmed(imgs)   # 公開直前に白ふちトリム＋ホスティング
                 res = threads_client.post_set(caption, imgs, item.get("reply", ""),
-                                              item.get("link", ""), user_id=uid)
+                                              item.get("link", ""), user_id=uid, token=tok)
             item["status"] = "published"
             item["permalink"] = (res.get("main") or {}).get("permalink")
             item["published_at"] = now
+            published += 1
             results.append({"id": item["id"], "ok": True, "permalink": item["permalink"]})
         except Exception as ex:  # noqa: BLE001
             item["status"] = "error"
