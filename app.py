@@ -916,11 +916,22 @@ def threads_account_delete(request: Request, acc_id: str = Form("")):
 
 @app.post("/threads/account/check")
 def threads_account_check(request: Request, acc_id: str = Form(""), token: str = Form("")):
-    """アカウントのトークン接続確認（me()でユーザー名取得・投稿しない）。入力中トークンを優先。"""
+    """トークンを媒体に保存してから接続確認（me()でユーザー名取得・投稿はしない）。
+
+    「保存」を押し忘れてもトークンが残るよう、接続確認＝保存も兼ねる。
+    """
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    acc = _threads_acc(acc_id)
-    tok = token.strip() or threads_pipeline.account_token(acc)
+    tok = token.strip()
+    if tok:                                    # 入力中トークンをその媒体に保存（保存忘れ防止）
+        accts = list(_threads_accounts())
+        for a in accts:
+            if a.get("id") == acc_id:
+                a["token"] = tok
+                break
+        _save_accounts(accts)
+    else:
+        tok = threads_pipeline.account_token(_threads_acc(acc_id))
     from core import threads_client
     try:
         info = threads_client.me(tok)

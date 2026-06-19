@@ -43,7 +43,7 @@
   {% if saved=='del' %}<div class="flash">✓ アカウントを削除しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">保存に失敗しました</div>{% endif %}
   {% if not can_save %}<div class="ro">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
-  {% if chk.startswith('ok:') %}<div class="flash">✅ 接続OK：{{ chk[3:] }} に紐付いています（投稿はしていません）</div>{% endif %}
+  {% if chk.startswith('ok:') %}<div class="flash">✅ 接続OK：{{ chk[3:] }} に紐付き＆<b>トークン保存しました</b>（投稿はしていません）</div>{% endif %}
   {% if chk.startswith('ng:') %}<div class="flash warn">❌ 接続NG：{{ chk[3:] }}</div>{% endif %}
 
   <div class="sec">
