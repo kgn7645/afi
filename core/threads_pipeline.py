@@ -1061,28 +1061,51 @@ def _crawl_review_site(url: str) -> dict:
     return info if info.get("name") else {}
 
 
+def _name_overlap(it: dict, toks: list) -> int:
+    nm = it.get("itemName", "") or ""
+    return sum(1 for t in toks if t in nm)
+
+
 def _rakuten_best_match(name: str, e: dict) -> dict | None:
-    """商品名で楽天を検索し、名前の一致度＋人気で最良の1件を返す（収益化リンク用）。"""
+    """商品名で楽天を検索し、名前の一致度＋人気で最良の1件を返す（収益化リンク用）。
+
+    手動で選んだ商品なので、レビュー数/価格帯の足切り(_score)はしない（楽天にあるのに
+    レビューが少なくて『該当なし』になるのを防ぐ）。NGワード品だけ除外し、名前の一致を最優先。
+    検索語は広さを変えて複数回試す（先頭4語で出ない商品も3語/2語で拾う）。
+    """
     if not name:
         return None
-    kw = " ".join(name.split()[:4])              # 長すぎるとヒットしないので主要語のみ
-    try:
-        items = _rakuten_search(kw, e, by_keyword=True)
-    except Exception:  # noqa: BLE001
-        return None
     toks = [t for t in re.split(r"[\s　/・]+", name) if len(t) >= 2]
-
-    def _match(it: dict) -> float:
-        nm = it.get("itemName", "") or ""
-        overlap = sum(1 for t in toks if t in nm)
-        base = _score(it)
-        if base < 0 or overlap == 0:
-            return -1
-        return overlap * 100 + base
-
-    ranked = sorted(items, key=_match, reverse=True)
-    best = ranked[0] if ranked else None
-    return best if best and _match(best) > 0 else None
+    words = name.split()
+    tries: list[str] = []
+    for kw in (name, " ".join(words[:4]), " ".join(words[:3]), " ".join(words[:2])):
+        kw = kw.strip()
+        if kw and kw not in tries:
+            tries.append(kw)
+    items, seen = [], set()
+    strong = max(2, len(toks) - 1)               # 「ほぼ全トークン一致」の目安
+    for kw in tries:
+        try:
+            res = _rakuten_search(kw, e, by_keyword=True)
+        except Exception:  # noqa: BLE001
+            continue
+        for it in res:
+            c = it.get("itemCode")
+            if not c or c in seen:
+                continue
+            if any(ng in (it.get("itemName", "") or "") for ng in _NG):
+                continue                          # NGワード品のみ除外
+            seen.add(c)
+            items.append(it)
+        if any(_name_overlap(it, toks) >= strong for it in items):
+            break                                 # 十分な一致が取れたら追加検索は省く
+    if not items:
+        return None
+    best = max(items, key=lambda it: (_name_overlap(it, toks),
+                                      it.get("reviewCount") or 0,
+                                      it.get("reviewAverage") or 0))
+    need = 2 if len(toks) >= 3 else 1             # ブランド名だけの誤爆を防ぐ最低一致
+    return best if _name_overlap(best, toks) >= need else None
 
 
 # ---------- @cosme/LIPS 取得待ちキュー（日本IPのXserverで処理） ----------
