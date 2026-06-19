@@ -137,7 +137,8 @@ def _rakuten_search(genre_or_kw: str, e: dict, *, by_keyword: bool = False) -> l
 def _score(it: dict) -> float:
     price = it.get("itemPrice") or 0
     rc = it.get("reviewCount") or 0
-    if not (1500 <= price <= 30000) or rc < 30:
+    # 美容はプチプラ(¥500〜)も対象。レビューは10件以上で社会的証明
+    if not (500 <= price <= 30000) or rc < 10:
         return -1
     if any(ng in it.get("itemName", "") for ng in _NG):
         return -1
