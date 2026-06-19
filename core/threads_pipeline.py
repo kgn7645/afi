@@ -1126,8 +1126,8 @@ def _enqueue_fetch(account: dict, url: str, label: str) -> None:
 def process_fetch_queue(limit: int = 10, max_tries: int = 5) -> dict:
     """取得待ちの@cosme/LIPS URLを処理→選定に追加（Xserver=日本IPのcron用）。
 
-    クロール失敗はネットワーク一時不調とみなし max_tries まで温存・再試行。
-    楽天該当なし/重複は恒久要因としてキューから外す。
+    クロール失敗/楽天該当なしは一時不調(429等)もありうるので max_tries まで温存・再試行。
+    重複は恒久要因として即キューから外す。
     """
     q = fetchqueue()
     if not q:
@@ -1145,8 +1145,8 @@ def process_fetch_queue(limit: int = 10, max_tries: int = 5) -> dict:
             continue
         failed += 1
         item["tries"] = item.get("tries", 0) + 1
-        # 取得失敗のみ再試行（楽天該当なし/重複は恒久要因→破棄）
-        if "取得できませんでした" in msg and item["tries"] < max_tries:
+        # 重複は恒久→破棄。それ以外(取得失敗/楽天該当なし)は max_tries まで再試行
+        if "既に" not in msg and item["tries"] < max_tries:
             keep.append(item)
     rest = keep + q[limit:]
     _save("_threads_fetchqueue", rest)
@@ -1169,6 +1169,12 @@ def _add_from_review_site(account: dict, url: str, source: str, label: str,
         return False, f"{site}ページを取得できませんでした（アクセス制限/一時不調の可能性）"
     it = _rakuten_best_match(info["name"], e)
     if not it:
+        # 楽天マッチ不可。Render等は楽天APIキー未設定/IPで失敗しがちなので、
+        # キー＋日本IPを持つXserverに再マッチを委譲（取得待ちへ）。
+        if allow_enqueue:
+            _enqueue_fetch(account, url, label)
+            return True, (f"「{info['name'][:20]}」を取得待ちに追加しました"
+                          "（日本IPのサーバーが数分以内に楽天マッチ→選定に並びます）")
         return False, f"「{info['name'][:24]}」に一致する楽天商品が見つかりませんでした"
     gist = ""
     if info.get("snippets") and e.get("GEMINI_API_KEY"):
