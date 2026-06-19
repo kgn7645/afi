@@ -831,7 +831,7 @@ def _page_item_id(url: str) -> str:
 def _is_review_site(url: str) -> str:
     """URLが@cosme/LIPSなら 'cosme'/'lips' を返す。違えば ''。"""
     host = urllib.parse.urlparse(url).netloc.lower()
-    if "cosme.net" in host:
+    if "cosme.net" in host or "cosme.com" in host:   # 新旧ドメイン両対応
         return "cosme"
     if "lips.jp" in host or "lipscosme.com" in host:
         return "lips"
@@ -1085,14 +1085,65 @@ def _rakuten_best_match(name: str, e: dict) -> dict | None:
     return best if best and _match(best) > 0 else None
 
 
+# ---------- @cosme/LIPS 取得待ちキュー（日本IPのXserverで処理） ----------
+def fetchqueue() -> list:
+    """@cosme/LIPSの取得待ち（RenderなどIP制限環境で積み、Xserver cronがクロール）。"""
+    return _load("_threads_fetchqueue")
+
+
+def _enqueue_fetch(account: dict, url: str, label: str) -> None:
+    q = fetchqueue()
+    if any(x.get("url") == url and x.get("account") == account["id"] for x in q):
+        return  # 重複
+    q.append({"account": account["id"], "url": url, "label": (label or "").strip(),
+              "tries": 0, "created": int(time.time())})
+    _save("_threads_fetchqueue", q[-100:])
+
+
+def process_fetch_queue(limit: int = 10, max_tries: int = 5) -> dict:
+    """取得待ちの@cosme/LIPS URLを処理→選定に追加（Xserver=日本IPのcron用）。
+
+    クロール失敗はネットワーク一時不調とみなし max_tries まで温存・再試行。
+    楽天該当なし/重複は恒久要因としてキューから外す。
+    """
+    q = fetchqueue()
+    if not q:
+        return {"done": 0, "failed": 0, "left": 0}
+    e = _env()
+    done, failed, head, keep = 0, 0, q[:limit], []
+    for item in head:
+        src = _is_review_site(item.get("url", ""))
+        if not src:
+            continue  # 不正URLは破棄
+        ok, msg = _add_from_review_site({"id": item["account"]}, item["url"], src,
+                                        item.get("label", ""), e, allow_enqueue=False)
+        if ok:
+            done += 1
+            continue
+        failed += 1
+        item["tries"] = item.get("tries", 0) + 1
+        # 取得失敗のみ再試行（楽天該当なし/重複は恒久要因→破棄）
+        if "取得できませんでした" in msg and item["tries"] < max_tries:
+            keep.append(item)
+    rest = keep + q[limit:]
+    _save("_threads_fetchqueue", rest)
+    return {"done": done, "failed": failed, "left": len(rest)}
+
+
 def _add_from_review_site(account: dict, url: str, source: str, label: str,
-                          e: dict) -> tuple[bool, str]:
-    """@cosme/LIPSのURL → 公式画像・口コミ傾向を取り込み、商品名で楽天を自動マッチして追加。"""
+                          e: dict, *, allow_enqueue: bool = True) -> tuple[bool, str]:
+    """@cosme/LIPSのURL → 公式画像・口コミ傾向を取り込み、商品名で楽天を自動マッチして追加。
+
+    allow_enqueue=True かつ取得に失敗（=IP制限の可能性）なら、取得待ちキューに積んで
+    日本IPのXserver cronに委譲する（Web UIから貼っても後で選定に並ぶ）。
+    """
     site = "@cosme" if source == "cosme" else "LIPS"
     info = _crawl_review_site(url)
     if not info or not info.get("name"):
-        return False, (f"{site}ページを取得できませんでした（URL確認、"
-                       "またはサーバーから@cosme/LIPSへアクセス制限の可能性）")
+        if allow_enqueue:
+            _enqueue_fetch(account, url, label)
+            return True, f"{site}を取得待ちに追加しました（日本IPのサーバーが数分以内に取得→選定に並びます）"
+        return False, f"{site}ページを取得できませんでした（アクセス制限/一時不調の可能性）"
     it = _rakuten_best_match(info["name"], e)
     if not it:
         return False, f"「{info['name'][:24]}」に一致する楽天商品が見つかりませんでした"
