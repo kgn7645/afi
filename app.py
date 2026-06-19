@@ -507,6 +507,27 @@ def _add_manual_text(text: str) -> int:
     return _queue_manual_urls(urls)
 
 
+# Threads用URL（楽天/@cosme/LIPS）。Amazonとはドメインが別なので自動振り分けできる
+_THREADS_URL_RE = re.compile(
+    r"https?://\S*?(?:item\.rakuten\.co\.jp|cosme\.net|cosme\.com|lipscosme\.com|lips\.jp)\S*")
+
+
+def _add_threads_text(text: str) -> int:
+    """テキストから Threads用URL(楽天/@cosme/LIPS) を抽出→取得待ちに積む。受付件数を返す。"""
+    urls = list(dict.fromkeys(m.group(0) for m in _THREADS_URL_RE.finditer(text or "")))
+    if not urls:
+        return 0
+    acc = _threads_acc()
+    n = 0
+    for u in urls:
+        try:
+            if threads_pipeline.enqueue_threads_url(acc, u.strip()):
+                n += 1
+        except Exception:  # noqa: BLE001
+            continue
+    return n
+
+
 @app.post("/manual/paste")
 def manual_paste(request: Request, bulk: str = Form("")):
     """URL/ASINを複数貼り付け→まとめて選定済みへ。短縮リンクはXserverで展開予約。"""
@@ -538,11 +559,23 @@ async def line_webhook(request: Request):
         if not line_client.allowed(user_id):
             line_client.reply(token, "このアカウントからの追加は許可されていません。")
             continue
-        q = _add_manual_text(ev["message"]["text"])
-        if q == 0:
-            line_client.reply(token, "Amazonの商品リンク/ASINが見つかりませんでした🙏\n商品ページを「共有」して送ってください。")
+        msg = ev["message"]["text"]
+        # URLの種類で自動振り分け: Amazon→ブログ / 楽天・@cosme・LIPS→Threads
+        blog_n = _add_manual_text(msg)
+        threads_n = _add_threads_text(msg)
+        parts = []
+        if blog_n:
+            parts.append(f"🛒 ブログ {blog_n}件")
+        if threads_n:
+            parts.append(f"🧵 Threads {threads_n}件")
+        if parts:
+            line_client.reply(token, "✅ " + " / ".join(parts) + " を受け付けました！\n"
+                              "数分以内に商品情報を取得して選定リストに反映します📝")
         else:
-            line_client.reply(token, f"✅ {q}件を受け付けました！\n数分以内に商品情報（名前・価格・画像）を取得して選定リストに反映します📝")
+            line_client.reply(token, "商品リンクが見つかりませんでした🙏\n"
+                              "・ブログ用: Amazonの商品リンク/ASIN\n"
+                              "・Threads用: 楽天 / @cosme / LIPS の商品リンク\n"
+                              "を「共有」して送ってください。")
     return JSONResponse({"ok": True})
 
 

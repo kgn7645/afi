@@ -1170,7 +1170,7 @@ def _enqueue_fetch(account: dict, url: str, label: str) -> None:
 
 
 def process_fetch_queue(limit: int = 10, max_tries: int = 5) -> dict:
-    """取得待ちの@cosme/LIPS URLを処理→選定に追加（Xserver=日本IPのcron用）。
+    """取得待ちのThreads URL(@cosme/LIPS/楽天)を処理→選定に追加（Xserver=日本IPのcron用）。
 
     クロール失敗/楽天該当なしは一時不調(429等)もありうるので max_tries まで温存・再試行。
     重複は恒久要因として即キューから外す。
@@ -1181,11 +1181,15 @@ def process_fetch_queue(limit: int = 10, max_tries: int = 5) -> dict:
     e = _env()
     done, failed, head, keep = 0, 0, q[:limit], []
     for item in head:
-        src = _is_review_site(item.get("url", ""))
-        if not src:
+        url, acc = item.get("url", ""), {"id": item["account"]}
+        kind = _is_threads_url(url)
+        if not kind:
             continue  # 不正URLは破棄
-        ok, msg = _add_from_review_site({"id": item["account"]}, item["url"], src,
-                                        item.get("label", ""), e, allow_enqueue=False)
+        if kind == "rakuten":
+            ok, msg = _add_rakuten_url(acc, url, item.get("label", ""), e)
+        else:
+            ok, msg = _add_from_review_site(acc, url, kind, item.get("label", ""),
+                                            e, allow_enqueue=False)
         if ok:
             done += 1
             continue
@@ -1232,6 +1236,41 @@ def _add_from_review_site(account: dict, url: str, source: str, label: str,
     return True, f"{site}→楽天マッチ: {it.get('itemName', '')[:24]}{note}"
 
 
+def _add_rakuten_url(account: dict, url: str, label: str, e: dict) -> tuple[bool, str]:
+    """楽天の商品URL → 商品ID取得 → APIで取得 → 選定に追加。"""
+    m = re.search(r"item\.rakuten\.co\.jp/([^/?#]+)/", url)
+    if not m:
+        return False, "楽天 / @cosme / LIPS の商品URLを貼ってください"
+    shop = m.group(1)
+    item_id = _page_item_id(url)
+    if not item_id:
+        return False, "商品ページから商品IDを取得できませんでした（URLを確認）"
+    it = _rakuten_by_code(f"{shop}:{item_id}", e)
+    if not it:
+        return False, "商品が取得できませんでした（在庫切れ/販売終了の可能性）"
+    if not _add_product(account, it, label, "manual", source_url=url):
+        return False, "この商品は既にリスト/投稿にあります"
+    return True, f"商品選定に追加: {it.get('itemName','')[:24]}"
+
+
+def _is_threads_url(url: str) -> str:
+    """ThreadsのURL種別を返す: 'cosme'/'lips'/'rakuten'/''。"""
+    src = _is_review_site(url)
+    if src:
+        return src
+    if re.search(r"item\.rakuten\.co\.jp/[^/?#]+/", url):
+        return "rakuten"
+    return ""
+
+
+def enqueue_threads_url(account: dict, url: str, label: str = "") -> bool:
+    """ThreadsのURL(楽天/@cosme/LIPS)を取得待ちに積む（LINE等・Xserverが処理）。種別不一致はFalse。"""
+    if not _is_threads_url(url):
+        return False
+    _enqueue_fetch(account, url, label)
+    return True
+
+
 def add_manual_url(account: dict, url: str, label: str = "") -> tuple[bool, str]:
     """商品URL(楽天 / @cosme / LIPS)を貼ると記事化候補に追加。label指定でその文脈を文章に。
 
@@ -1241,20 +1280,7 @@ def add_manual_url(account: dict, url: str, label: str = "") -> tuple[bool, str]
     src = _is_review_site(url)
     if src:
         return _add_from_review_site(account, url, src, label, e)
-    m = re.search(r"item\.rakuten\.co\.jp/([^/?#]+)/", url)
-    if not m:
-        return False, "楽天 / @cosme / LIPS の商品URLを貼ってください"
-    shop = m.group(1)
-    item_id = _page_item_id(url)
-    if not item_id:
-        return False, "商品ページから商品IDを取得できませんでした（URLを確認）"
-    code = f"{shop}:{item_id}"
-    it = _rakuten_by_code(code, e)
-    if not it:
-        return False, "商品が取得できませんでした（在庫切れ/販売終了の可能性）"
-    if not _add_product(account, it, label, "manual", source_url=url):
-        return False, "この商品は既にリスト/投稿にあります"
-    return True, f"商品選定に追加: {it.get('itemName','')[:24]}"
+    return _add_rakuten_url(account, url, label, e)
 
 
 def generate_drafts(account: dict, count: int) -> int:
