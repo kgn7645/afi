@@ -853,7 +853,7 @@ def threads_label_remove(request: Request, label: str = Form("")):
 
 @app.post("/threads/manual")
 def threads_manual(request: Request, url: str = Form(""), label: str = Form("")):
-    """楽天の商品URL（＋ラベル）を貼ると、クロールして商品選定リストに追加。"""
+    """楽天 / @cosme / LIPS の商品URL（＋ラベル）を貼ると、クロールして商品選定リストに追加。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     acc = _threads_acc()

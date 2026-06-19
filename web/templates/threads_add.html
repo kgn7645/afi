@@ -54,10 +54,10 @@
 
   <div class="sec">
     <h2>🔗 商品URLで追加（手動）</h2>
-    <p class="hint">楽天の商品ページURLを貼ると、クロールして<b>商品選定リスト</b>に追加します（紹介文の生成は選定でOKした時）。</p>
+    <p class="hint">楽天 / <b>@cosme</b> / <b>LIPS</b> の商品ページURLを貼ると、クロールして<b>商品選定リスト</b>に追加します（紹介文の生成は選定でOKした時）。@cosme/LIPSは公式画像・口コミ傾向を取り込み、紹介リンクは商品名で楽天を自動マッチ。</p>
     <form method="post" action="/threads/manual">
-      <label>商品URL（楽天）</label>
-      <input type="url" name="url" placeholder="https://item.rakuten.co.jp/店舗/商品番号/" required>
+      <label>商品URL（楽天 / @cosme / LIPS）</label>
+      <input type="url" name="url" placeholder="https://item.rakuten.co.jp/... / https://www.cosme.net/products/... / https://lipscosme.com/products/..." required>
       <label>ラベル（タップで選択・任意）— 紹介文に織り込む文脈</label>
       <div class="chips">
         <label class="chip"><input type="radio" name="label" value="" checked>なし</label>

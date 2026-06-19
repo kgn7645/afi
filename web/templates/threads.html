@@ -143,6 +143,7 @@
         <span class="pname">🛒 {{ d.product }}</span>
         <span class="meta">¥{{ d.price }} ★{{ d.review.avg }}（{{ d.review.count }}）</span>
       </div>
+      {% if d.source_url %}<div class="url"><a href="{{ d.source_url }}" target="_blank" rel="noopener noreferrer" style="color:#4a8fe0;text-decoration:none;">🔎 取得元: {{ d.source_url[:50] }}{% if d.source_url|length > 50 %}…{% endif %}</a></div>{% endif %}
       {% if d.label %}<div class="url" style="color:#6a5fb0;background:#f3f0fb;">🏷 ラベル「{{ d.label }}」を紹介文に反映済み</div>{% endif %}
       {% if d.review_gist %}<div class="url" style="color:#0d8a6a;background:#e3f8ee;">💬 @cosme/LIPSの口コミ傾向を反映：{{ d.review_gist.splitlines()[0][:40] }}…</div>{% endif %}
       {% if d.cosme_image_count %}<div class="url" style="color:#2563c0;background:#e6effb;">🖼 @cosme/LIPSの公式商品画像 {{ d.cosme_image_count }}枚を先頭に使用</div>{% endif %}
@@ -193,7 +194,7 @@
     <div class="qrow">
       {% if view=='musing' %}<div style="flex:1;">💬 <span class="meta">{{ q.caption[:46] }}…</span></div>
       {% else %}<img src="{{ q.image }}" loading="lazy" alt="">
-      <div style="flex:1;">{{ q.product }}<br><span class="meta">{{ q.caption[:36] }}…</span></div>{% endif %}
+      <div style="flex:1;">{{ q.product }}{% if q.source_url %} <a href="{{ q.source_url }}" target="_blank" rel="noopener noreferrer" style="color:#4a8fe0;font-size:11px;text-decoration:none;">🔎取得元</a>{% endif %}<br><span class="meta">{{ q.caption[:36] }}…</span></div>{% endif %}
       <span class="qwhen">{{ q.when }}</span>
     </div>
     {% endfor %}

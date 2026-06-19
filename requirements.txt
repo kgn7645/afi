@@ -11,3 +11,7 @@ pydantic-settings==2.7.1
 python-dotenv==1.0.1
 PyYAML==6.0.2
 Pillow==11.3.0
+# 任意: @cosme/LIPS の商品追加で、HTTP取得が弾かれた場合のヘッドレスブラウザ・フォールバック用。
+# 未導入でも @cosme/LIPS は通常HTTPで動作する（取得不能URLだけ静かにスキップ）。
+# 有効化: pip install playwright==1.60.0 && python -m playwright install chromium
+# playwright==1.60.0

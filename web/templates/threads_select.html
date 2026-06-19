@@ -81,6 +81,7 @@
       <div class="px"><b>¥{{ '{:,}'.format(p.price) if p.price else '—' }}</b>
         {% if p.review and p.review.count %}<span class="rv">★{{ p.review.avg }}・{{ p.review.count }}件</span>{% endif %}
       </div>
+      {% if p.source_url %}<div style="margin-top:3px;"><a href="{{ p.source_url }}" target="_blank" rel="noopener noreferrer" style="color:#4a8fe0;font-size:11px;text-decoration:none;word-break:break-all;">🔎 取得元: {{ p.source_url[:46] }}{% if p.source_url|length > 46 %}…{% endif %}</a></div>{% endif %}
       <div class="acts">
         <form action="/threads/articleize" method="post" style="flex:1;margin:0;">
           <input type="hidden" name="product_id" value="{{ p.id }}">

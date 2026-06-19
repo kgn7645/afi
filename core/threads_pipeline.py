@@ -125,7 +125,8 @@ def _trim_item(it: dict) -> dict:
 
 
 def _add_product(account: dict, it: dict, label: str = "", source: str = "rakuten",
-                 review_gist: str = "", cosme_images: list | None = None) -> bool:
+                 review_gist: str = "", cosme_images: list | None = None,
+                 source_url: str = "") -> bool:
     code = it.get("itemCode", "")
     if not code:
         return False
@@ -142,6 +143,8 @@ def _add_product(account: dict, it: dict, label: str = "", source: str = "rakute
         "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
         "image": imgs[0] if imgs else (cimgs[0] if cimgs else ""),  # 一覧サムネは表示の安定する楽天優先
         "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
+        # 取得元（貼った@cosme/LIPS/楽天ページ。未指定なら楽天商品ページ）。アフィリのlinkとは別物
+        "source_url": (source_url or it.get("itemUrl", "")).strip(),
         "label": (label or "").strip(), "source": source,
         "review_gist": (review_gist or "").strip(), "cosme_images": cimgs[:4],
         "item": _trim_item(it), "created": int(time.time()),
@@ -171,6 +174,7 @@ def _enqueue_pr(account: dict, p: dict) -> None:
         "product": (it.get("itemName") or p.get("name", ""))[:40],
         "label": p.get("label", ""), "review_gist": p.get("review_gist", ""),
         "cosme_images": p.get("cosme_images", []), "source": p.get("source", ""),
+        "source_url": p.get("source_url", ""),
         "item": it, "prompt": prompt, "created": int(time.time()),
     })
     _save("_threads_genqueue", q[-200:])
@@ -192,7 +196,8 @@ def articleize(account: dict, product_id: str) -> str:
         return "fail"
     extra = _host_external(p.get("cosme_images", []))  # @cosme/LIPS公式画像をWPへ
     d = _pr_draft_from_item(account, it, e, label=p.get("label", ""),
-                            review_gist=p.get("review_gist", ""), extra_images=extra)
+                            review_gist=p.get("review_gist", ""), extra_images=extra,
+                            source_url=p.get("source_url", ""))
     if not d:
         return "fail"
     d["source"] = p.get("source", "")
@@ -239,7 +244,8 @@ def apply_generation(results: dict) -> int:
             d = _pr_draft_from_item({"id": item["account"]}, it, _env(),
                                     label=item.get("label", ""),
                                     review_gist=item.get("review_gist", ""),
-                                    extra_images=extra, caps=caps)
+                                    extra_images=extra, caps=caps,
+                                    source_url=item.get("source_url", ""))
             if not d:
                 continue
             d["source"] = item.get("source", "")
@@ -741,7 +747,7 @@ def _host_external(urls: list, limit: int = 4) -> list:
 # ---------- ドラフト生成 ----------
 def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
                         review_gist: str = "", extra_images: list | None = None,
-                        caps: dict | None = None) -> dict | None:
+                        caps: dict | None = None, source_url: str = "") -> dict | None:
     """楽天itemから PRドラフト(画像ランク＋5案キャプション) を組み立てる。
 
     extra_images（@cosme/LIPSの公式商品画像をWPにホスト済みのURL）があれば先頭に置く。
@@ -783,6 +789,7 @@ def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
         "price": it.get("itemPrice"),
         "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
         "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
+        "source_url": (source_url or it.get("itemUrl", "")).strip(),   # 取得元ページ（表示用）
         "caption": opts[0], "caption_options": opts,
         "reply": cap.get("reply", "気になる方はこちらから🛒").strip(),
         "images": imgs, "review_gist": review_gist.strip(), "created": int(time.time()),
@@ -820,12 +827,296 @@ def _page_item_id(url: str) -> str:
     return ""
 
 
+# ---------- @cosme / LIPS からの取り込み ----------
+def _is_review_site(url: str) -> str:
+    """URLが@cosme/LIPSなら 'cosme'/'lips' を返す。違えば ''。"""
+    host = urllib.parse.urlparse(url).netloc.lower()
+    if "cosme.net" in host:
+        return "cosme"
+    if "lips.jp" in host or "lipscosme.com" in host:
+        return "lips"
+    return ""
+
+
+def _clean_review_title(raw: str) -> str:
+    """og:title/JSON-LD名から商品名を抽出（サイト名・クチコミ等の付帯語を除去）。"""
+    t = re.sub(r"\s+", " ", raw or "").strip()
+    t = re.split(r"\s*[｜|]\s*", t)[0]                       # 区切り以降（サイト名）を捨てる
+    t = re.sub(r"の(クチコミ|口コミ|商品情報|効果|評判|人気色|カラー|イエベ).*$", "", t)
+    t = re.sub(r"【[^】]*】", "", t)
+    toks = t.split()
+    if len(toks) >= 2 and toks[0] == toks[1]:               # 「SUQQU SUQQU …」等の先頭ブランド重複を解消
+        toks = toks[1:]
+    return " ".join(toks).strip()[:60]
+
+
+def _ld_image_urls(img) -> list[str]:
+    """JSON-LDの image（str / ImageObject dict / それらのlist）からURL文字列だけ取り出す。"""
+    def one(x):
+        if isinstance(x, str):
+            return x
+        if isinstance(x, dict):
+            return x.get("contentUrl") or x.get("url") or ""
+        return ""
+    items = img if isinstance(img, list) else [img]
+    return [u for u in (one(x) for x in items) if u]
+
+
+def _is_product_image(u: str) -> bool:
+    """商品写真として使えるURLか。LIPSの共有カード(/api/og/)は除外。"""
+    return bool(u) and u.startswith("http") and "/api/og/" not in u
+
+
+_BROWSER_HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
+               "image/avif,image/webp,*/*;q=0.8"),
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "same-origin",
+}
+
+
+def _crawl_review_http(url: str) -> dict:
+    """@cosme/LIPSの商品ページを素のHTTPで取得し {name, images[], snippets[]} を抽出（速い）。
+
+    @cosme/LIPSはbot検知が強いので、セッションでトップを先に踏んでCookieを得てから本体を取得。
+    LIPSはJSチャレンジで弾かれることが多い（その場合は空dict→Playwrightへフォールバック）。
+    """
+    import requests
+    try:
+        origin = "{0.scheme}://{0.netloc}/".format(urllib.parse.urlparse(url))
+        s = requests.Session()
+        s.get(origin, headers=_BROWSER_HEADERS, timeout=20)          # Cookie/セッション確立
+        r = s.get(url, headers={**_BROWSER_HEADERS, "Referer": origin},
+                  timeout=20, allow_redirects=True)
+        html = r.text if r.status_code == 200 and len(r.text) > 10_000 else ""
+    except Exception:  # noqa: BLE001
+        html = ""
+    if not html:
+        return {}
+    name, brand, images, snippets = "", "", [], []
+    # 1) JSON-LD(Product/Review)を最優先
+    for block in re.findall(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', html, re.S):
+        try:
+            data = json.loads(block.strip())
+        except Exception:  # noqa: BLE001
+            continue
+        for node in (data if isinstance(data, list) else [data]):
+            if not isinstance(node, dict):
+                continue
+            t = node.get("@type", "")
+            if t == "Product" or (isinstance(t, list) and "Product" in t):
+                name = name or (node.get("name") or "")
+                b = node.get("brand")
+                brand = brand or (b.get("name") if isinstance(b, dict) else (b or ""))
+                images += _ld_image_urls(node.get("image"))   # str / ImageObject / その混在list
+            for rv in (node.get("review") or []) if isinstance(node, dict) else []:
+                body = rv.get("reviewBody") or rv.get("description") or "" if isinstance(rv, dict) else ""
+                if body:
+                    snippets.append(body)
+    # 2) OGメタで補完
+    if not name:
+        m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)', html)
+        name = m.group(1) if m else ""
+    name = _clean_review_title(name)
+    for m in re.finditer(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', html):
+        images.append(m.group(1))
+    # 3) 商品画像CDNから補完（@cosme=cache-cdn/fitter.cosme.net・LIPS=cdn.lipscosme/cloudfront）
+    images += re.findall(
+        r'https://[^"\']*(?:cosme\.net/media|cdn\.lipscosme\.com|cloudfront\.net/[^"\']*lips)'
+        r'[^"\']*\.(?:jpg|jpeg|png|webp)', html)
+    seen, uniq = set(), []
+    for u in images:
+        k = u.split("?")[0].rsplit("/", 1)[-1]   # 同一画像が別CDNホストで重複するのでファイル名で除去
+        if _is_product_image(u) and k and k not in seen:
+            seen.add(k)
+            uniq.append(u)
+    full = (brand + " " + name).strip() if brand and brand not in name else name
+    return {"name": full[:60], "images": uniq[:4],
+            "snippets": [re.sub(r"\s+", " ", s).strip() for s in snippets if s][:30]}
+
+
+# Playwright(ヘッドレス)で取得するJS。SPA描画後のDOMから抽出する。
+_PW_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+          "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148")
+# og:title→h1 の順で商品名
+_PW_NAME_JS = r"""()=>{
+  const og=document.querySelector('meta[property="og:title"]');
+  if(og&&og.content&&og.content.trim().length>=4)return og.content.trim();
+  const h=document.querySelector('h1,h2');
+  return h?(h.innerText||'').replace(/\s+/g,' ').trim():'';
+}"""
+# 公式商品画像のみ（LIPS=product-show-image__image / @cosme=og:image+商品CDN）。クチコミ写真は除外
+_PW_IMG_JS = r"""()=>{
+  const out=[]; const seen=new Set();
+  const push=(src)=>{ if(!src||!src.startsWith('http'))return;
+    const k=src.split('?')[0].split('/').pop(); if(!k||seen.has(k))return; seen.add(k); out.push(src); };
+  const og=document.querySelector('meta[property="og:image"]'); if(og)push(og.content);
+  for(const im of document.querySelectorAll('img')){
+    const c=im.closest('[class]'); const cls=c?(c.className+''):'';
+    const src=im.currentSrc||im.src||im.getAttribute('data-src')||'';
+    const w=im.naturalWidth||im.width||0;
+    if(/product-show-image__image/i.test(cls)&&!/emblem/i.test(cls)){ if(!(w&&w<400))push(src); continue; }
+    if(/cosme\.net\/media|cdn\.lipscosme\.com/.test(src)&&!(w&&w<300))push(src);
+  }
+  return out.slice(0,6);
+}"""
+# 口コミ本文（意見語＋文末記号必須でUI/広告/色名を除外）。原文は保持せず後段で傾向へ抽象化
+_PW_REVIEW_JS = r"""()=>{
+  const out=[]; const seen=new Set();
+  const OPN=/(思|使っ|塗っ|発色|色持ち|似合|高見え|落ち|乾燥|うるお|質感|テクスチャ|なじ|リピ|可愛|くすま|ヨレ|密着|ラメ|粉|ぼかし|香り|しっとり|サラサラ|お気に入り|買っ)/;
+  const END=/[。！!？?…♡♥]/;
+  const NG=/(ログイン|会員登録|アプリ|ランキング|クーポン|送料|利用規約|GooglePlay|AppStore|もっと見る|ピックアップ|バリエーション|肌質|ユーザー|色見本|チェック|動画|HowTo|使い方を紹介|画像をもっと|公式|通報)/;
+  for(const el of document.querySelectorAll('p,span,div')){
+    if(el.children.length>2)continue;
+    let t=(el.innerText||'').replace(/\s+/g,' ').trim();
+    if(t.length<25||t.length>400)continue;
+    if(NG.test(t))continue; if(!OPN.test(t)||!END.test(t))continue;
+    t=t.replace(/\s*\S+さんのクチコミより引用.*$/,'').trim();
+    if(t.length<20||seen.has(t))continue; seen.add(t); out.push(t);
+  }
+  return out.slice(0,40);
+}"""
+
+
+def _browser_crawl(url: str) -> dict:
+    """Playwright(ヘッドレス)で商品ページをレンダリングし {name, images[], snippets[]} を取得。
+
+    LIPSのJSチャレンジ/SPA描画を突破する手段。Playwright(＋chromium)未導入の環境では
+    ImportError等で静かに {} を返し、呼び出し側はHTTP結果のまま劣化動作する。
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:  # noqa: BLE001
+        return {}
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch(headless=True)
+            try:
+                pg = b.new_context(user_agent=_PW_UA,
+                                   viewport={"width": 480, "height": 900}).new_page()
+                pg.goto(url, wait_until="domcontentloaded", timeout=30000)
+                pg.wait_for_timeout(3000)
+                for _ in range(6):                       # 遅延ロード(画像/クチコミ)を出すためスクロール
+                    pg.mouse.wheel(0, 3000)
+                    pg.wait_for_timeout(800)
+                name = pg.evaluate(_PW_NAME_JS)
+                images = pg.evaluate(_PW_IMG_JS)
+                snippets = pg.evaluate(_PW_REVIEW_JS)
+                # LIPSは商品ページのクチコミが薄い→最多クチコミの色別ページへ1回ホップして補強
+                if "lipscosme.com/products/" in url:
+                    best = pg.evaluate(r"""()=>{
+                      let best=null,max=0;
+                      for(const a of document.querySelectorAll('a[href*="/product_patterns/"]')){
+                        const m=(a.innerText||'').match(/クチコミ数[：:]\s*([\d,]+)/);
+                        const n=m?parseInt(m[1].replace(/,/g,'')):0;
+                        if(n>max){max=n;best=a.getAttribute('href');}
+                      } return best;
+                    }""")
+                    if best:
+                        href = best if best.startswith("http") else \
+                            "https://lipscosme.com/" + best.lstrip("/")
+                        pg.goto(href, wait_until="domcontentloaded", timeout=30000)
+                        pg.wait_for_timeout(2000)
+                        for _ in range(4):
+                            pg.mouse.wheel(0, 3000)
+                            pg.wait_for_timeout(800)
+                        snippets = (snippets or []) + pg.evaluate(_PW_REVIEW_JS)
+            finally:
+                b.close()
+    except Exception:  # noqa: BLE001
+        return {}
+    seen, uniq = set(), []
+    for u in images or []:
+        k = u.split("?")[0].rsplit("/", 1)[-1]
+        if _is_product_image(u) and k and k not in seen:
+            seen.add(k)
+            uniq.append(u)
+    sseen, sn = set(), []
+    for t in snippets or []:
+        t = re.sub(r"\s+", " ", t or "").strip()
+        if t and t not in sseen:
+            sseen.add(t)
+            sn.append(t)
+    return {"name": _clean_review_title(name or ""), "images": uniq[:4], "snippets": sn[:30]}
+
+
+def _crawl_review_site(url: str) -> dict:
+    """@cosme/LIPS商品ページ → {name, images[], snippets[]}。HTTPで先に試しPlaywrightで補完。
+
+    @cosmeは大抵HTTPで名前・公式画像が取れる（速い）。LIPSはJSチャレンジでHTTPが空になりがちなので
+    Playwrightへフォールバック。口コミ本文はSPA描画依存のためPlaywrightでのみ拾える（任意）。
+    """
+    info = _crawl_review_http(url) or {}
+    need_browser = (not info.get("name") or not info.get("images") or not info.get("snippets"))
+    if need_browser:
+        br = _browser_crawl(url)
+        if br:
+            info["name"] = info.get("name") or br.get("name", "")
+            info["images"] = info.get("images") or br.get("images", [])
+            if not info.get("snippets"):
+                info["snippets"] = br.get("snippets", [])
+    return info if info.get("name") else {}
+
+
+def _rakuten_best_match(name: str, e: dict) -> dict | None:
+    """商品名で楽天を検索し、名前の一致度＋人気で最良の1件を返す（収益化リンク用）。"""
+    if not name:
+        return None
+    kw = " ".join(name.split()[:4])              # 長すぎるとヒットしないので主要語のみ
+    try:
+        items = _rakuten_search(kw, e, by_keyword=True)
+    except Exception:  # noqa: BLE001
+        return None
+    toks = [t for t in re.split(r"[\s　/・]+", name) if len(t) >= 2]
+
+    def _match(it: dict) -> float:
+        nm = it.get("itemName", "") or ""
+        overlap = sum(1 for t in toks if t in nm)
+        base = _score(it)
+        if base < 0 or overlap == 0:
+            return -1
+        return overlap * 100 + base
+
+    ranked = sorted(items, key=_match, reverse=True)
+    best = ranked[0] if ranked else None
+    return best if best and _match(best) > 0 else None
+
+
+def _add_from_review_site(account: dict, url: str, source: str, label: str,
+                          e: dict) -> tuple[bool, str]:
+    """@cosme/LIPSのURL → 公式画像・口コミ傾向を取り込み、商品名で楽天を自動マッチして追加。"""
+    site = "@cosme" if source == "cosme" else "LIPS"
+    info = _crawl_review_site(url)
+    if not info or not info.get("name"):
+        return False, f"{site}ページから商品名を取得できませんでした（URLを確認）"
+    it = _rakuten_best_match(info["name"], e)
+    if not it:
+        return False, f"「{info['name'][:24]}」に一致する楽天商品が見つかりませんでした"
+    gist = ""
+    if info.get("snippets") and e.get("GEMINI_API_KEY"):
+        gist = gist_text(summarize_reviews(info["name"], info["snippets"], e))
+    if not _add_product(account, it, label, source, review_gist=gist,
+                        cosme_images=info.get("images"), source_url=url):
+        return False, "この商品は既にリスト/投稿にあります"
+    note = "（口コミ傾向も取込）" if gist else ""
+    return True, f"{site}→楽天マッチ: {it.get('itemName', '')[:24]}{note}"
+
+
 def add_manual_url(account: dict, url: str, label: str = "") -> tuple[bool, str]:
-    """楽天の商品URLを貼ると、AIで記事化してPRドラフトに追加。label指定でその文脈を文章に。"""
+    """商品URL(楽天 / @cosme / LIPS)を貼ると記事化候補に追加。label指定でその文脈を文章に。
+
+    @cosme/LIPSは公式画像・口コミ傾向を取り込み、収益化リンクは商品名で楽天を自動マッチ。
+    """
     e = _env()
+    src = _is_review_site(url)
+    if src:
+        return _add_from_review_site(account, url, src, label, e)
     m = re.search(r"item\.rakuten\.co\.jp/([^/?#]+)/", url)
     if not m:
-        return False, "楽天の商品URL(item.rakuten.co.jp/店舗/...)を貼ってください"
+        return False, "楽天 / @cosme / LIPS の商品URLを貼ってください"
     shop = m.group(1)
     item_id = _page_item_id(url)
     if not item_id:
@@ -834,7 +1125,7 @@ def add_manual_url(account: dict, url: str, label: str = "") -> tuple[bool, str]
     it = _rakuten_by_code(code, e)
     if not it:
         return False, "商品が取得できませんでした（在庫切れ/販売終了の可能性）"
-    if not _add_product(account, it, label, "manual"):
+    if not _add_product(account, it, label, "manual", source_url=url):
         return False, "この商品は既にリスト/投稿にあります"
     return True, f"商品選定に追加: {it.get('itemName','')[:24]}"
 
@@ -914,6 +1205,7 @@ def approve(draft_id: str, images: list[str], caption: str, reply_text: str = ""
               "reply": "" if is_musing else (reply_text or d.get("reply", "")).strip(),
               "image": "" if is_musing else (imgs[0] if imgs else ""),  # 後方互換
               "link": "" if is_musing else d.get("link", ""),
+              "source_url": "" if is_musing else d.get("source_url", ""),
               "product": d.get("product", ""),
               "scheduled_at": ts, "status": "pending", "created": int(time.time())})
     _save("_threads_queue", q)
