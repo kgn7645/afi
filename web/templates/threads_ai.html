@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% import '_prompt_preset.html' as ppm %}<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -47,6 +47,7 @@
 </div>
 <div class="wrap">
   {% if saved=='1' %}<div class="flash">✓ 保存しました（生成に最大1分で反映）</div>{% endif %}
+  {% if saved=='pp' %}<div class="flash">✓ プリセットを更新しました</div>{% endif %}
   {% if not can_save %}<div class="ro">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
 
   {% if test %}
@@ -91,30 +92,36 @@
       </select>
     </div>
 
-    <div class="sec">
-      <h2>📝 PR投稿プロンプト（編集可）</h2>
-      <textarea name="pr_prompt" rows="14">{{ pr_prompt }}</textarea>
-      <div class="ph">使える差し込み: <code>[[persona]]</code> <code>[[item_name]]</code> <code>[[price]]</code>
-        <code>[[review_avg]]</code> <code>[[review_count]]</code> <code>[[styles]]</code>
-        <code>[[n]]</code> <code>[[yakkiho]]</code>（空にすると既定に戻る）<br>
-        💬 @cosme/LIPSの<b>口コミ傾向</b>がある商品は、要約メモが自動で末尾に追記されます（原文は保存せず傾向のみ・引用禁止）。テスト生成ではサンプル傾向で確認できます。</div>
-    </div>
-
-    <div class="sec">
-      <h2>💬 つぶやきプロンプト（編集可）</h2>
-      <textarea name="musing_prompt" rows="10">{{ musing_prompt }}</textarea>
-      <div class="ph">使える差し込み: <code>[[persona]]</code> <code>[[niche]]</code>
-        <code>[[type_name]]</code> <code>[[type_ex]]</code> <code>[[opener]]</code>（空で既定）</div>
-    </div>
-
     <div class="btns">
-      <button type="submit" class="test" formaction="/threads/ai/test">🧪 テスト生成</button>
-      {% if can_save %}<button type="submit" class="save">💾 保存</button>{% endif %}
+      {% if can_save %}<button type="submit" class="save">💾 モデル・モードを保存</button>{% endif %}
     </div>
+  </form>
+
+  <div class="sec">
+    <h2>📝 PR投稿プロンプト（A/B/C切替可）</h2>
+    <p class="hint">プリセットを切り替えて別のプロンプトを試せます。チップで切替・「＋新規」で複製作成・編集して保存。</p>
+    {{ ppm.preset_block(pr_preset, '/threads/ai', 14) }}
+    <div class="ph">使える差し込み: <code>[[persona]]</code> <code>[[item_name]]</code> <code>[[price]]</code>
+      <code>[[review_avg]]</code> <code>[[review_count]]</code> <code>[[styles]]</code>
+      <code>[[n]]</code> <code>[[yakkiho]]</code><br>
+      💬 @cosme/LIPSの<b>口コミ傾向</b>がある商品は、要約メモが自動で末尾に追記されます（原文は保存せず傾向のみ）。</div>
+  </div>
+
+  <div class="sec">
+    <h2>💬 つぶやきプロンプト（A/B/C切替可）</h2>
+    {{ ppm.preset_block(musing_preset, '/threads/ai', 10) }}
+    <div class="ph">使える差し込み: <code>[[persona]]</code> <code>[[niche]]</code>
+      <code>[[type_name]]</code> <code>[[type_ex]]</code> <code>[[opener]]</code></div>
+  </div>
+
+  <form method="post" action="/threads/ai/test" class="sec" style="margin-top:14px;">
+    <p class="hint">現在「使用中」のプリセットでテスト生成します（保存済みの内容が使われます）。</p>
+    <button type="submit" class="test">🧪 テスト生成</button>
   </form>
 </div>
 <script src="/static/ui.js" defer></script>
 <script src="/static/ux.js" defer></script>
 <script src="/static/threads-stats.js" defer></script>
+<script src="/static/prompt-preset.js" defer></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% import '_prompt_preset.html' as ppm %}<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -46,6 +46,7 @@
 {% include "_statsbar.html" %}
 <form class="wrap" method="post" action="/settings">
   {% if saved=='1' %}<div class="flash">✓ 保存しました（生成に最大1分で反映）</div>{% endif %}
+  {% if saved=='pp' %}<div class="flash">✓ プリセットを更新しました</div>{% endif %}
   {% if saved=='crawl' %}<div class="flash">🔎 クロールを予約しました（Xserverが数分以内に実行）</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">保存に失敗しました（WP接続を確認）</div>{% endif %}
   {% if not can_save %}<div class="ro">⚠️ 保存は無効です。サーバーの環境変数 <code>CONFIG_OVERRIDES=1</code> とWP接続が必要です（閲覧のみ可）。</div>{% endif %}
@@ -135,22 +136,27 @@
     <p class="hint">※ 1日の総数はGemini枠（無料＋フォールバックで約8記事）が上限です。</p>
   </div>
 
-  <div class="sec">
-    <h2>🎨 文体ガイド（プロンプト）</h2>
-    <p class="hint">記事の世界観・語り口・禁止事項。AIへの基本指示です</p>
-    <label>記事タイトルの型</label>
-    <input type="text" name="title_format" value="{{ d.title_format }}">
-    <p class="hint">差し込み語: <code>{brand}</code> ブランド名／<code>{category}</code> カテゴリー／<code>{product_name}</code> 商品名／<code>{model}</code> 型番／<code>{year}</code> 西暦。<br>
-      例（中華・無名向け）: <code>【{year}】{brand}はどこの国の企業？{category}の評判・口コミを徹底レビュー</code></p>
-    <label>スタイルガイド</label>
-    <textarea name="style_guide" rows="12">{{ d.style_guide }}</textarea>
-    <label>追加の指示（任意・本文生成に上乗せ）</label>
-    <textarea name="extra_instructions" rows="4" placeholder="例：必ず実体験風のエピソードを1つ入れる／専門用語は必ず注釈をつける 等">{{ d.extra_instructions }}</textarea>
-  </div>
-
   <div class="save"><button type="submit">設定を保存</button></div>
 </form>
+
+<div class="sec">
+  <h2>🎨 文体ガイド（プロンプト・A/B/C切替可）</h2>
+  <p class="hint">プリセットを切り替えて別のプロンプトを試せます。チップで切替・「＋新規」で複製作成・編集して保存。各項目は独立して切り替わります。</p>
+
+  <label style="display:block;font-weight:700;font-size:13px;margin:10px 0 2px;">記事タイトルの型</label>
+  {{ ppm.preset_block(presets.og_title_format, '/settings', 2) }}
+  <p class="hint">差し込み語: <code>{brand}</code>／<code>{category}</code>／<code>{product_name}</code>／<code>{model}</code>／<code>{year}</code>。<br>
+    例（中華・無名向け）: <code>【{year}】{brand}はどこの国の企業？{category}の評判・口コミを徹底レビュー</code></p>
+
+  <label style="display:block;font-weight:700;font-size:13px;margin:14px 0 2px;">スタイルガイド</label>
+  {{ ppm.preset_block(presets.og_style_guide, '/settings', 12) }}
+
+  <label style="display:block;font-weight:700;font-size:13px;margin:14px 0 2px;">追加の指示（任意・本文生成に上乗せ）</label>
+  {{ ppm.preset_block(presets.og_extra, '/settings', 4) }}
+</div>
+
 <script src="/static/ui.js"></script>
 <script src="/static/ux.js" defer></script>
+<script src="/static/prompt-preset.js" defer></script>
 </body>
 </html>

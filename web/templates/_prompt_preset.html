@@ -1,0 +1,38 @@
+{# プロンプトのプリセット(A/B/C)ブロック。p=prompt_presets.view(field) の結果、back=戻り先パス #}
+{% macro preset_block(p, back, rows=12) %}
+<div class="ppset">
+  <div class="pphead">
+    <span class="pplabel">{{ p.label }}</span>
+    <span class="ppactive">使用中: {{ p.active }}</span>
+  </div>
+  <div class="ppchips">
+    {% for n in p.names %}
+    <form method="post" action="/prompt-preset/switch">
+      <input type="hidden" name="field" value="{{ p.field }}">
+      <input type="hidden" name="name" value="{{ n }}">
+      <input type="hidden" name="back" value="{{ back }}">
+      <button type="submit" class="ppchip{{ ' on' if n == p.active }}">{{ n }}</button>
+    </form>
+    {% endfor %}
+    <button type="button" class="ppchip ppadd" onclick="ppAdd('{{ p.field }}','{{ back }}')">＋ 新規</button>
+  </div>
+  <form method="post" action="/prompt-preset/save">
+    <input type="hidden" name="field" value="{{ p.field }}">
+    <input type="hidden" name="name" value="{{ p.active }}">
+    <input type="hidden" name="back" value="{{ back }}">
+    <textarea name="content" rows="{{ rows }}">{{ p.content }}</textarea>
+    <div class="pprow">
+      <button type="submit" class="ppsave">💾 「{{ p.active }}」を保存</button>
+    </div>
+  </form>
+  {% if p.names | length > 1 %}
+  <form method="post" action="/prompt-preset/delete" class="ppdelf"
+        data-confirm="プリセット「{{ p.active }}」を削除しますか？（戻せません）" data-confirm-ok="削除する">
+    <input type="hidden" name="field" value="{{ p.field }}">
+    <input type="hidden" name="name" value="{{ p.active }}">
+    <input type="hidden" name="back" value="{{ back }}">
+    <button type="submit" class="ppdel">🗑 「{{ p.active }}」を削除</button>
+  </form>
+  {% endif %}
+</div>
+{% endmacro %}

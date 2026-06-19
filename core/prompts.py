@@ -35,18 +35,18 @@ DEFAULT_TITLE_FORMAT = "【{year}】{brand}の{category}は買い？評判・口
 
 
 def _style_guide() -> str:
-    from .config import get_rules
-    return (get_rules().get("prompts", {}) or {}).get("style_guide") or STYLE_GUIDE_DEFAULT
+    from . import prompt_presets
+    return prompt_presets.active_value("og_style_guide")
 
 
 def _extra_instructions() -> str:
-    from .config import get_rules
-    return (get_rules().get("prompts", {}) or {}).get("extra_instructions", "").strip()
+    from . import prompt_presets
+    return prompt_presets.active_value("og_extra").strip()
 
 
 def _title_format() -> str:
-    from .config import get_rules
-    return (get_rules().get("prompts", {}) or {}).get("title_format") or DEFAULT_TITLE_FORMAT
+    from . import prompt_presets
+    return prompt_presets.active_value("og_title_format") or DEFAULT_TITLE_FORMAT
 
 
 def title_and_meta_prompt(product: Product) -> str:

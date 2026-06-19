@@ -608,10 +608,12 @@ def settings_form(request: Request, saved: str = ""):
     # 楽天ジャンル（チェックボックス）
     rk_catalog = rakuten_catalog.get_catalog()
     rk_selected = {str(x) for x in (cand.get("rakuten_genres", []) or [])}
+    from core import prompt_presets
+    presets = {f: prompt_presets.view(f) for f in prompt_presets.BLOG_FIELDS}
     return templates.TemplateResponse(
         "settings.html",
         {"request": request, "d": d, "saved": saved, "can_save": overrides.enabled(),
-         "crawl": _crawl_status(), "catalog_groups": groups,
+         "crawl": _crawl_status(), "catalog_groups": groups, "presets": presets,
          "selected_nodes": selected, "catalog_updated": cat["updated_at"],
          "rakuten_catalog": rk_catalog, "rakuten_selected": rk_selected})
 
@@ -651,9 +653,7 @@ def settings_save(
         "article": {"min_chars": _int(min_chars, 6000), "reviews_each": _int(reviews_each, 5),
                     "tone": tone.strip(), "competitor_brands": _lines(competitor_brands),
                     "ground_company": ground_company == "on"},
-        "prompts": {"style_guide": style_guide.strip(),
-                    "extra_instructions": extra_instructions.strip(),
-                    "title_format": title_format.strip()},
+        # プロンプト(style_guide/extra/title)は prompt_presets で個別管理（ここでは触らない）
         "candidates": {"keywords": _lines(keywords),
                        "ranking_nodes": list(dict.fromkeys(
                            [*ranking_nodes_cb, *_lines(ranking_nodes)])),  # チェック＋手入力
@@ -665,6 +665,26 @@ def settings_save(
     }
     ok = overrides.update(ov)   # 他項目(_crawl_request等)を壊さず部分更新
     return RedirectResponse("/settings?saved=" + ("1" if ok else "fail"), status_code=303)
+
+
+@app.post("/prompt-preset/{action}")
+def prompt_preset_op(action: str, request: Request, field: str = Form(""),
+                     name: str = Form(""), content: str = Form(""),
+                     back: str = Form("/settings")):
+    """プロンプトのプリセット操作（保存/追加/切替/削除）。項目ごとにA/B/C管理。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    from core import prompt_presets
+    if action == "save":
+        prompt_presets.save_content(field, name, content)
+    elif action == "add":
+        prompt_presets.add(field, name)
+    elif action == "switch":
+        prompt_presets.set_active(field, name)
+    elif action == "delete":
+        prompt_presets.delete(field, name)
+    dest = back if back in ("/settings", "/threads/ai") else "/settings"
+    return RedirectResponse(dest + "?saved=pp", status_code=303)
 
 
 @app.get("/ai-settings", response_class=HTMLResponse)
@@ -942,7 +962,8 @@ def threads_reject(request: Request, draft_id: str = Form(...)):
     return RedirectResponse(f"/threads?view={v}&saved=rej", status_code=303)
 
 
-def _threads_ai_ctx(request, *, model="", pr="", musing="", saved="", test=None):
+def _threads_ai_ctx(request, *, model="", saved="", test=None):
+    from core import prompt_presets
     return {
         "request": request, "saved": saved, "test": test,
         "can_save": overrides.enabled(),
@@ -950,10 +971,8 @@ def _threads_ai_ctx(request, *, model="", pr="", musing="", saved="", test=None)
         "gen_pending": len(threads_pipeline.genqueue()),
         "model": model or threads_pipeline.threads_model(),
         "model_choices": gemini_client.MODEL_CHOICES,
-        "pr_prompt": pr or threads_pipeline.pr_prompt_template(),
-        "musing_prompt": musing or threads_pipeline.musing_prompt_template(),
-        "default_pr": threads_pipeline._DEFAULT_PR_PROMPT,
-        "default_musing": threads_pipeline._DEFAULT_MUSING_PROMPT,
+        "pr_preset": prompt_presets.view("th_pr_prompt"),
+        "musing_preset": prompt_presets.view("th_musing_prompt"),
     }
 
 
@@ -969,13 +988,12 @@ def threads_ai_form(request: Request, saved: str = ""):
 
 @app.post("/threads/ai")
 def threads_ai_save(request: Request, gemini_model: str = Form(""),
-                    pr_prompt: str = Form(""), musing_prompt: str = Form(""),
                     gen_mode: str = Form("api")):
+    """モデル・生成モードを保存（プロンプトはプリセットで個別管理）。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     valid = {m for m, _ in gemini_client.MODEL_CHOICES}
-    g: dict = {"pr_prompt": pr_prompt.strip(), "musing_prompt": musing_prompt.strip(),
-               "gen_mode": "claude" if gen_mode == "claude" else "api"}
+    g: dict = {"gen_mode": "claude" if gen_mode == "claude" else "api"}
     if gemini_model.strip() in valid:
         g["gemini_model"] = gemini_model.strip()
     overrides.update({"threads": g})
@@ -983,16 +1001,18 @@ def threads_ai_save(request: Request, gemini_model: str = Form(""),
 
 
 @app.post("/threads/ai/test", response_class=HTMLResponse)
-def threads_ai_test(request: Request, gemini_model: str = Form(""),
-                    pr_prompt: str = Form(""), musing_prompt: str = Form("")):
+def threads_ai_test(request: Request, gemini_model: str = Form("")):
+    """現在アクティブなプリセットでテスト生成（保存済みプロンプトを使う）。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
     acc = accounts[0] if accounts else {"id": "mmmtreees"}
-    test = threads_pipeline.test_generate(acc, model=gemini_model.strip(),
-                                          pr_tmpl=pr_prompt.strip(), musing_tmpl=musing_prompt.strip())
+    test = threads_pipeline.test_generate(
+        acc, model=gemini_model.strip(),
+        pr_tmpl=threads_pipeline.pr_prompt_template(),
+        musing_tmpl=threads_pipeline.musing_prompt_template())
     return templates.TemplateResponse("threads_ai.html", _threads_ai_ctx(
-        request, model=gemini_model, pr=pr_prompt, musing=musing_prompt, test=test))
+        request, model=gemini_model, test=test))
 
 
 @app.get("/threads/settings", response_class=HTMLResponse)
