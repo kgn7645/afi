@@ -996,6 +996,17 @@ def threads_reject(request: Request, draft_id: str = Form(...)):
     return RedirectResponse(f"/threads?view={v}&saved=rej", status_code=303)
 
 
+@app.post("/threads/withdraw")
+def threads_withdraw(request: Request, item_id: str = Form(...)):
+    """公開キューの未公開を取り下げ→承認待ちドラフトに戻す（再編集可・削除ではない）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    item = next((x for x in threads_pipeline.queue() if x.get("id") == item_id), None)
+    v = "musing" if (item and item.get("type") == "musing") else "pr"
+    ok = threads_pipeline.withdraw(item_id)
+    return RedirectResponse(f"/threads?view={v}&saved=" + ("wd" if ok else "fail"), status_code=303)
+
+
 def _threads_ai_ctx(request, *, model="", saved="", test=None):
     from core import prompt_presets
     return {

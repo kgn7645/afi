@@ -62,6 +62,9 @@
   .qrow{ display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid #f1eef6; font-size:13px; }
   .qrow img{ width:46px; height:46px; object-fit:contain; border-radius:8px; background:#f4f1f8; }
   .qwhen{ font-weight:800; color:var(--orange); white-space:nowrap; }
+  .qright{ display:flex; flex-direction:column; gap:6px; align-items:flex-end; flex:none; }
+  .wdraw{ border:1.5px solid #d9d4e6; background:#fff; color:#6a5fb0; border-radius:9px;
+          padding:6px 10px; font-size:11.5px; font-weight:800; white-space:nowrap; cursor:pointer; }
   .empty{ color:#9a96ad; font-size:13px; padding:18px; text-align:center; }
   /* 折りたたみカード（タイトル＋写真＋金額のみ表示→タップで展開） */
   .dcard > summary{ list-style:none; cursor:pointer; display:flex; align-items:center; gap:11px; padding:2px; }
@@ -103,6 +106,7 @@
   {% if saved=='man' %}<div class="flash">✓ URLから商品を追加しました（下に表示）</div>{% endif %}
   {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天の商品URLか確認／重複の可能性）</div>{% endif %}
   {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
+  {% if saved=='wd' %}<div class="flash">↩ 取り下げました。上の「承認待ち」に戻したので、編集してもう一度承認できます。</div>{% endif %}
   {% if saved.startswith('genmu') %}<div class="flash">✓ つぶやきを {{ saved[5:] }} 件生成しました</div>
   {% elif saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">処理に失敗しました</div>{% endif %}
@@ -225,7 +229,14 @@
       {% if view=='musing' %}<div style="flex:1;">💬 <span class="meta">{{ q.caption[:46] }}…</span></div>
       {% else %}<img src="{{ q.image }}" loading="lazy" alt="">
       <div style="flex:1;">{{ q.product }}{% if q.source_url %} <a href="{{ q.source_url }}" target="_blank" rel="noopener noreferrer" style="color:#4a8fe0;font-size:11px;text-decoration:none;">🔎取得元</a>{% endif %}<br><span class="meta">{{ q.caption[:36] }}…</span></div>{% endif %}
-      <span class="qwhen">{{ q.when }}</span>
+      <div class="qright">
+        <span class="qwhen">{{ q.when }}</span>
+        <form method="post" action="/threads/withdraw" style="margin:0;"
+              data-confirm="この投稿を取り下げて編集に戻しますか？（承認待ちに戻り、削除されません）" data-confirm-ok="取り下げる" data-safe>
+          <input type="hidden" name="item_id" value="{{ q.id }}">
+          <button type="submit" class="wdraw">↩ 取り下げて編集</button>
+        </form>
+      </div>
     </div>
     {% endfor %}
   </div>

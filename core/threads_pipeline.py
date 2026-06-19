@@ -1369,9 +1369,39 @@ def approve(draft_id: str, images: list[str], caption: str, reply_text: str = ""
               "link": "" if is_musing else d.get("link", ""),
               "source_url": "" if is_musing else d.get("source_url", ""),
               "product": d.get("product", ""),
+              "_draft": d,   # 取り下げ時に承認待ちドラフトへ完全復元するための元データ
               "scheduled_at": ts, "status": "pending", "created": int(time.time())})
     _save("_threads_queue", q)
     _save("_threads_drafts", [x for x in ds if x["id"] != draft_id])
+    return True
+
+
+def withdraw(item_id: str) -> bool:
+    """公開キューの未公開(pending)を取り下げ→承認待ちドラフトに戻す（再編集可）。即削除ではない。"""
+    q = queue()
+    item = next((x for x in q if x.get("id") == item_id and x.get("status") == "pending"), None)
+    if not item:
+        return False
+    base = item.get("_draft")
+    if base:                                   # 元ドラフトを復元しつつ承認時の編集を引き継ぐ
+        d = dict(base)
+        d["caption"] = item.get("caption", d.get("caption", ""))
+        if item.get("type") != "musing":
+            d["reply"] = item.get("reply", d.get("reply", ""))
+    else:                                      # 旧データ(_draft無し)はキュー項目から再構成
+        d = {"id": item["id"], "account": item.get("account", ""),
+             "type": item.get("type", "pr"), "product": item.get("product", ""),
+             "caption": item.get("caption", ""),
+             "caption_options": [item.get("caption", "")],
+             "reply": item.get("reply", ""),
+             "images": item.get("images") or ([item["image"]] if item.get("image") else []),
+             "link": item.get("link", ""), "source_url": item.get("source_url", ""),
+             "created": int(time.time())}
+    ds = drafts()
+    if not any(x.get("id") == d["id"] for x in ds):
+        ds.append(d)
+    _save("_threads_drafts", ds[-200:])
+    _save("_threads_queue", [x for x in q if x.get("id") != item_id])
     return True
 
 
