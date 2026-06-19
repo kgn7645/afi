@@ -66,6 +66,22 @@
 
   <form method="post" action="/threads/ai">
     <div class="sec">
+      <h2>⚙️ 生成モード（コスト切替）</h2>
+      <p class="hint">記事化・つぶやきの<b>文章生成</b>を誰がやるか。商品・プロンプト・設定は共通で、生成部分だけ切り替わります。</p>
+      <label style="display:block;border:1.5px solid #ece9f1;border-radius:11px;padding:11px 13px;margin:7px 0;cursor:pointer;">
+        <input type="radio" name="gen_mode" value="api" {{ 'checked' if gen_mode!='claude' }}>
+        <b>APIモード（自動）</b>
+        <div style="font-size:12px;color:#9a96ad;margin-top:3px;">Geminiが即生成。記事化ボタンですぐ投稿候補に。<b>Gemini API課金あり</b>。</div>
+      </label>
+      <label style="display:block;border:1.5px solid #ece9f1;border-radius:11px;padding:11px 13px;margin:7px 0;cursor:pointer;">
+        <input type="radio" name="gen_mode" value="claude" {{ 'checked' if gen_mode=='claude' }}>
+        <b>Claude Codeモード</b>
+        <div style="font-size:12px;color:#9a96ad;margin-top:3px;">文章生成だけClaude Codeが担当＝<b>Gemini API不使用</b>。記事化は「生成待ち」に積まれ、Claude Codeで一括生成して投稿へ。</div>
+      </label>
+      {% if gen_pending %}<div class="hint" style="color:#c2410c;font-weight:700;">⏳ 生成待ち {{ gen_pending }}件 — Claude Codeで「Threadsの生成待ちを処理して」と指示してください。</div>{% endif %}
+    </div>
+
+    <div class="sec">
       <h2>🤖 AIモデル（Threads専用）</h2>
       <p class="hint">おうちベースとは別に、Threadsだけのモデルを設定できます。現在: <b>{{ model }}</b></p>
       <select name="gemini_model">

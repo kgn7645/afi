@@ -792,6 +792,8 @@ def threads_select(request: Request, saved: str = ""):
     ds = threads_pipeline.drafts()
     return templates.TemplateResponse("threads_select.html", {
         "request": request, "saved": saved, "products": ps,
+        "gen_mode": threads_pipeline.gen_mode(),
+        "gen_pending": len(threads_pipeline.genqueue()),
         "pending": len([d for d in ds if d.get("type") == "pr"]),
         "musings": len([d for d in ds if d.get("type") == "musing"])})
 
@@ -802,8 +804,9 @@ def threads_articleize(request: Request, product_id: str = Form("")):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     acc = _threads_acc(product_id.split("::")[0] if "::" in product_id else "")
-    ok = threads_pipeline.articleize(acc, product_id)
-    return RedirectResponse("/threads/select?saved=" + ("art" if ok else "artfail"), status_code=303)
+    status = threads_pipeline.articleize(acc, product_id)
+    code = {"done": "art", "queued": "artq", "fail": "artfail"}.get(status, "artfail")
+    return RedirectResponse(f"/threads/select?saved={code}", status_code=303)
 
 
 @app.post("/threads/product/reject")
@@ -917,6 +920,8 @@ def _threads_ai_ctx(request, *, model="", pr="", musing="", saved="", test=None)
     return {
         "request": request, "saved": saved, "test": test,
         "can_save": overrides.enabled(),
+        "gen_mode": threads_pipeline.gen_mode(),
+        "gen_pending": len(threads_pipeline.genqueue()),
         "model": model or threads_pipeline.threads_model(),
         "model_choices": gemini_client.MODEL_CHOICES,
         "pr_prompt": pr or threads_pipeline.pr_prompt_template(),
@@ -938,11 +943,13 @@ def threads_ai_form(request: Request, saved: str = ""):
 
 @app.post("/threads/ai")
 def threads_ai_save(request: Request, gemini_model: str = Form(""),
-                    pr_prompt: str = Form(""), musing_prompt: str = Form("")):
+                    pr_prompt: str = Form(""), musing_prompt: str = Form(""),
+                    gen_mode: str = Form("api")):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     valid = {m for m, _ in gemini_client.MODEL_CHOICES}
-    g: dict = {"pr_prompt": pr_prompt.strip(), "musing_prompt": musing_prompt.strip()}
+    g: dict = {"pr_prompt": pr_prompt.strip(), "musing_prompt": musing_prompt.strip(),
+               "gen_mode": "claude" if gen_mode == "claude" else "api"}
     if gemini_model.strip() in valid:
         g["gemini_model"] = gemini_model.strip()
     overrides.update({"threads": g})

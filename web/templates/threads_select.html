@@ -52,7 +52,9 @@
   {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天URLか確認／重複の可能性）</div>{% endif %}
   {% if saved.startswith('col') %}<div class="flash">✓ {{ saved[3:] }}件を候補に収集しました</div>{% endif %}
   {% if saved=='art' %}<div class="flash">✓ 記事化しました（投稿タブで5案から選んで承認）</div>{% endif %}
+  {% if saved=='artq' %}<div class="flash" style="background:#fff3e0;color:#c2410c;">⏳ 生成待ちに追加しました。Claude Codeで「Threadsの生成待ちを処理して」と指示してください。</div>{% endif %}
   {% if saved=='artfail' %}<div class="flash warn">記事化に失敗しました（商品が取得できない可能性）</div>{% endif %}
+  {% if gen_mode=='claude' %}<div class="flash" style="background:#eef2ff;color:#3730a3;">⚙️ Claude Codeモード：記事化は「生成待ち」に積まれます（Gemini API不使用）{% if gen_pending %}・現在 <b>{{ gen_pending }}</b>件待ち{% endif %}</div>{% endif %}
   {% if saved=='prej' %}<div class="flash">却下しました</div>{% endif %}
 
   <div class="bar">

@@ -155,28 +155,103 @@ def reject_product(account_id: str, product_id: str) -> bool:
     return True
 
 
-def articleize(account: dict, product_id: str) -> bool:
-    """商品選定でOK→投稿作成。商品候補からAIで5案ドラフトを生成→投稿タブへ。"""
+def genqueue() -> list:
+    """Claude Codeモードの生成待ち（プロンプトのみ保持・APIは叩かない）。"""
+    return _load("_threads_genqueue")
+
+
+def _enqueue_pr(account: dict, p: dict) -> None:
+    """PR記事化を生成待ちへ。プロンプトと画像/口コミ素材を保持（Gemini不使用）。"""
+    it = p.get("item") or {}
+    prompt = build_pr_prompt(account.get("persona", ""), it, n=5,
+                             label=p.get("label", ""), review_gist=p.get("review_gist", ""))
+    q = genqueue()
+    q.append({
+        "id": p["id"], "account": account["id"], "type": "pr",
+        "product": (it.get("itemName") or p.get("name", ""))[:40],
+        "label": p.get("label", ""), "review_gist": p.get("review_gist", ""),
+        "cosme_images": p.get("cosme_images", []), "source": p.get("source", ""),
+        "item": it, "prompt": prompt, "created": int(time.time()),
+    })
+    _save("_threads_genqueue", q[-200:])
+
+
+def articleize(account: dict, product_id: str) -> str:
+    """商品選定でOK→投稿作成。返り 'done'(API生成済) / 'queued'(Claude待ち) / 'fail'。"""
     ps = products()
     p = next((x for x in ps if x.get("id") == product_id), None)
     if not p:
-        return False
+        return "fail"
+    if gen_mode() == "claude":
+        _enqueue_pr(account, p)
+        _save("_threads_products", [x for x in ps if x.get("id") != product_id])
+        return "queued"
     e = _env()
     it = p.get("item") or _rakuten_by_code(p.get("itemCode", ""), e)
     if not it:
-        return False
+        return "fail"
     extra = _host_external(p.get("cosme_images", []))  # @cosme/LIPS公式画像をWPへ
     d = _pr_draft_from_item(account, it, e, label=p.get("label", ""),
                             review_gist=p.get("review_gist", ""), extra_images=extra)
     if not d:
-        return False
+        return "fail"
     d["source"] = p.get("source", "")
     d["cosme_image_count"] = len(extra)
     cur = drafts()
     cur.append(d)
     _save("_threads_drafts", cur[-200:])
     _save("_threads_products", [x for x in ps if x.get("id") != product_id])
-    return True
+    return "done"
+
+
+def pending_generation() -> list:
+    """Claude Codeが生成すべきプロンプト一覧（id/type/product/prompt）。"""
+    return [{"id": x["id"], "type": x.get("type", "pr"), "product": x.get("product", ""),
+             "prompt": x.get("prompt", "")} for x in genqueue()]
+
+
+def apply_generation(results: dict) -> int:
+    """Claude Codeが生成した結果を取り込み→投稿ドラフト化。
+
+    results = {id: {captions:[...], reply, clean_name}}（PR） or {id:{caption}}（つぶやき）。
+    """
+    q = genqueue()
+    by_id = {x["id"]: x for x in q}
+    cur = drafts()
+    applied, made = [], 0
+    for gid, r in (results or {}).items():
+        item = by_id.get(gid)
+        if not item or not isinstance(r, dict):
+            continue
+        if item.get("type") == "musing":
+            cap = (r.get("caption") or "").strip()
+            if not cap:
+                continue
+            cur.append({"id": gid, "account": item["account"], "type": "musing",
+                        "product": "💬 つぶやき", "caption": cap, "created": int(time.time())})
+        else:
+            caps = {"clean_name": r.get("clean_name", ""),
+                    "captions": r.get("captions") or [], "reply": r.get("reply", "")}
+            if not [c for c in caps["captions"] if c and c.strip()]:
+                continue
+            it = item.get("item") or {}
+            extra = _host_external(item.get("cosme_images", []))
+            d = _pr_draft_from_item({"id": item["account"]}, it, _env(),
+                                    label=item.get("label", ""),
+                                    review_gist=item.get("review_gist", ""),
+                                    extra_images=extra, caps=caps)
+            if not d:
+                continue
+            d["source"] = item.get("source", "")
+            d["cosme_image_count"] = len(extra)
+            cur.append(d)
+        applied.append(gid)
+        made += 1
+    if made:
+        _save("_threads_drafts", cur[-200:])
+    if applied:
+        _save("_threads_genqueue", [x for x in q if x["id"] not in applied])
+    return made
 
 
 def collect_products_rakuten(account: dict, count: int) -> int:
@@ -475,13 +550,15 @@ def gist_text(g) -> str:
     return "\n".join(parts)
 
 
-def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *,
-                   tmpl: str = "", label: str = "", review_gist: str = "") -> dict:
-    """1商品につき n 案（異なるフック型）のキャプションを生成。返り {clean_name, captions[], reply}。
+def gen_mode() -> str:
+    """文章生成のモード。api=Gemini自動 / claude=Claude Codeが生成（API不使用）。"""
+    m = ((get_rules().get("threads", {}) or {}).get("gen_mode") or "api").strip()
+    return "claude" if m == "claude" else "api"
 
-    label を指定すると、n案のうち最低1案に label の文脈（例『{label}愛用/おすすめ』）を入れる。
-    review_gist（口コミ傾向の要約）があれば、リアルさの素材として渡す（原文引用はさせない）。
-    """
+
+def build_pr_prompt(persona: str, item: dict, n: int = 5, *,
+                    tmpl: str = "", label: str = "", review_gist: str = "") -> str:
+    """PR投稿の最終プロンプト文字列を組み立てる（Gemini/Claude共通）。"""
     styles = random.sample(_PR_HOOKS, min(n, len(_PR_HOOKS)))
     style_lines = "\n".join(f"  案{i+1}「{nm}」型: {ex}" for i, (nm, ex) in enumerate(styles))
     prompt = _render_prompt(
@@ -500,10 +577,20 @@ def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *,
         prompt += (f"\n\n# ラベル指定（重要）\n{n}案のうち**最低1案**は「{lb}」を自然に織り込む"
                    f"（例『{lb}も愛用してるらしい』『{lb}おすすめの』『{lb}っぽい雰囲気』）。"
                    f"全案には入れない。文脈に無理がないように。")
-    out = _gemini_json(prompt, e)
+    return prompt
+
+
+def _norm_caps(out: dict, n: int = 5) -> dict:
     caps = [c.strip() for c in (out.get("captions") or []) if c and c.strip()]
     out["captions"] = caps[:n] or [out.get("caption", "")]
     return out
+
+
+def _make_captions(persona: str, item: dict, e: dict, n: int = 5, *,
+                   tmpl: str = "", label: str = "", review_gist: str = "") -> dict:
+    """1商品につき n 案（異なるフック型）のキャプションをGeminiで生成。返り {clean_name, captions[], reply}。"""
+    prompt = build_pr_prompt(persona, item, n, tmpl=tmpl, label=label, review_gist=review_gist)
+    return _norm_caps(_gemini_json(prompt, e), n)
 
 
 # つぶやきのネタ型（参考アカ分析より・毎回ランダムで単調化を防ぐ）
@@ -539,16 +626,20 @@ def musing_prompt_template() -> str:
     return ((get_rules().get("threads", {}) or {}).get("musing_prompt") or "").strip() or _DEFAULT_MUSING_PROMPT
 
 
-def _make_musing(account: dict, e: dict, *, tmpl: str = "") -> dict:
+def build_musing_prompt(account: dict, *, tmpl: str = "") -> str:
+    """つぶやきの最終プロンプト文字列を組み立てる（毎回ネタ型/書き出しをランダム）。"""
     name, ex = random.choice(_MUSING_TYPES)
     opener = random.choice(["結局/つまり以外で", "問いかけで", "情景描写で", "感情の一言で",
                             "『え、』『うそ、』等の驚きで", "ぼやき/ひとりごとで"])
-    prompt = _render_prompt(
+    return _render_prompt(
         tmpl or musing_prompt_template(),
         persona=account.get("persona", "") or "親しみやすく絵文字。正直で等身大",
         niche=account.get("name", "美容・暮らし"),
         type_name=name, type_ex=ex, opener=opener)
-    return _gemini_json(prompt, e)
+
+
+def _make_musing(account: dict, e: dict, *, tmpl: str = "") -> dict:
+    return _gemini_json(build_musing_prompt(account, tmpl=tmpl), e)
 
 
 def test_generate(account: dict, *, model: str = "", pr_tmpl: str = "",
@@ -577,7 +668,18 @@ def test_generate(account: dict, *, model: str = "", pr_tmpl: str = "",
 
 
 def generate_musings(account: dict, count: int) -> int:
-    """日常つぶやきドラフトを生成（画像・リンク無し）。"""
+    """日常つぶやきドラフトを生成（画像・リンク無し）。claudeモードは生成待ちへ積む。"""
+    if gen_mode() == "claude":
+        q = genqueue()
+        base = int(time.time() * 1000)
+        for i in range(max(0, count)):
+            q.append({
+                "id": f"{account['id']}::musing::{base}::{i}", "account": account["id"],
+                "type": "musing", "product": "💬 つぶやき",
+                "prompt": build_musing_prompt(account), "created": int(time.time()),
+            })
+        _save("_threads_genqueue", q[-200:])
+        return count
     e = _env()
     if not e["GEMINI_API_KEY"]:
         return 0
@@ -638,10 +740,12 @@ def _host_external(urls: list, limit: int = 4) -> list:
 
 # ---------- ドラフト生成 ----------
 def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
-                        review_gist: str = "", extra_images: list | None = None) -> dict | None:
+                        review_gist: str = "", extra_images: list | None = None,
+                        caps: dict | None = None) -> dict | None:
     """楽天itemから PRドラフト(画像ランク＋5案キャプション) を組み立てる。
 
     extra_images（@cosme/LIPSの公式商品画像をWPにホスト済みのURL）があれば先頭に置く。
+    caps（{clean_name,captions[],reply}）を渡すとGemini生成をスキップ（Claude Codeモード用）。
     """
     code = it.get("itemCode", "")
     extra = [u for u in (extra_images or []) if u]
@@ -661,11 +765,14 @@ def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
     imgs = (extra + ranked)[:12]   # 公式画像（@cosme/LIPS）を先頭・楽天は補完
     if not imgs:
         return None
-    try:
-        cap = _make_captions(account.get("persona", ""), it, e, n=5, label=label,
-                             review_gist=review_gist)
-    except Exception:  # noqa: BLE001
-        return None
+    if caps is not None:
+        cap = _norm_caps(dict(caps), 5)
+    else:
+        try:
+            cap = _make_captions(account.get("persona", ""), it, e, n=5, label=label,
+                                 review_gist=review_gist)
+        except Exception:  # noqa: BLE001
+            return None
     opts = [o.strip() for o in (cap.get("captions") or []) if o.strip()]
     if not opts:
         return None
