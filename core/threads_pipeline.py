@@ -125,7 +125,7 @@ def _trim_item(it: dict) -> dict:
 
 
 def _add_product(account: dict, it: dict, label: str = "", source: str = "rakuten",
-                 review_gist: str = "") -> bool:
+                 review_gist: str = "", cosme_images: list | None = None) -> bool:
     code = it.get("itemCode", "")
     if not code:
         return False
@@ -133,16 +133,17 @@ def _add_product(account: dict, it: dict, label: str = "", source: str = "rakute
     if any(p.get("id") == pid for p in products()) or \
        any(d.get("id") == pid for d in drafts() + queue()):
         return False
+    cimgs = [u for u in (cosme_images or []) if u]
     imgs = api_images(it)
     cur = products()
     cur.append({
         "id": pid, "itemCode": code, "account": account["id"],
         "name": (it.get("itemName", "") or "")[:50], "price": it.get("itemPrice"),
         "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
-        "image": imgs[0] if imgs else "",
+        "image": imgs[0] if imgs else (cimgs[0] if cimgs else ""),  # 一覧サムネは表示の安定する楽天優先
         "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
         "label": (label or "").strip(), "source": source,
-        "review_gist": (review_gist or "").strip(),
+        "review_gist": (review_gist or "").strip(), "cosme_images": cimgs[:4],
         "item": _trim_item(it), "created": int(time.time()),
     })
     _save("_threads_products", cur[-80:])
@@ -164,11 +165,13 @@ def articleize(account: dict, product_id: str) -> bool:
     it = p.get("item") or _rakuten_by_code(p.get("itemCode", ""), e)
     if not it:
         return False
+    extra = _host_external(p.get("cosme_images", []))  # @cosme/LIPS公式画像をWPへ
     d = _pr_draft_from_item(account, it, e, label=p.get("label", ""),
-                            review_gist=p.get("review_gist", ""))
+                            review_gist=p.get("review_gist", ""), extra_images=extra)
     if not d:
         return False
     d["source"] = p.get("source", "")
+    d["cosme_image_count"] = len(extra)
     cur = drafts()
     cur.append(d)
     _save("_threads_drafts", cur[-200:])
@@ -599,13 +602,51 @@ def generate_musings(account: dict, count: int) -> int:
     return made
 
 
+def _host_external(urls: list, limit: int = 4) -> list:
+    """外部画像URL（@cosme/LIPS等）をDLしてWP(ouchibase)へホスト。
+
+    Threadsは公開URL必須＋元CDNのホットリンク回避のため、自社メディアに載せ替える。失敗分はスキップ。
+    """
+    import io
+    from PIL import Image
+    out = []
+    for u in (urls or [])[:limit]:
+        if not u:
+            continue
+        try:
+            req = urllib.request.Request(
+                u, headers={"User-Agent": "Mozilla/5.0",
+                            "Accept": "image/avif,image/webp,image/png,image/jpeg,*/*"})
+            with urllib.request.urlopen(req, timeout=25) as r:
+                data = r.read()
+            # webp/avif/png をJPEGに正規化（Threadsは JPEG/PNG のみ・公開URL必須）
+            im = Image.open(io.BytesIO(data))
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=88)
+            fn = f"th_ext_{int(time.time())}_{random.randint(100, 999)}.jpg"
+            res = wordpress.upload_image_bytes(buf.getvalue(), filename=fn,
+                                               content_type="image/jpeg")
+            su = res.get("source_url")
+            if su:
+                out.append(su)
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
 # ---------- ドラフト生成 ----------
 def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
-                        review_gist: str = "") -> dict | None:
-    """楽天itemから PRドラフト(画像ランク＋5案キャプション) を組み立てる。"""
+                        review_gist: str = "", extra_images: list | None = None) -> dict | None:
+    """楽天itemから PRドラフト(画像ランク＋5案キャプション) を組み立てる。
+
+    extra_images（@cosme/LIPSの公式商品画像をWPにホスト済みのURL）があれば先頭に置く。
+    """
     code = it.get("itemCode", "")
+    extra = [u for u in (extra_images or []) if u]
     real = api_images(it)
-    if not real:
+    if not real and not extra:
         return None
     gal = gallery_images(it)
     dedup, seen_u = [], set()
@@ -614,9 +655,10 @@ def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
             seen_u.add(u.split("?")[0])
             dedup.append(u)
     try:
-        imgs = image_pick.rank_urls(dedup, limit=10)
+        ranked = image_pick.rank_urls(dedup, limit=10) if dedup else []
     except Exception:  # noqa: BLE001
-        imgs = dedup[:10]
+        ranked = dedup[:10]
+    imgs = (extra + ranked)[:12]   # 公式画像（@cosme/LIPS）を先頭・楽天は補完
     if not imgs:
         return None
     try:
