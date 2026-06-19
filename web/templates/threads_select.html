@@ -59,7 +59,7 @@
 
   <div class="bar">
     <a class="badd" href="/threads/add">＋ 商品追加</a>
-    <form action="/threads/collect" method="post" style="flex:1;margin:0;"><button class="bcol" type="submit">⚡ 楽天収集</button></form>
+    <form action="/threads/collect" method="post" style="flex:1;margin:0;"><button class="bcol" type="submit" data-busy="楽天から商品を収集中…" data-busy-label="収集中…">⚡ 楽天収集</button></form>
     <a class="bpost" href="/threads">🧵 投稿 (PR {{ pending }})</a>
   </div>
 
@@ -83,12 +83,13 @@
       </div>
       {% if p.source_url %}<div style="margin-top:3px;"><a href="{{ p.source_url }}" target="_blank" rel="noopener noreferrer" style="color:#4a8fe0;font-size:11px;text-decoration:none;word-break:break-all;">🔎 取得元: {{ p.source_url[:46] }}{% if p.source_url|length > 46 %}…{% endif %}</a></div>{% endif %}
       <div class="acts">
-        <form action="/threads/articleize" method="post" style="flex:1;margin:0;">
+        <form action="/threads/articleize" method="post" style="flex:1;margin:0;"
+              data-busy="記事化中…（@cosme/LIPSは口コミ取得で最大15秒）" data-busy-label="記事化中…">
           <input type="hidden" name="product_id" value="{{ p.id }}">
           <button class="ok" type="submit">✍️ 記事化する</button>
         </form>
         <form action="/threads/product/reject" method="post" style="flex:1;margin:0;"
-              onsubmit="return confirm('この商品を候補から外しますか？');">
+              data-confirm="この商品を候補から外しますか？" data-confirm-ok="却下する">
           <input type="hidden" name="product_id" value="{{ p.id }}">
           <button class="ng2" type="submit">却下</button>
         </form>
@@ -97,5 +98,7 @@
   </div>
   {% endfor %}
 </div>
+<script src="/static/ui.js" defer></script>
+<script src="/static/ux.js" defer></script>
 </body>
 </html>

@@ -104,7 +104,7 @@
   <div class="bar">
     <h2>{{ '💬 つぶやき' if view=='musing' else '🛒 商品PR' }}（承認待ち {{ drafts|length }}）</h2>
     {% if view=='musing' %}
-    <form method="post" action="/threads/generate" style="margin:0;">
+    <form method="post" action="/threads/generate" style="margin:0;" data-busy="つぶやきを生成中…">
       <button class="genbtn" type="submit" style="line-height:2.4;">＋つぶやき生成</button>
     </form>
     {% else %}
@@ -130,7 +130,7 @@
       <textarea name="caption" rows="3">{{ d.caption }}</textarea>
       <div class="acts"><button class="approve" type="submit">✓ 承認してキューへ</button></div>
     </form>
-    <form method="post" action="/threads/reject" style="margin-top:8px;">
+    <form method="post" action="/threads/reject" style="margin-top:8px;" data-confirm="このドラフトを却下しますか？" data-confirm-ok="却下する">
       <input type="hidden" name="draft_id" value="{{ d.id }}">
       <button class="reject" type="submit">却下</button>
     </form>
@@ -178,7 +178,7 @@
         <button class="approve" type="submit">✓ 承認してキューへ</button>
       </div>
     </form>
-    <form method="post" action="/threads/reject" style="margin-top:8px;">
+    <form method="post" action="/threads/reject" style="margin-top:8px;" data-confirm="このドラフトを却下しますか？" data-confirm-ok="却下する">
       <input type="hidden" name="draft_id" value="{{ d.id }}">
       <button class="reject" type="submit">却下</button>
     </form>
@@ -265,5 +265,7 @@ function chk(form){
 }
 document.querySelectorAll('form[action="/threads/approve"]').forEach(updateCnt);
 </script>
+<script src="/static/ui.js" defer></script>
+<script src="/static/ux.js" defer></script>
 </body>
 </html>
