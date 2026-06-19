@@ -145,6 +145,7 @@
       </div>
       {% if d.label %}<div class="url" style="color:#6a5fb0;background:#f3f0fb;">🏷 ラベル「{{ d.label }}」を紹介文に反映済み</div>{% endif %}
       {% if d.review_gist %}<div class="url" style="color:#0d8a6a;background:#e3f8ee;">💬 @cosme/LIPSの口コミ傾向を反映：{{ d.review_gist.splitlines()[0][:40] }}…</div>{% endif %}
+      {% if d.cosme_image_count %}<div class="url" style="color:#2563c0;background:#e6effb;">🖼 @cosme/LIPSの公式商品画像 {{ d.cosme_image_count }}枚を先頭に使用</div>{% endif %}
 
       <div class="step">① メイン投稿（画像＋文章）</div>
       <div class="lbl">画像を選択 <span class="hint2">複数選択可・カルーセル</span> <b class="cnt">0枚</b></div>
