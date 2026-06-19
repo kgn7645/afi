@@ -107,6 +107,7 @@
   {% elif saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">処理に失敗しました</div>{% endif %}
   {% if not can_save %}<div class="flash warn">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
+  {% if publish_mode != 'live' %}<div class="flash" style="background:#fff3cd;color:#8a6d1a;">📥 下書きストックモード：承認しても<b>Threadsへは投稿されません</b>（溜めるだけ）。公開を始めるには <a href="/threads/settings" style="color:#8a6d1a;font-weight:800;">⚙️設定</a> で「ライブ公開」に切替。</div>{% endif %}
 
   <div class="subseg">
     <a href="/threads?view=pr" class="{{ 'on' if view!='musing' }}">🛒 商品PR <b>{{ pr_count }}</b></a>

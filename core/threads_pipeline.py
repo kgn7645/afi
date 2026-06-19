@@ -563,6 +563,15 @@ def gen_mode() -> str:
     return "claude" if m == "claude" else "api"
 
 
+def publish_mode() -> str:
+    """公開モード。live=Threadsへ実投稿 / draft_only=投稿せず承認済みを溜めるだけ（温め運用）。
+
+    既定は draft_only（安全側）。新規アカ温め中の誤爆BAN防止。
+    """
+    m = ((get_rules().get("threads", {}) or {}).get("publish_mode") or "draft_only").strip()
+    return "live" if m == "live" else "draft_only"
+
+
 def build_pr_prompt(persona: str, item: dict, n: int = 5, *,
                     tmpl: str = "", label: str = "", review_gist: str = "") -> str:
     """PR投稿の最終プロンプト文字列を組み立てる（Gemini/Claude共通）。"""
@@ -1375,6 +1384,8 @@ def reject(draft_id: str) -> bool:
 # ---------- 公開（スケジューラ） ----------
 def publish_due(*, limit: int = 1) -> list[dict]:
     """scheduled_at<=now の pending を公開（画像メイン＋リンクをリプライ）。"""
+    if publish_mode() != "live":
+        return []   # 下書きストックモード: 実投稿しない（承認済みはキューに溜まる）
     if not threads_client.enabled():
         return []
     q = queue()

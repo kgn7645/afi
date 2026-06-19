@@ -64,6 +64,22 @@
   </div>
 
   <div class="sec">
+    <h2>🚦 公開モード</h2>
+    <p class="hint">アカウントを温める間は「下書きストックのみ」にして実投稿を止められます（BAN対策）。
+      承認済みは公開キューに溜まり、ライブ公開に切替えた時にスケジュールどおり出ます。</p>
+    <label style="display:block;border:1.5px solid #ece9f1;border-radius:11px;padding:11px 13px;margin:7px 0;cursor:pointer;">
+      <input type="radio" name="publish_mode" value="draft_only" {{ 'checked' if d.publish_mode != 'live' }}>
+      📥 <b>下書きストックのみ</b>（API投稿オフ）
+      <div style="font-size:12px;color:#9a96ad;margin-top:3px;">承認しても<b>Threadsへは投稿しません</b>。承認済みを溜めるだけ。温め期間はこれ。</div>
+    </label>
+    <label style="display:block;border:1.5px solid #ece9f1;border-radius:11px;padding:11px 13px;margin:7px 0;cursor:pointer;">
+      <input type="radio" name="publish_mode" value="live" {{ 'checked' if d.publish_mode == 'live' }}>
+      🚀 <b>ライブ公開</b>（スケジュールどおり実投稿）
+      <div style="font-size:12px;color:#9a96ad;margin-top:3px;">承認＋公開cronでThreadsへ実投稿。アカウントが十分育ってから。</div>
+    </label>
+  </div>
+
+  <div class="sec">
     <h2>📅 公開スケジュール</h2>
     <p class="hint">承認した投稿を、ここで決めた時間帯に小出しで公開します（分はランダム）。
       <b>枠の数＝1日の公開数</b>。例: 「8,12,20」で1日3投稿、「8,11,13,16,19,21」で1日6投稿。</p>

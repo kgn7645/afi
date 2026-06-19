@@ -797,7 +797,8 @@ def threads_review(request: Request, saved: str = "", view: str = "pr"):
     return templates.TemplateResponse("threads.html", {
         "request": request, "drafts": (mu_d if view == "musing" else pr_d),
         "queued": q, "saved": saved, "can_save": overrides.enabled(),
-        "view": view, "pr_count": len(pr_d), "mu_count": len(mu_d)})
+        "view": view, "pr_count": len(pr_d), "mu_count": len(mu_d),
+        "publish_mode": threads_pipeline.publish_mode()})
 
 
 @app.get("/threads/stats")
@@ -1068,6 +1069,7 @@ def threads_settings_form(request: Request, saved: str = ""):
         "musing_per_run": acc.get("musing_per_run", 3),
         "hours": ",".join(str(h) for h in (sch.get("hours") or [8, 12, 20])),
         "pub_per_run": sch.get("per_run", 1),
+        "publish_mode": threads_pipeline.publish_mode(),
     }
     return templates.TemplateResponse("threads_settings.html", {
         "request": request, "d": d, "saved": saved, "can_save": overrides.enabled()})
@@ -1079,6 +1081,7 @@ def threads_settings_save(
     persona: str = Form(""), keywords: str = Form(""), genres: str = Form(""),
     per_run: str = Form("3"), musing_per_run: str = Form("3"),
     hours: str = Form("8,12,20"), pub_per_run: str = Form("1"),
+    publish_mode: str = Form("draft_only"),
 ):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
@@ -1100,6 +1103,7 @@ def threads_settings_save(
                 "per_run": int(per_run) if per_run.isdigit() else 3,
                 "musing_per_run": int(musing_per_run) if musing_per_run.isdigit() else 3})
     ov = {"threads": {"enabled": enabled == "on", "accounts": [acc],
+                      "publish_mode": "live" if publish_mode == "live" else "draft_only",
                       "schedule": {"hours": _ints(hours, r"[,\s]+") or [8, 12, 20],
                                    "per_run": int(pub_per_run) if pub_per_run.isdigit() else 1}}}
     ok = overrides.update(ov)
