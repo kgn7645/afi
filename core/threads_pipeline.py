@@ -113,6 +113,90 @@ def queue() -> list:
     return _load("_threads_queue")
 
 
+def products() -> list:
+    """商品選定の候補（記事化前・キャプション未生成）。"""
+    return _load("_threads_products")
+
+
+def _trim_item(it: dict) -> dict:
+    return {k: it.get(k) for k in ("itemCode", "itemName", "itemPrice", "reviewAverage",
+                                   "reviewCount", "itemUrl", "affiliateUrl",
+                                   "mediumImageUrls", "shopCode")}
+
+
+def _add_product(account: dict, it: dict, label: str = "", source: str = "rakuten") -> bool:
+    code = it.get("itemCode", "")
+    if not code:
+        return False
+    pid = f"{account['id']}::{code}"
+    if any(p.get("id") == pid for p in products()) or \
+       any(d.get("id") == pid for d in drafts() + queue()):
+        return False
+    imgs = api_images(it)
+    cur = products()
+    cur.append({
+        "id": pid, "itemCode": code, "account": account["id"],
+        "name": (it.get("itemName", "") or "")[:50], "price": it.get("itemPrice"),
+        "review": {"avg": it.get("reviewAverage"), "count": it.get("reviewCount")},
+        "image": imgs[0] if imgs else "",
+        "link": it.get("affiliateUrl") or it.get("itemUrl", ""),
+        "label": (label or "").strip(), "source": source,
+        "item": _trim_item(it), "created": int(time.time()),
+    })
+    _save("_threads_products", cur[-80:])
+    return True
+
+
+def reject_product(account_id: str, product_id: str) -> bool:
+    _save("_threads_products", [p for p in products() if p.get("id") != product_id])
+    return True
+
+
+def articleize(account: dict, product_id: str) -> bool:
+    """商品選定でOK→投稿作成。商品候補からAIで5案ドラフトを生成→投稿タブへ。"""
+    ps = products()
+    p = next((x for x in ps if x.get("id") == product_id), None)
+    if not p:
+        return False
+    e = _env()
+    it = p.get("item") or _rakuten_by_code(p.get("itemCode", ""), e)
+    if not it:
+        return False
+    d = _pr_draft_from_item(account, it, e, label=p.get("label", ""))
+    if not d:
+        return False
+    d["source"] = p.get("source", "")
+    cur = drafts()
+    cur.append(d)
+    _save("_threads_drafts", cur[-200:])
+    _save("_threads_products", [x for x in ps if x.get("id") != product_id])
+    return True
+
+
+def collect_products_rakuten(account: dict, count: int) -> int:
+    """楽天キーワードから商品候補を収集（キャプション未生成＝Gemini不使用・速い）。"""
+    e = _env()
+    keywords = account.get("keywords") or _BEAUTY_KEYWORDS
+    seen = {p.get("itemCode") for p in products()}
+    items: list[dict] = []
+    for kw in keywords:
+        try:
+            items += [it for it in _rakuten_search(kw, e, by_keyword=True) if _score(it) > 0]
+        except Exception:  # noqa: BLE001
+            continue
+    items.sort(key=_score, reverse=True)
+    made = 0
+    for it in items:
+        if made >= count:
+            break
+        if it.get("itemCode") in seen:
+            continue
+        if _add_product(account, it, "", "rakuten"):
+            seen.add(it.get("itemCode"))
+            made += 1
+    return made
+
+
 # ---------- 楽天 商品選定 ----------
 # 美容の既定キーワード（アカウントにkeywords/genres未指定時に使用）
 _BEAUTY_KEYWORDS = ["リップティント", "アイシャドウ パレット", "チーク 頬紅", "マスカラ コスメ",
@@ -533,18 +617,12 @@ def add_manual_url(account: dict, url: str, label: str = "") -> tuple[bool, str]
     if not item_id:
         return False, "商品ページから商品IDを取得できませんでした（URLを確認）"
     code = f"{shop}:{item_id}"
-    if any(d.get("id") == f"{account['id']}::{code}" for d in drafts() + queue()):
-        return False, "この商品は既にリストにあります"
     it = _rakuten_by_code(code, e)
     if not it:
         return False, "商品が取得できませんでした（在庫切れ/販売終了の可能性）"
-    d = _pr_draft_from_item(account, it, e, label=label)
-    if not d:
-        return False, "記事化に失敗しました"
-    cur = drafts()
-    cur.append(d)
-    _save("_threads_drafts", cur[-200:])
-    return True, f"追加: {d['product']}"
+    if not _add_product(account, it, label, "manual"):
+        return False, "この商品は既にリスト/投稿にあります"
+    return True, f"商品選定に追加: {it.get('itemName','')[:24]}"
 
 
 def generate_drafts(account: dict, count: int) -> int:

@@ -737,37 +737,95 @@ def threads_review(request: Request, saved: str = ""):
         "can_save": overrides.enabled()})
 
 
+def _threads_accounts() -> list:
+    return (get_rules().get("threads", {}) or {}).get("accounts", []) or []
+
+
+def _threads_acc(account_id: str = "") -> dict:
+    accounts = _threads_accounts()
+    for a in accounts:
+        if a.get("id") == account_id:
+            return a
+    return accounts[0] if accounts else {"id": "mmmtreees"}
+
+
 @app.post("/threads/generate")
-def threads_generate(request: Request, kind: str = Form("both")):
-    """kind: pr=商品のみ / musing=つぶやきのみ / both=両方（既定）。"""
+def threads_generate(request: Request, kind: str = Form("musing")):
+    """つぶやき生成（商品は段階分離のため /threads/collect で候補収集→商品選定）。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
     made = 0
-    for acc in accounts:
+    for acc in _threads_accounts():
         try:
-            if kind in ("pr", "both"):
-                made += threads_pipeline.generate_drafts(acc, int(acc.get("per_run", 3)))
-            if kind in ("musing", "both"):
-                made += threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
+            made += threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
         except Exception:  # noqa: BLE001
             pass
-    return RedirectResponse(f"/threads/products?saved=gen{made}", status_code=303)
+    return RedirectResponse(f"/threads?saved=genmu{made}", status_code=303)
 
 
-@app.get("/threads/products", response_class=HTMLResponse)
-def threads_products(request: Request, saved: str = ""):
-    """商品選定タブ：URL＋ラベルで手動追加・一括生成。"""
+@app.post("/threads/collect")
+def threads_collect(request: Request):
+    """楽天キーワードから商品候補を収集 → 商品選定リストへ（キャプション未生成）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    made = 0
+    for acc in _threads_accounts():
+        try:
+            made += threads_pipeline.collect_products_rakuten(acc, int(acc.get("per_run", 6)))
+        except Exception:  # noqa: BLE001
+            pass
+    return RedirectResponse(f"/threads/select?saved=col{made}", status_code=303)
+
+
+@app.get("/threads/select", response_class=HTMLResponse)
+def threads_select(request: Request, saved: str = ""):
+    """商品選定タブ：取得した商品候補を見て、記事化する/却下を判断。"""
     if not review.enabled():
         return RedirectResponse("/review", status_code=303)
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
+    ps = sorted(threads_pipeline.products(), key=lambda p: p.get("created", 0), reverse=True)
     ds = threads_pipeline.drafts()
-    return templates.TemplateResponse("threads_products.html", {
-        "request": request, "saved": saved, "can_save": overrides.enabled(),
-        "labels": threads_pipeline.labels(),
+    return templates.TemplateResponse("threads_select.html", {
+        "request": request, "saved": saved, "products": ps,
         "pending": len([d for d in ds if d.get("type") == "pr"]),
         "musings": len([d for d in ds if d.get("type") == "musing"])})
+
+
+@app.post("/threads/articleize")
+def threads_articleize(request: Request, product_id: str = Form("")):
+    """商品選定でOK→投稿作成（AIで5案ドラフト生成→投稿タブへ）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    acc = _threads_acc(product_id.split("::")[0] if "::" in product_id else "")
+    ok = threads_pipeline.articleize(acc, product_id)
+    return RedirectResponse("/threads/select?saved=" + ("art" if ok else "artfail"), status_code=303)
+
+
+@app.post("/threads/product/reject")
+def threads_product_reject(request: Request, product_id: str = Form("")):
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    threads_pipeline.reject_product("", product_id)
+    return RedirectResponse("/threads/select?saved=prej", status_code=303)
+
+
+@app.get("/threads/add", response_class=HTMLResponse)
+def threads_add(request: Request, saved: str = ""):
+    """商品追加タブ：楽天URLを手動で貼って商品選定に追加・ラベル管理。"""
+    if not review.enabled():
+        return RedirectResponse("/review", status_code=303)
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    return templates.TemplateResponse("threads_add.html", {
+        "request": request, "saved": saved, "can_save": overrides.enabled(),
+        "labels": threads_pipeline.labels(),
+        "candidates": len(threads_pipeline.products())})
+
+
+@app.get("/threads/products")
+def threads_products_redirect():
+    return RedirectResponse("/threads/select", status_code=303)
 
 
 @app.post("/threads/labels/add")
@@ -775,7 +833,7 @@ def threads_label_add(request: Request, label: str = Form("")):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     threads_pipeline.add_label(label)
-    return RedirectResponse("/threads/products?saved=label", status_code=303)
+    return RedirectResponse("/threads/add?saved=label", status_code=303)
 
 
 @app.post("/threads/labels/remove")
@@ -783,18 +841,17 @@ def threads_label_remove(request: Request, label: str = Form("")):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     threads_pipeline.remove_label(label)
-    return RedirectResponse("/threads/products?saved=label", status_code=303)
+    return RedirectResponse("/threads/add?saved=label", status_code=303)
 
 
 @app.post("/threads/manual")
 def threads_manual(request: Request, url: str = Form(""), label: str = Form("")):
-    """楽天の商品URL（＋ラベル）を貼ると、AIで記事化してPRドラフトに追加。"""
+    """楽天の商品URL（＋ラベル）を貼ると、クロールして商品選定リストに追加。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
-    acc = accounts[0] if accounts else {"id": "mmmtreees"}
+    acc = _threads_acc()
     ok, _msg = threads_pipeline.add_manual_url(acc, url.strip(), label.strip())
-    return RedirectResponse("/threads/products?saved=" + ("man" if ok else "manfail"), status_code=303)
+    return RedirectResponse("/threads/select?saved=" + ("man" if ok else "manfail"), status_code=303)
 
 
 @app.get("/threads/img-proxy")

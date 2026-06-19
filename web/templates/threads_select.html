@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>商品選定｜Threads</title>
+<style>
+  :root{ --orange:#ff9f1c; --green:#21c17a; --red:#e0433f; --ink:#2b2b3a; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif; margin:0; color:var(--ink);
+        background:linear-gradient(180deg,#fbf7f0,#f1eef6); min-height:100dvh; padding-bottom:40px; }
+  .nav{ padding:14px 16px 6px; }
+  .seg{ display:flex; background:#ece9f1; border-radius:999px; padding:4px; max-width:560px; margin:0 auto; }
+  .seg a{ flex:1; text-align:center; padding:9px 0; border-radius:999px; font-size:12px; font-weight:700;
+          color:#8a86a0; text-decoration:none; }
+  .seg a.on{ background:#fff; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .wrap{ max-width:680px; margin:0 auto; padding:8px 16px; }
+  .flash{ background:#e3f8ee; color:#149a5e; border-radius:12px; padding:11px 14px; font-weight:800; font-size:14px; margin:10px 0; }
+  .flash.warn{ background:#ffe7e7; color:#e0433f; }
+  .bar{ display:flex; gap:8px; margin:10px 0; }
+  .bar a,.bar button{ flex:1; text-align:center; text-decoration:none; border:none; border-radius:12px; padding:12px;
+        font-size:13px; font-weight:800; color:#fff; }
+  .bcol{ background:linear-gradient(135deg,var(--orange),#ff7e5f); }
+  .badd{ background:linear-gradient(135deg,#4a8fe0,#6aa9f0); }
+  .bpost{ background:linear-gradient(135deg,var(--green),#13b06b); }
+  .empty{ background:#fff; border-radius:16px; padding:30px 16px; text-align:center; color:#9a96ad; font-size:14px; }
+  .card{ background:#fff; border-radius:16px; box-shadow:0 4px 16px rgba(40,30,70,.06); padding:12px; margin:12px 0;
+         display:flex; gap:12px; }
+  .thumb{ width:88px; height:88px; flex:none; border-radius:12px; object-fit:cover; background:#f1eef6; }
+  .meta{ flex:1; min-width:0; }
+  .src{ display:inline-block; font-size:11px; font-weight:800; color:#6a5fb0; background:#f3f0fb; border-radius:6px; padding:2px 7px; }
+  .nm{ font-size:13px; font-weight:700; line-height:1.45; margin:5px 0; word-break:break-word;
+       display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .px{ font-size:13px; color:#444; } .px b{ color:var(--orange); font-size:15px; }
+  .rv{ font-size:11px; color:#9a96ad; margin-left:6px; }
+  .lbl{ display:inline-block; font-size:11px; font-weight:800; color:#c2410c; background:#fff0e6; border-radius:6px; padding:2px 7px; margin-top:4px; }
+  .acts{ display:flex; gap:8px; margin-top:8px; }
+  .acts button{ border:none; border-radius:10px; padding:9px 0; font-size:13px; font-weight:800; color:#fff; flex:1; }
+  .ok{ background:linear-gradient(135deg,var(--green),#13b06b); } .ng{ background:#f1eef6; color:#a06; }
+  .ng2{ background:#fce8e8; color:var(--red); }
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="seg">
+    <a href="/">🏠</a><a href="/threads/add">＋追加</a><a href="/threads/select" class="on">🛍 選定</a><a href="/threads">🧵 投稿</a><a href="/threads/settings">⚙️</a><a href="/threads/ai">🤖</a>
+  </div>
+</div>
+<div class="wrap">
+  {% if saved=='man' %}<div class="flash">✓ 商品選定に追加しました</div>{% endif %}
+  {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天URLか確認／重複の可能性）</div>{% endif %}
+  {% if saved.startswith('col') %}<div class="flash">✓ {{ saved[3:] }}件を候補に収集しました</div>{% endif %}
+  {% if saved=='art' %}<div class="flash">✓ 記事化しました（投稿タブで5案から選んで承認）</div>{% endif %}
+  {% if saved=='artfail' %}<div class="flash warn">記事化に失敗しました（商品が取得できない可能性）</div>{% endif %}
+  {% if saved=='prej' %}<div class="flash">却下しました</div>{% endif %}
+
+  <div class="bar">
+    <a class="badd" href="/threads/add">＋ 商品追加</a>
+    <form action="/threads/collect" method="post" style="flex:1;margin:0;"><button class="bcol" type="submit">⚡ 楽天収集</button></form>
+    <a class="bpost" href="/threads">🧵 投稿 (PR {{ pending }})</a>
+  </div>
+
+  <p class="hint" style="font-size:12px;color:#9a96ad;margin:4px 2px;">取得した商品候補です。<b>記事化</b>でAIが5案の紹介文を生成→投稿タブへ。却下分はGeminiを消費しません。</p>
+
+  {% if not products %}
+    <div class="empty">候補がありません。<br>「＋商品追加」または「⚡楽天収集」で集めましょう。</div>
+  {% endif %}
+
+  {% for p in products %}
+  <div class="card">
+    {% if p.image %}<img class="thumb" src="{{ p.image }}" alt="">{% else %}<div class="thumb"></div>{% endif %}
+    <div class="meta">
+      <span class="src">{{ p.source or 'rakuten' }}</span>
+      {% if p.label %}<span class="lbl">🏷 {{ p.label }}</span>{% endif %}
+      <div class="nm">{{ p.name }}</div>
+      <div class="px"><b>¥{{ '{:,}'.format(p.price) if p.price else '—' }}</b>
+        {% if p.review and p.review.count %}<span class="rv">★{{ p.review.avg }}・{{ p.review.count }}件</span>{% endif %}
+      </div>
+      <div class="acts">
+        <form action="/threads/articleize" method="post" style="flex:1;margin:0;">
+          <input type="hidden" name="product_id" value="{{ p.id }}">
+          <button class="ok" type="submit">✍️ 記事化する</button>
+        </form>
+        <form action="/threads/product/reject" method="post" style="flex:1;margin:0;"
+              onsubmit="return confirm('この商品を候補から外しますか？');">
+          <input type="hidden" name="product_id" value="{{ p.id }}">
+          <button class="ng2" type="submit">却下</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+</body>
+</html>
