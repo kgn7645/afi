@@ -73,6 +73,7 @@
     <div class="meta">
       <span class="src">{{ p.source or 'rakuten' }}</span>
       {% if p.label %}<span class="lbl">🏷 {{ p.label }}</span>{% endif %}
+      {% if p.review_gist %}<span class="lbl" style="color:#0d8a6a;background:#e3f8ee;" title="{{ p.review_gist }}">💬 口コミ傾向あり</span>{% endif %}
       <div class="nm">{{ p.name }}</div>
       <div class="px"><b>¥{{ '{:,}'.format(p.price) if p.price else '—' }}</b>
         {% if p.review and p.review.count %}<span class="rv">★{{ p.review.avg }}・{{ p.review.count }}件</span>{% endif %}

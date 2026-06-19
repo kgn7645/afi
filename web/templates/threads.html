@@ -144,6 +144,7 @@
         <span class="meta">¥{{ d.price }} ★{{ d.review.avg }}（{{ d.review.count }}）</span>
       </div>
       {% if d.label %}<div class="url" style="color:#6a5fb0;background:#f3f0fb;">🏷 ラベル「{{ d.label }}」を紹介文に反映済み</div>{% endif %}
+      {% if d.review_gist %}<div class="url" style="color:#0d8a6a;background:#e3f8ee;">💬 @cosme/LIPSの口コミ傾向を反映：{{ d.review_gist.splitlines()[0][:40] }}…</div>{% endif %}
 
       <div class="step">① メイン投稿（画像＋文章）</div>
       <div class="lbl">画像を選択 <span class="hint2">複数選択可・カルーセル</span> <b class="cnt">0枚</b></div>
