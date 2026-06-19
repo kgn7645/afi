@@ -153,8 +153,14 @@ def stats(request: Request):
 
 @app.get("/health")
 def health():
-    """死活監視・Renderコールドスタート防止用の軽量エンドポイント（認証/外部API無し）。"""
-    return JSONResponse({"ok": True, "service": "affiliate-automation"})
+    """死活監視・Renderコールドスタート防止用の軽量エンドポイント（認証/外部API無し）。
+
+    commit は稼働中のデプロイ確認用（Renderは RENDER_GIT_COMMIT を自動設定）。
+    """
+    import os
+    commit = (os.environ.get("RENDER_GIT_COMMIT")
+              or os.environ.get("GIT_COMMIT") or "")[:7]
+    return JSONResponse({"ok": True, "service": "affiliate-automation", "commit": commit})
 
 
 @app.get("/", response_class=HTMLResponse)
