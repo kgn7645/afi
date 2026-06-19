@@ -48,8 +48,8 @@
   </div>
 </div>
 <div class="wrap">
-  {% if saved=='man' %}<div class="flash">✓ 商品選定に追加しました</div>{% endif %}
-  {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天URLか確認／重複の可能性）</div>{% endif %}
+  {% if saved=='man' %}<div class="flash">✓ {{ msg or '商品選定に追加しました' }}</div>{% endif %}
+  {% if saved=='manfail' %}<div class="flash warn">追加に失敗：{{ msg or '楽天URLか確認／重複の可能性' }}</div>{% endif %}
   {% if saved.startswith('col') %}<div class="flash">✓ {{ saved[3:] }}件を候補に収集しました</div>{% endif %}
   {% if saved=='art' %}<div class="flash">✓ 記事化しました（投稿タブで5案から選んで承認）</div>{% endif %}
   {% if saved=='artq' %}<div class="flash" style="background:#fff3e0;color:#c2410c;">⏳ 生成待ちに追加しました。Claude Codeで「Threadsの生成待ちを処理して」と指示してください。</div>{% endif %}

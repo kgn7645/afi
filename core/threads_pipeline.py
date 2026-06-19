@@ -1091,7 +1091,8 @@ def _add_from_review_site(account: dict, url: str, source: str, label: str,
     site = "@cosme" if source == "cosme" else "LIPS"
     info = _crawl_review_site(url)
     if not info or not info.get("name"):
-        return False, f"{site}ページから商品名を取得できませんでした（URLを確認）"
+        return False, (f"{site}ページを取得できませんでした（URL確認、"
+                       "またはサーバーから@cosme/LIPSへアクセス制限の可能性）")
     it = _rakuten_best_match(info["name"], e)
     if not it:
         return False, f"「{info['name'][:24]}」に一致する楽天商品が見つかりませんでした"

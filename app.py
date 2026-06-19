@@ -782,7 +782,7 @@ def threads_collect(request: Request):
 
 
 @app.get("/threads/select", response_class=HTMLResponse)
-def threads_select(request: Request, saved: str = ""):
+def threads_select(request: Request, saved: str = "", m: str = ""):
     """商品選定タブ：取得した商品候補を見て、記事化する/却下を判断。"""
     if not review.enabled():
         return RedirectResponse("/review", status_code=303)
@@ -791,7 +791,7 @@ def threads_select(request: Request, saved: str = ""):
     ps = sorted(threads_pipeline.products(), key=lambda p: p.get("created", 0), reverse=True)
     ds = threads_pipeline.drafts()
     return templates.TemplateResponse("threads_select.html", {
-        "request": request, "saved": saved, "products": ps,
+        "request": request, "saved": saved, "msg": m, "products": ps,
         "gen_mode": threads_pipeline.gen_mode(),
         "gen_pending": len(threads_pipeline.genqueue()),
         "pending": len([d for d in ds if d.get("type") == "pr"]),
@@ -857,8 +857,10 @@ def threads_manual(request: Request, url: str = Form(""), label: str = Form(""))
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     acc = _threads_acc()
-    ok, _msg = threads_pipeline.add_manual_url(acc, url.strip(), label.strip())
-    return RedirectResponse("/threads/select?saved=" + ("man" if ok else "manfail"), status_code=303)
+    ok, msg = threads_pipeline.add_manual_url(acc, url.strip(), label.strip())
+    import urllib.parse
+    qs = "saved=" + ("man" if ok else "manfail") + "&m=" + urllib.parse.quote(msg or "")
+    return RedirectResponse("/threads/select?" + qs, status_code=303)
 
 
 @app.get("/threads/img-proxy")
