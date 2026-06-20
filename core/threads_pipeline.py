@@ -763,10 +763,11 @@ def test_generate(account: dict, *, model: str = "", pr_tmpl: str = "",
                   musing_tmpl: str = "") -> dict:
     """現在のモデル/プロンプトで、固定商品に対するサンプル文を生成（保存しない）。"""
     e = _env(model or None)
-    item = {"itemName": "ロムアンド ジューシーラスティングティント 06 フィグフィグ 韓国コスメ",
-            "itemPrice": 1100, "reviewAverage": 4.6, "reviewCount": 12000}
-    demo_gist = ("発色が良く色持ちも高評価。みずみずしい質感で唇が荒れにくいという声が多い。\n"
-                 "◎良い点: 色持ちが良い / みずみずしいツヤ感 / 落ちにくい\n△気になる点: 乾燥を感じる人も")
+    item = {"itemName": "薬用 オールインワン保湿ジェル 化粧水 メンズ レディース 兼用",
+            "itemPrice": 1980, "reviewAverage": 4.5, "reviewCount": 850}
+    demo_gist = ("うるおいが続きベタつかない使用感が高評価。手軽さとコスパで支持されている。\n"
+                 "◎良い点: しっとりするのにベタつかない / 1本で時短 / コスパが良い\n"
+                 "△気になる点: 乾燥が強い時は物足りない人も")
     result = {"model": e["GEMINI_MODEL"], "product": item["itemName"][:24],
               "captions": [], "reply": "", "musing": "", "error": ""}
     try:

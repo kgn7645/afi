@@ -1180,11 +1180,10 @@ def threads_ai_save(request: Request, gemini_model: str = Form(""),
 
 @app.post("/threads/ai/test", response_class=HTMLResponse)
 def threads_ai_test(request: Request, gemini_model: str = Form("")):
-    """現在アクティブなプリセットでテスト生成（保存済みプロンプトを使う）。"""
+    """操作中の媒体のペルソナ/スタイル型でテスト生成（保存済みプロンプトを使う）。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    accounts = (get_rules().get("threads", {}) or {}).get("accounts", []) or []
-    acc = accounts[0] if accounts else {"id": "mmmtreees"}
+    acc = _threads_acc(_active_acc_id(request))   # 操作中の媒体（m2=KAI等）で生成
     test = threads_pipeline.test_generate(
         acc, model=gemini_model.strip(),
         pr_tmpl=threads_pipeline.pr_prompt_template(),
