@@ -1671,12 +1671,14 @@ def _publish_item(item: dict, uid_cache: dict | None = None) -> dict:
         if item.get("type") == "musing":
             res = {"main": threads_client.publish_text(item["caption"], user_id=uid, token=tok)}
         else:
-            caption = item["caption"]
-            if "#PR" not in caption:
-                caption += "\n\n#PR"
+            # メイン(1投稿目)にはPR表記を入れず、2投稿目(リプライ)に小文字prを入れる
+            caption = re.sub(r"\s*#PR\b", "", item["caption"]).rstrip()
             imgs = item.get("images") or ([item["image"]] if item.get("image") else [])
             imgs = _hosted_trimmed(imgs)   # 公開直前に白ふちトリム＋ホスティング
-            res = threads_client.post_set(caption, imgs, item.get("reply", ""),
+            reply_text = (item.get("reply", "") or "").strip()
+            if not re.search(r"(?<![A-Za-z])pr(?![A-Za-z])", reply_text, re.I):
+                reply_text = (reply_text + "\npr").strip()   # 2投稿目に小文字prを担保
+            res = threads_client.post_set(caption, imgs, reply_text,
                                           item.get("link", ""), user_id=uid, token=tok)
         item["status"] = "published"
         item["permalink"] = (res.get("main") or {}).get("permalink")
