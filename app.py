@@ -163,6 +163,39 @@ def health():
     return JSONResponse({"ok": True, "service": "affiliate-automation", "commit": commit})
 
 
+def _emoji_svg(emoji: str, bg: str) -> Response:
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+           f'<rect width="64" height="64" rx="14" fill="{bg}"/>'
+           f'<text x="32" y="44" font-size="38" text-anchor="middle">{emoji}</text></svg>')
+    return Response(content=svg, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+def _icon_response(name: str, emoji: str, bg: str) -> Response:
+    """web/static/icons/<name>.(png|svg|ico) があれば配信、無ければ絵文字SVG。"""
+    import mimetypes
+    base = ROOT / "web" / "static" / "icons"
+    for ext in ("svg", "png", "ico"):
+        f = base / f"{name}.{ext}"
+        if f.exists():
+            ctype = mimetypes.types_map.get("." + ext, "image/png")
+            return Response(content=f.read_bytes(), media_type=ctype,
+                            headers={"Cache-Control": "public, max-age=86400"})
+    return _emoji_svg(emoji, bg)
+
+
+@app.get("/favicon.ico")
+def favicon():
+    """おうちベース全体のファビコン（icons/favicon.* 優先・無ければ🏠）。"""
+    return _icon_response("favicon", "🏠", "#ff9f1c")
+
+
+@app.get("/favicon-threads")
+def favicon_threads():
+    """Threads画面用ファビコン（icons/threads.* 優先・無ければ🧵）。"""
+    return _icon_response("threads", "🧵", "#7a6fb0")
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     """ホーム＝媒体ハブ（おうちベース / Threads を選択）。軽量＝WP実通信はしない。"""
