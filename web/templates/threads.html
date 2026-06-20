@@ -65,6 +65,8 @@
   .qright{ display:flex; flex-direction:column; gap:6px; align-items:flex-end; flex:none; }
   .wdraw{ border:1.5px solid #d9d4e6; background:#fff; color:#6a5fb0; border-radius:9px;
           padding:6px 10px; font-size:11.5px; font-weight:800; white-space:nowrap; cursor:pointer; }
+  .getimg{ width:100%; border:1.5px solid #cfe0f6; background:#f3f8ff; color:#2563c0; border-radius:11px;
+           padding:11px; font-size:13px; font-weight:800; cursor:pointer; }
   .empty{ color:#9a96ad; font-size:13px; padding:18px; text-align:center; }
   /* 折りたたみカード（タイトル＋写真＋金額のみ表示→タップで展開） */
   .dcard > summary{ list-style:none; cursor:pointer; display:flex; align-items:center; gap:11px; padding:2px; }
@@ -107,6 +109,7 @@
   {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天の商品URLか確認／重複の可能性）</div>{% endif %}
   {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
   {% if saved=='wd' %}<div class="flash">↩ 取り下げました。上の「承認待ち」に戻したので、編集してもう一度承認できます。</div>{% endif %}
+  {% if saved.startswith('img') %}<div class="flash">🖼 画像を {{ saved[3:] }} 枚取得しました（参照元・楽天・Web検索）。下の候補から選び直せます。</div>{% endif %}
   {% if saved.startswith('genmuq') %}<div class="flash" style="background:#fff3e0;color:#c2410c;">⏳ つぶやき {{ saved[6:] }}件を「生成待ち」に追加しました。Claude Codeで「Threadsの生成待ちを処理して」と指示すると文章化されてここに並びます。</div>
   {% elif saved.startswith('genmu') %}<div class="flash">✓ つぶやきを {{ saved[5:] }} 件生成しました</div>
   {% elif saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
@@ -174,6 +177,11 @@
         <span class="dchev">▼</span>
       </summary>
       <div class="dbody">
+      <form method="post" action="/threads/draft/images" style="margin:0 0 10px;"
+            data-busy="画像を取得中…（参照元・楽天・Web検索／最大20秒）" data-busy-label="画像取得中…">
+        <input type="hidden" name="draft_id" value="{{ d.id }}">
+        <button type="submit" class="getimg">🖼 画像を取得し直す（参照元・楽天・Web）</button>
+      </form>
       <form method="post" action="/threads/approve" onsubmit="return chk(this)">
         <input type="hidden" name="draft_id" value="{{ d.id }}">
         {% if d.source_url %}<div class="url"><a href="{{ d.source_url }}" target="_blank" rel="noopener noreferrer" style="color:#4a8fe0;text-decoration:none;">🔎 取得元: {{ d.source_url[:50] }}{% if d.source_url|length > 50 %}…{% endif %}</a></div>{% endif %}

@@ -1110,6 +1110,15 @@ def threads_reject(request: Request, draft_id: str = Form(...)):
     return RedirectResponse(f"/threads/posts?view={v}&saved=rej", status_code=303)
 
 
+@app.post("/threads/draft/images")
+def threads_draft_images(request: Request, draft_id: str = Form(...)):
+    """ドラフトの画像候補を 参照元/楽天/Web検索 から取得し直して追加。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    n = threads_pipeline.fetch_more_images(draft_id)
+    return RedirectResponse(f"/threads/posts?view=pr&saved=img{n}", status_code=303)
+
+
 @app.post("/threads/withdraw")
 def threads_withdraw(request: Request, item_id: str = Form(...)):
     """公開キューの未公開を取り下げ→承認待ちドラフトに戻す（再編集可・削除ではない）。"""

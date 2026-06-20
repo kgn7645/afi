@@ -878,6 +878,77 @@ def _host_external(urls: list, limit: int = 4) -> list:
     return out
 
 
+def _bing_image_search(query: str, limit: int = 8) -> list:
+    """Bing画像検索で商品名から画像URLを取得（参照元以外の媒体＝メーカー公式/各通販）。"""
+    import html as _html
+    import requests
+    try:
+        r = requests.get("https://www.bing.com/images/search",
+                         params={"q": (query + " 商品").strip(), "form": "HDRSC2"},
+                         headers=_BROWSER_HEADERS, timeout=20)
+        body = _html.unescape(r.text)
+    except Exception:  # noqa: BLE001
+        return []
+    urls = re.findall(r'"murl":"(https?://[^"]+?)"', body)
+    seen, good = set(), []
+    for u in urls:
+        if not re.search(r"\.(jpg|jpeg|png|webp)", u, re.I):
+            continue
+        k = u.split("?")[0].rsplit("/", 1)[-1]
+        if k in seen:
+            continue
+        seen.add(k)
+        good.append(u)
+    # 通販/メーカー系を前に（信頼できる商品画像を優先）
+    good.sort(key=lambda u: 0 if any(d in u for d in
+              ("rakuten", "r10s", "amazon", "shop", "cosme", "official", "cdn", ".jp/")) else 1)
+    return good[:limit]
+
+
+def fetch_more_images(draft_id: str) -> int:
+    """ドラフトの画像候補を 参照元サイト/楽天/Web画像検索 から取得して追加（重複除去）。"""
+    ds = drafts()
+    d = next((x for x in ds if x.get("id") == draft_id), None)
+    if not d or d.get("type") == "musing":
+        return 0
+    e = _env()
+    code = draft_id.split("::", 1)[-1]
+    it = _rakuten_by_code(code, e) or {}
+    cands = []
+    cands += api_images(it) + gallery_images(it)            # ② 楽天ギャラリー
+    su = d.get("source_url", "")
+    if _is_review_site(su):                                  # ① 参照元(@cosme/LIPS)公式画像
+        try:
+            cands += (_crawl_review_site(su) or {}).get("images", [])
+        except Exception:  # noqa: BLE001
+            pass
+    name = re.sub(r"[【】\[\]★●]+", " ", d.get("product") or it.get("itemName", "")).strip()
+    cands += _bing_image_search(name[:40])                   # ③ 参照元以外（Bing画像検索）
+    # 重複除去（ファイル名）
+    seen, uniq = set(), []
+    for u in cands:
+        if not (u or "").startswith("http"):
+            continue
+        k = u.split("?")[0].rsplit("/", 1)[-1]
+        if k and k not in seen:
+            seen.add(k)
+            uniq.append(u)
+    # 楽天は公開URLのまま使える。外部(参照元/Bing)はWPへホストして表示&Threads対応に
+    external = [u for u in uniq if not re.search(r"rakuten|r10s", u)]
+    rakuten = [u for u in uniq if re.search(r"rakuten|r10s", u)]
+    hosted = _host_external(external, limit=8)
+    new_imgs = hosted + rakuten                              # 取得し直した候補（外部=ホスト済を前に）
+    merged, mseen = [], set()
+    for u in new_imgs + (d.get("images") or []):             # 新規を前・既存を後ろ
+        k = u.split("?")[0].rsplit("/", 1)[-1]
+        if u and k and k not in mseen:
+            mseen.add(k)
+            merged.append(u)
+    d["images"] = merged[:16]
+    _save("_threads_drafts", ds)
+    return len(new_imgs)
+
+
 # ---------- ドラフト生成 ----------
 def _pr_draft_from_item(account: dict, it: dict, e: dict, *, label: str = "",
                         review_gist: str = "", extra_images: list | None = None,
