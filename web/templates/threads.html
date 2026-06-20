@@ -66,6 +66,8 @@
   .qright{ display:flex; flex-direction:column; gap:6px; align-items:flex-end; flex:none; }
   .wdraw{ border:1.5px solid #d9d4e6; background:#fff; color:#6a5fb0; border-radius:9px;
           padding:6px 10px; font-size:11.5px; font-weight:800; white-space:nowrap; cursor:pointer; }
+  .pubnow{ border:none; background:linear-gradient(135deg,#21c17a,#13b06b); color:#fff; border-radius:9px;
+           padding:7px 11px; font-size:11.5px; font-weight:800; white-space:nowrap; cursor:pointer; }
   .getimg{ width:100%; border:1.5px solid #cfe0f6; background:#f3f8ff; color:#2563c0; border-radius:11px;
            padding:11px; font-size:13px; font-weight:800; cursor:pointer; }
   .empty{ color:#9a96ad; font-size:13px; padding:18px; text-align:center; }
@@ -110,6 +112,8 @@
   {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天の商品URLか確認／重複の可能性）</div>{% endif %}
   {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
   {% if saved=='wd' %}<div class="flash">↩ 取り下げました。上の「承認待ち」に戻したので、編集してもう一度承認できます。</div>{% endif %}
+  {% if saved=='pubok' %}<div class="flash">🚀 今すぐ投稿しました（Threadsに公開）。</div>{% endif %}
+  {% if saved=='puberr' %}<div class="flash warn">公開に失敗しました：{{ msg or 'トークン/接続を確認してください' }}</div>{% endif %}
   {% if saved.startswith('img') %}<div class="flash">🖼 画像を {{ saved[3:] }} 枚取得しました（参照元・楽天・Web検索）。下の候補から選び直せます。</div>{% endif %}
   {% if saved.startswith('genmuq') %}<div class="flash" style="background:#fff3e0;color:#c2410c;">⏳ つぶやき {{ saved[6:] }}件を「生成待ち」に追加しました。Claude Codeで「Threadsの生成待ちを処理して」と指示すると文章化されてここに並びます。</div>
   {% elif saved.startswith('genmu') %}<div class="flash">✓ つぶやきを {{ saved[5:] }} 件生成しました</div>
@@ -241,6 +245,12 @@
       <div style="flex:1;">{{ q.product }}{% if q.source_url %} <a href="{{ q.source_url }}" target="_blank" rel="noopener noreferrer" style="color:#4a8fe0;font-size:11px;text-decoration:none;">🔎取得元</a>{% endif %}<br><span class="meta">{{ q.caption[:36] }}…</span></div>{% endif %}
       <div class="qright">
         <span class="qwhen">{{ q.when }}</span>
+        <form method="post" action="/threads/publish-now" style="margin:0;"
+              data-confirm="この投稿を今すぐThreadsに公開しますか？（取り消せません）" data-confirm-ok="今すぐ投稿する"
+              data-busy="Threadsに公開中…（画像処理で最大30秒）" data-busy-label="公開中…">
+          <input type="hidden" name="item_id" value="{{ q.id }}">
+          <button type="submit" class="pubnow">🚀 今すぐ投稿</button>
+        </form>
         <form method="post" action="/threads/withdraw" style="margin:0;"
               data-confirm="この投稿を取り下げて編集に戻しますか？（承認待ちに戻り、削除されません）" data-confirm-ok="取り下げる" data-safe>
           <input type="hidden" name="item_id" value="{{ q.id }}">

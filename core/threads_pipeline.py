@@ -1655,6 +1655,50 @@ def reject(draft_id: str) -> bool:
 
 
 # ---------- 公開（スケジューラ） ----------
+def _publish_item(item: dict, uid_cache: dict | None = None) -> dict:
+    """キュー項目1件を実際にThreadsへ公開（媒体別トークン）。itemを更新し結果dictを返す。"""
+    uid_cache = uid_cache if uid_cache is not None else {}
+    acc = get_account(item.get("account", ""))
+    tok = account_token(acc)
+    now = int(time.time())
+    try:
+        if not (tok or threads_client.enabled()):
+            raise RuntimeError("このアカウントの公開トークンが未設定です")
+        acc_id = acc.get("id", "")
+        if acc_id not in uid_cache:
+            uid_cache[acc_id] = threads_client.me(tok).get("id", "me")
+        uid = uid_cache[acc_id]
+        if item.get("type") == "musing":
+            res = {"main": threads_client.publish_text(item["caption"], user_id=uid, token=tok)}
+        else:
+            caption = item["caption"]
+            if "#PR" not in caption:
+                caption += "\n\n#PR"
+            imgs = item.get("images") or ([item["image"]] if item.get("image") else [])
+            imgs = _hosted_trimmed(imgs)   # 公開直前に白ふちトリム＋ホスティング
+            res = threads_client.post_set(caption, imgs, item.get("reply", ""),
+                                          item.get("link", ""), user_id=uid, token=tok)
+        item["status"] = "published"
+        item["permalink"] = (res.get("main") or {}).get("permalink")
+        item["published_at"] = now
+        return {"id": item["id"], "ok": True, "permalink": item["permalink"]}
+    except Exception as ex:  # noqa: BLE001
+        item["status"] = "error"
+        item["error"] = str(ex)[:200]
+        return {"id": item["id"], "ok": False, "error": str(ex)[:200]}
+
+
+def publish_now(item_id: str) -> dict:
+    """指定の公開待ち1件を今すぐ手動公開（スケジュール/公開モード問わず・本人操作）。"""
+    q = queue()
+    item = next((x for x in q if x.get("id") == item_id and x.get("status") == "pending"), None)
+    if not item:
+        return {"ok": False, "error": "対象が見つかりません（既に公開済み/取り下げ済みの可能性）"}
+    r = _publish_item(item)
+    _save("_threads_queue", q[-300:])
+    return r
+
+
 def publish_due(*, limit: int = 1) -> list[dict]:
     """scheduled_at<=now の pending を公開（画像メイン＋リンクをリプライ）。
 
@@ -1670,35 +1714,11 @@ def publish_due(*, limit: int = 1) -> list[dict]:
     for item in due:
         if published >= limit:
             break
-        acc = get_account(item.get("account", ""))
-        if account_publish_mode(acc) != "live":
+        if account_publish_mode(get_account(item.get("account", ""))) != "live":
             continue                # 下書きストックモードのアカウントはスキップ（溜めるだけ）
-        tok = account_token(acc)
-        try:
-            if not (tok or threads_client.enabled()):
-                raise RuntimeError("このアカウントの公開トークンが未設定です")
-            acc_id = acc.get("id", "")
-            if acc_id not in uids:
-                uids[acc_id] = threads_client.me(tok).get("id", "me")
-            uid = uids[acc_id]
-            if item.get("type") == "musing":
-                res = {"main": threads_client.publish_text(item["caption"], user_id=uid, token=tok)}
-            else:
-                caption = item["caption"]
-                if "#PR" not in caption:
-                    caption += "\n\n#PR"
-                imgs = item.get("images") or ([item["image"]] if item.get("image") else [])
-                imgs = _hosted_trimmed(imgs)   # 公開直前に白ふちトリム＋ホスティング
-                res = threads_client.post_set(caption, imgs, item.get("reply", ""),
-                                              item.get("link", ""), user_id=uid, token=tok)
-            item["status"] = "published"
-            item["permalink"] = (res.get("main") or {}).get("permalink")
-            item["published_at"] = now
+        r = _publish_item(item, uids)
+        results.append(r)
+        if r.get("ok"):
             published += 1
-            results.append({"id": item["id"], "ok": True, "permalink": item["permalink"]})
-        except Exception as ex:  # noqa: BLE001
-            item["status"] = "error"
-            item["error"] = str(ex)[:200]
-            results.append({"id": item["id"], "ok": False, "error": str(ex)[:200]})
     _save("_threads_queue", q[-300:])
     return results

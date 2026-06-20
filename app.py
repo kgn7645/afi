@@ -838,7 +838,7 @@ def threads_home(request: Request):
 
 
 @app.get("/threads/posts", response_class=HTMLResponse)
-def threads_review(request: Request, saved: str = "", view: str = "pr"):
+def threads_review(request: Request, saved: str = "", view: str = "pr", m: str = ""):
     """Threads投稿の承認UI（媒体ごと）。view=pr=商品PR / musing=つぶやき でタブ分け。"""
     if not review.enabled():
         return RedirectResponse("/review", status_code=303)
@@ -859,7 +859,7 @@ def threads_review(request: Request, saved: str = "", view: str = "pr"):
         x["when"] = _dt.datetime.fromtimestamp(x.get("scheduled_at", 0), _jst).strftime("%m/%d %H:%M")
     return templates.TemplateResponse("threads.html", {
         "request": request, "drafts": (mu_d if view == "musing" else pr_d),
-        "queued": q, "saved": saved, "can_save": overrides.enabled(),
+        "queued": q, "saved": saved, "msg": m, "can_save": overrides.enabled(),
         "view": view, "pr_count": len(pr_d), "mu_count": len(mu_d),
         "publish_mode": threads_pipeline.account_publish_mode(aid)})
 
@@ -1152,6 +1152,20 @@ def threads_draft_images(request: Request, draft_id: str = Form(...)):
         return RedirectResponse("/review/login", status_code=303)
     n = threads_pipeline.fetch_more_images(draft_id)
     return RedirectResponse(f"/threads/posts?view=pr&saved=img{n}", status_code=303)
+
+
+@app.post("/threads/publish-now")
+def threads_publish_now(request: Request, item_id: str = Form(...)):
+    """公開待ち1件を今すぐ手動公開（スケジュール待たず即投稿）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    r = threads_pipeline.publish_now(item_id)
+    import urllib.parse
+    if r.get("ok"):
+        code = "pubok"
+    else:
+        code = "puberr&m=" + urllib.parse.quote(r.get("error", "")[:120])
+    return RedirectResponse(f"/threads/posts?view=pr&saved={code}", status_code=303)
 
 
 @app.post("/threads/withdraw")
