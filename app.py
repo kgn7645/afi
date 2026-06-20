@@ -953,7 +953,9 @@ def threads_generate(request: Request, kind: str = Form("musing")):
         made = threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
     except Exception:  # noqa: BLE001
         made = 0
-    return RedirectResponse(f"/threads/posts?view=musing&saved=genmu{made}", status_code=303)
+    # claudeモードは「生成待ち」に積むだけ＝/createで文章化。誤解を避けて別コードで案内
+    code = (f"genmuq{made}" if threads_pipeline.gen_mode() == "claude" else f"genmu{made}")
+    return RedirectResponse(f"/threads/posts?view=musing&saved={code}", status_code=303)
 
 
 @app.post("/threads/collect")

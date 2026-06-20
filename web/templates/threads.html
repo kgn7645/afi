@@ -107,7 +107,8 @@
   {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天の商品URLか確認／重複の可能性）</div>{% endif %}
   {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
   {% if saved=='wd' %}<div class="flash">↩ 取り下げました。上の「承認待ち」に戻したので、編集してもう一度承認できます。</div>{% endif %}
-  {% if saved.startswith('genmu') %}<div class="flash">✓ つぶやきを {{ saved[5:] }} 件生成しました</div>
+  {% if saved.startswith('genmuq') %}<div class="flash" style="background:#fff3e0;color:#c2410c;">⏳ つぶやき {{ saved[6:] }}件を「生成待ち」に追加しました。Claude Codeで「Threadsの生成待ちを処理して」と指示すると文章化されてここに並びます。</div>
+  {% elif saved.startswith('genmu') %}<div class="flash">✓ つぶやきを {{ saved[5:] }} 件生成しました</div>
   {% elif saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">処理に失敗しました</div>{% endif %}
   {% if not can_save %}<div class="flash warn">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
