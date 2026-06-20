@@ -1571,6 +1571,24 @@ def _next_slot(account_id: str, q: list, hours: list[int]) -> int:
     return int((now + timedelta(hours=1)).timestamp())
 
 
+def reschedule_overdue() -> int:
+    """期限切れの公開待ちを、各媒体の次の空き枠（未来）に振り直す。
+
+    下書きストックモードで公開されないまま放置されると予定時刻が過去になるため、
+    一覧表示時に未来へ繰り上げて「経過済み」表示を防ぐ。
+    """
+    q = queue()
+    now = int(time.time())
+    overdue = [x for x in q if x.get("status") == "pending" and x.get("scheduled_at", 0) <= now]
+    if not overdue:
+        return 0
+    hours = ((get_rules().get("threads", {}) or {}).get("schedule", {}) or {}).get("hours", [9, 13, 20])
+    for item in sorted(overdue, key=lambda x: x.get("scheduled_at", 0)):
+        item["scheduled_at"] = _next_slot(item.get("account", ""), q, hours)  # qは参照で更新される
+    _save("_threads_queue", q)
+    return len(overdue)
+
+
 # ---------- 承認 / 却下 ----------
 def approve(draft_id: str, images: list[str], caption: str, reply_text: str = "",
             *, when: int | None = None) -> bool:

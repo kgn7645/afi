@@ -812,6 +812,7 @@ def threads_review(request: Request, saved: str = "", view: str = "pr"):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     aid = _active_acc_id(request)
+    threads_pipeline.reschedule_overdue()      # 期限切れの公開待ちを未来枠へ繰り上げ
     ds = [d for d in threads_pipeline.drafts() if d.get("account") == aid]
     pr_d = [d for d in ds if d.get("type") != "musing"]
     mu_d = [d for d in ds if d.get("type") == "musing"]
