@@ -61,7 +61,7 @@
       {% if a.mode=='live' %}<span class="badge b-live">🚀 ライブ公開</span>
       {% else %}<span class="badge b-draft">📥 下書きストック</span>{% endif %}
     </div>
-    <div class="ctok">{% if a.has_token %}<span class="tok-ok">🔑 トークン設定済み</span>{% else %}<span class="tok-no">🔑 トークン未設定（公開不可）</span>{% endif %}</div>
+    <div class="ctok">{% if a.has_token %}<span class="tok-ok">🔑 {% if a.username %}@{{ a.username }} に接続{% else %}トークン設定済み{% endif %}</span>{% else %}<span class="tok-no">🔑 トークン未設定（公開不可）</span>{% endif %}</div>
     <div class="stats">
       <div class="stat"><b>{{ a.select }}</b><span>選定候補</span></div>
       <div class="stat"><b>{{ a.drafts }}</b><span>承認待ち</span></div>

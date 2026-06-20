@@ -828,6 +828,7 @@ def threads_home(request: Request):
             "id": i, "name": a.get("name", i),
             "mode": threads_pipeline.account_publish_mode(a),
             "has_token": bool(threads_pipeline.account_token(a)),
+            "username": a.get("connected_username", ""),
             "select": sum(1 for p in prods if p.get("account") == i),
             "drafts": sum(1 for d in drs if d.get("account") == i),
             "queue": sum(1 for x in q if x.get("status") == "pending" and x.get("account") == i),
@@ -957,22 +958,22 @@ def threads_account_check(request: Request, acc_id: str = Form(""), token: str =
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     tok = token.strip()
-    if tok:                                    # 入力中トークンをその媒体に保存（保存忘れ防止）
-        accts = list(_threads_accounts())
-        for a in accts:
-            if a.get("id") == acc_id:
-                a["token"] = tok
-                break
-        _save_accounts(accts)
-    else:
+    accts = list(_threads_accounts())
+    target = next((a for a in accts if a.get("id") == acc_id), None)
+    if tok and target is not None:             # 入力中トークンをその媒体に保存（保存忘れ防止）
+        target["token"] = tok
+    elif not tok:
         tok = threads_pipeline.account_token(_threads_acc(acc_id))
     from core import threads_client
     try:
         info = threads_client.me(tok)
         un = info.get("username") or info.get("id") or "?"
+        if target is not None:                 # 接続先@ユーザー名を保存（媒体ごとに別Metaアカ可視化）
+            target["connected_username"] = un
         msg = f"ok:@{un}"
     except Exception as ex:  # noqa: BLE001
         msg = "ng:" + str(ex)[:120]
+    _save_accounts(accts)
     import urllib.parse
     return RedirectResponse(f"/threads/settings?acc={acc_id}&chk=" + urllib.parse.quote(msg),
                             status_code=303)
@@ -1272,7 +1273,7 @@ def threads_settings_form(request: Request, saved: str = "", acc: str = "", chk:
         "genres": "\n".join(str(g) for g in (a.get("genres") or [])),
         "per_run": a.get("per_run", 3),
         "musing_per_run": a.get("musing_per_run", 3),
-        "token": a.get("token", ""),
+        "token": a.get("token", ""), "username": a.get("connected_username", ""),
         "publish_mode": threads_pipeline.account_publish_mode(a),
         "hours": ",".join(str(h) for h in (sch.get("hours") or [8, 12, 20])),
         "pub_per_run": sch.get("per_run", 1),

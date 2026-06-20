@@ -91,7 +91,8 @@
   <div class="sec">
     <h2>🔑 公開トークン（この媒体専用）</h2>
     <p class="hint">この媒体のThreads投稿に使うアクセストークン（THAA…）。媒体ごとに別々に設定します。
-      空の場合は env の THREADS_ACCESS_TOKEN を使用。</p>
+      <b>Metaアプリが別でもOK</b>（投稿はトークンだけで動く）。空の場合は env の THREADS_ACCESS_TOKEN を使用。</p>
+    {% if d.username %}<div class="flash" style="margin:4px 0 8px;">✅ 接続先：<b>@{{ d.username }}</b></div>{% endif %}
     <label>アクセストークン</label>
     <input type="text" name="token" value="{{ d.token }}" placeholder="THAA…（この媒体のトークン）" autocomplete="off">
     <div style="display:flex;gap:8px;margin-top:8px;">
