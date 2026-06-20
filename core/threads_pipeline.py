@@ -878,35 +878,67 @@ def _host_external(urls: list, limit: int = 4) -> list:
     return out
 
 
-def _bing_image_search(query: str, limit: int = 8) -> list:
-    """Bing画像検索で商品名から画像URLを取得（参照元以外の媒体＝メーカー公式/各通販）。"""
-    import html as _html
+def _name_match(prod_name: str, query: str, need: int = 2) -> bool:
+    """検索結果の商品名 prod_name が query と十分一致するか（無関係画像の混入防止）。"""
+    toks = [t for t in re.split(r"[\s　/・]+", query) if len(t) >= 2]
+    ov = sum(1 for t in toks if t in (prod_name or ""))
+    return ov >= min(need, max(1, len(toks)))
+
+
+def _mcosme_image_search(name: str, limit: int = 4) -> list:
+    """m-cosmeで商品名検索→一致した商品の公式画像（Shopify products.json）。"""
     import requests
     try:
-        r = requests.get("https://www.bing.com/images/search",
-                         params={"q": (query + " 商品").strip(), "form": "HDRSC2"},
-                         headers=_BROWSER_HEADERS, timeout=20)
-        body = _html.unescape(r.text)
+        r = requests.get("https://www.m-cosme.com/search",
+                         params={"q": name, "type": "product"}, headers=_BROWSER_HEADERS, timeout=20)
+        handles = list(dict.fromkeys(re.findall(r"/products/([a-z0-9-]+)", r.text)))[:3]
     except Exception:  # noqa: BLE001
         return []
-    urls = re.findall(r'"murl":"(https?://[^"]+?)"', body)
-    seen, good = set(), []
-    for u in urls:
-        if not re.search(r"\.(jpg|jpeg|png|webp)", u, re.I):
+    out = []
+    for h in handles:
+        try:
+            pr = requests.get(f"https://www.m-cosme.com/products/{h}.json",
+                              headers=_BROWSER_HEADERS, timeout=15)
+            if pr.status_code != 200:
+                continue
+            p = json.loads(pr.text).get("product", {})
+            if not _name_match(p.get("title", ""), name):    # 名前一致のみ採用
+                continue
+            for im in p.get("images", [])[:limit]:
+                s = im.get("src") if isinstance(im, dict) else im
+                if s:
+                    out.append(s)
+            if out:
+                break                                        # 最初の一致商品で十分
+        except Exception:  # noqa: BLE001
             continue
-        k = u.split("?")[0].rsplit("/", 1)[-1]
-        if k in seen:
-            continue
-        seen.add(k)
-        good.append(u)
-    # 通販/メーカー系を前に（信頼できる商品画像を優先）
-    good.sort(key=lambda u: 0 if any(d in u for d in
-              ("rakuten", "r10s", "amazon", "shop", "cosme", "official", "cdn", ".jp/")) else 1)
-    return good[:limit]
+    return out[:limit]
+
+
+def _lips_image_search(name: str, limit: int = 4) -> list:
+    """LIPSで商品名検索→一致した商品の公式画像（JSON-LD）。"""
+    import requests
+    try:
+        s = requests.Session()
+        s.get("https://lipscosme.com/", headers=_BROWSER_HEADERS, timeout=20)
+        r = s.get("https://lipscosme.com/search", params={"query": name},
+                  headers={**_BROWSER_HEADERS, "Referer": "https://lipscosme.com/"}, timeout=20)
+        ids = list(dict.fromkeys(re.findall(r"/products/(\d+)", r.text)))[:3]
+    except Exception:  # noqa: BLE001
+        return []
+    for pid in ids:
+        info = _crawl_review_http(f"https://lipscosme.com/products/{pid}")
+        if info and info.get("name") and _name_match(info["name"], name):
+            return (info.get("images") or [])[:limit]
+    return []
 
 
 def fetch_more_images(draft_id: str) -> int:
-    """ドラフトの画像候補を 参照元サイト/楽天/Web画像検索 から取得して追加（重複除去）。"""
+    """画像候補を 楽天＋取得元と別の美容媒体(m-cosme/LIPS) から名前一致で取得して追加。
+
+    商品名で各媒体を検索し、名前が一致した商品の公式画像だけ採用（無関係画像の混入を防ぐ）。
+    取得元の媒体は重複なので除外する。
+    """
     ds = drafts()
     d = next((x for x in ds if x.get("id") == draft_id), None)
     if not d or d.get("type") == "musing":
@@ -914,17 +946,15 @@ def fetch_more_images(draft_id: str) -> int:
     e = _env()
     code = draft_id.split("::", 1)[-1]
     it = _rakuten_by_code(code, e) or {}
+    src = (d.get("source") or "").lower()
+    name = re.sub(r"[【】\[\]★●（）()]|ポイント\d+倍|送料無料|医薬部外品|[0-9]+(?:ml|g|mL|個|袋|本)",
+                  " ", d.get("product") or it.get("itemName", ""))
+    name = re.sub(r"\s+", " ", name).strip()[:30]
     cands = []
-    cands += api_images(it) + gallery_images(it)            # ② 楽天ギャラリー
-    su = d.get("source_url", "")
-    if _is_review_site(su):                                  # ① 参照元(@cosme/LIPS)公式画像
-        try:
-            cands += (_crawl_review_site(su) or {}).get("images", [])
-        except Exception:  # noqa: BLE001
-            pass
-    name = re.sub(r"[【】\[\]★●]+", " ", d.get("product") or it.get("itemName", "")).strip()
-    cands += _bing_image_search(name[:40])                   # ③ 参照元以外（Bing画像検索）
-    # 重複除去（ファイル名）
+    cands += api_images(it) + gallery_images(it)             # 楽天（リンク商品自身のギャラリー）
+    cands += _mcosme_image_search(name)                      # 別媒体①: m-cosme公式（名前一致のみ）
+    if src != "lips":                                        # LIPS由来なら既に公式画像あり→重複回避
+        cands += _lips_image_search(name)                    # 別媒体②: LIPS公式（名前一致のみ）
     seen, uniq = set(), []
     for u in cands:
         if not (u or "").startswith("http"):
@@ -933,13 +963,12 @@ def fetch_more_images(draft_id: str) -> int:
         if k and k not in seen:
             seen.add(k)
             uniq.append(u)
-    # 楽天は公開URLのまま使える。外部(参照元/Bing)はWPへホストして表示&Threads対応に
     external = [u for u in uniq if not re.search(r"rakuten|r10s", u)]
     rakuten = [u for u in uniq if re.search(r"rakuten|r10s", u)]
-    hosted = _host_external(external, limit=8)
-    new_imgs = hosted + rakuten                              # 取得し直した候補（外部=ホスト済を前に）
+    hosted = _host_external(external, limit=8)               # 外部はWPへホスト（表示&Threads対応）
+    new_imgs = hosted + rakuten
     merged, mseen = [], set()
-    for u in new_imgs + (d.get("images") or []):             # 新規を前・既存を後ろ
+    for u in new_imgs + (d.get("images") or []):
         k = u.split("?")[0].rsplit("/", 1)[-1]
         if u and k and k not in mseen:
             mseen.add(k)

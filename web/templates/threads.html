@@ -178,9 +178,9 @@
       </summary>
       <div class="dbody">
       <form method="post" action="/threads/draft/images" style="margin:0 0 10px;"
-            data-busy="画像を取得中…（参照元・楽天・Web検索／最大20秒）" data-busy-label="画像取得中…">
+            data-busy="画像を取得中…（楽天＋m-cosme/LIPSから名前一致で／最大20秒）" data-busy-label="画像取得中…">
         <input type="hidden" name="draft_id" value="{{ d.id }}">
-        <button type="submit" class="getimg">🖼 画像を取得し直す（参照元・楽天・Web）</button>
+        <button type="submit" class="getimg">🖼 画像を取得し直す（楽天＋他の美容媒体）</button>
       </form>
       <form method="post" action="/threads/approve" onsubmit="return chk(this)">
         <input type="hidden" name="draft_id" value="{{ d.id }}">
