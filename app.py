@@ -821,8 +821,9 @@ def threads_review(request: Request, saved: str = "", view: str = "pr"):
          if x.get("status") == "pending" and x.get("account") == aid]
     q.sort(key=lambda x: x.get("scheduled_at", 0))
     import datetime as _dt
+    _jst = _dt.timezone(_dt.timedelta(hours=9))     # 公開時刻は日本時間で表示（サーバーTZ非依存）
     for x in q:
-        x["when"] = _dt.datetime.fromtimestamp(x.get("scheduled_at", 0)).strftime("%m/%d %H:%M")
+        x["when"] = _dt.datetime.fromtimestamp(x.get("scheduled_at", 0), _jst).strftime("%m/%d %H:%M")
     return templates.TemplateResponse("threads.html", {
         "request": request, "drafts": (mu_d if view == "musing" else pr_d),
         "queued": q, "saved": saved, "can_save": overrides.enabled(),

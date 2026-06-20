@@ -16,7 +16,9 @@ import re
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+_JST = timezone(timedelta(hours=9))   # 公開スケジュールは日本時間で固定（サーバーTZ非依存）
 
 from . import image_pick, overrides, threads_client, wordpress
 from .config import get_rules, get_settings
@@ -1560,11 +1562,11 @@ def generate_drafts(account: dict, count: int) -> int:
 # ---------- スケジュール ----------
 def _next_slot(account_id: str, q: list, hours: list[int]) -> int:
     taken = {x["scheduled_at"] for x in q if x.get("account") == account_id}
-    now = datetime.now()
+    now = datetime.now(_JST)                       # 日本時間で枠を作る（サーバーTZ非依存）
     for day in range(0, 60):
         d = (now + timedelta(days=day)).date()
         for h in sorted(hours or [9, 13, 20]):
-            slot = datetime(d.year, d.month, d.day, h, random.randint(0, 25))
+            slot = datetime(d.year, d.month, d.day, h, random.randint(0, 25), tzinfo=_JST)
             ts = int(slot.timestamp())
             if slot > now and ts not in taken:
                 return ts
