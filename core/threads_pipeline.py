@@ -285,6 +285,28 @@ def collect_products_rakuten(account: dict, count: int) -> int:
     return made
 
 
+def collect_mens_discovery(account: dict, count: int) -> int:
+    """メンズ収集元（m-cosme/@cosmeメンズ）で発見した商品名を楽天照合→選定に追加。"""
+    from . import mens_discover
+    e = _env()
+    names = mens_discover.mens_product_names(per_genre=1)
+    seen = {p.get("itemCode") for p in products()}
+    made = 0
+    for name in names:
+        if made >= count:
+            break
+        try:
+            it = _rakuten_best_match(name, e)
+        except Exception:  # noqa: BLE001
+            continue
+        if not it or it.get("itemCode") in seen:
+            continue
+        if _add_product(account, it, "", "mens", source_url=""):
+            seen.add(it.get("itemCode"))
+            made += 1
+    return made
+
+
 # ---------- 楽天 商品選定 ----------
 # 美容の既定キーワード（アカウントにkeywords/genres未指定時に使用）
 _BEAUTY_KEYWORDS = ["リップティント", "アイシャドウ パレット", "チーク 頬紅", "マスカラ コスメ",

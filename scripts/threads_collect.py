@@ -34,8 +34,12 @@ def main() -> None:
         cnt = args.count or int(acc.get("per_run", 3))
         try:
             n = threads_pipeline.collect_products_rakuten(acc, cnt)
-            print(f"[threads-collect] {acc.get('id')}/{acc.get('name')}: +{n}件")
+            print(f"[threads-collect] {acc.get('id')}/{acc.get('name')}: 楽天KW +{n}件")
             total += n
+            if acc.get("mens_discovery"):       # メンズ発見ソース(m-cosme/@cosme)も使う媒体
+                nd = threads_pipeline.collect_mens_discovery(acc, cnt)
+                print(f"[threads-collect] {acc.get('id')}: メンズ発見 +{nd}件")
+                total += nd
         except Exception as e:  # noqa: BLE001
             print(f"[threads-collect] {acc.get('id')}: 失敗 {e}")
     print(f"[threads-collect] 合計 +{total}件")
