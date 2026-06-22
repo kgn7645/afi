@@ -159,8 +159,14 @@
       <div class="dbody">
         <form method="post" action="/threads/approve">
           <input type="hidden" name="draft_id" value="{{ d.id }}">
-          <div class="lbl">本文（編集可・画像/リンク無し）</div>
+          <div class="lbl">親投稿の本文（編集可・画像/リンク無し）</div>
           <textarea name="caption" rows="3">{{ d.caption }}</textarea>
+          {% if d.reply %}
+          <div class="lbl">↳ 返信詳細文（親投稿へのリプライ・編集可）</div>
+          <textarea name="reply_text" rows="4">{{ d.reply }}</textarea>
+          {% else %}
+          <textarea name="reply_text" rows="2" placeholder="返信詳細文（任意）"></textarea>
+          {% endif %}
           <div class="acts"><button class="approve" type="submit">✓ 承認してキューへ</button></div>
         </form>
         <form method="post" action="/threads/reject" style="margin-top:8px;" data-confirm="このドラフトを却下しますか？" data-confirm-ok="却下する">

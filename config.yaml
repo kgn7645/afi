@@ -164,6 +164,15 @@ threads:
       genres: []               # 美容はキーワード主体。ジャンルID併用も可
       per_run: 3              # 1回の生成で作るPRドラフト数
       musing_per_run: 3        # 1回の生成で作るつぶやき数
+    # 占い/スピ特化（3アカ目）。投稿は data/superuniverseoracle_year.json から
+    # scripts/uranai_drip.py が日次でキュー投入する（商品生成は使わないので per_run=0）。
+    - id: superuniverseoracle
+      name: "占い・宇宙オラクル"
+      persona: "宇宙/オラクル系の占い師。優しい断定(reikan風)。絵文字で行動を促す。本文にリンクは載せない(リンクはbioのみ)。誕生月/12星座/宇宙からのメッセージ/開運アクション"
+      keywords: []
+      genres: []
+      per_run: 0               # 商品PR生成しない（年間スケジュール由来）
+      musing_per_run: 0        # つぶやき生成もしない（年間スケジュール由来）
   schedule:
     hours: [8, 12, 20]        # 公開する時間帯（分はランダムで人間らしく分散）
     per_run: 1                # publish cron 1回で出す最大数

@@ -1607,7 +1607,7 @@ def approve(draft_id: str, images: list[str], caption: str, reply_text: str = ""
     q.append({"id": draft_id, "account": d["account"], "type": d.get("type", "pr"),
               "caption": caption.strip(),
               "images": [] if is_musing else imgs,
-              "reply": "" if is_musing else (reply_text or d.get("reply", "")).strip(),
+              "reply": (reply_text or d.get("reply", "")).strip(),
               "image": "" if is_musing else (imgs[0] if imgs else ""),  # 後方互換
               "link": "" if is_musing else d.get("link", ""),
               "source_url": "" if is_musing else d.get("source_url", ""),
@@ -1669,7 +1669,13 @@ def _publish_item(item: dict, uid_cache: dict | None = None) -> dict:
             uid_cache[acc_id] = threads_client.me(tok).get("id", "me")
         uid = uid_cache[acc_id]
         if item.get("type") == "musing":
-            res = {"main": threads_client.publish_text(item["caption"], user_id=uid, token=tok)}
+            main = threads_client.publish_text(item["caption"], user_id=uid, token=tok)
+            res = {"main": main}
+            rep_text = (item.get("reply", "") or "").strip()
+            if rep_text:  # 返信詳細文があれば親投稿へのリプライとして投稿（スレッド化）
+                link = (item.get("link", "") or "").strip()
+                body = (rep_text + ("\n" + link if link else "")).strip()
+                res["reply"] = threads_client.reply(main.get("id"), body, user_id=uid, token=tok)
         else:
             # メイン(1投稿目)にはPR表記を入れず、2投稿目(リプライ)に小文字prを入れる
             caption = re.sub(r"\s*#PR\b", "", item["caption"]).rstrip()
