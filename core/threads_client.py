@@ -13,6 +13,8 @@ import urllib.request
 from .config import get_settings
 
 API = "https://graph.threads.net/v1.0"
+# 一貫したUA（毎回バラバラ/裸のurllib UAは不審判定の一因になりうるため固定）
+_UA = "ouchibase-threads/1.0 (+https://graph.threads.net)"
 
 
 def enabled() -> bool:
@@ -30,10 +32,10 @@ def _req(method: str, path: str, params: dict, *, timeout: int = 40) -> dict:
     url = f"{API}/{path}"
     if method == "GET":
         url = f"{url}?{urllib.parse.urlencode(params)}"
-        req = urllib.request.Request(url, method="GET")
+        req = urllib.request.Request(url, method="GET", headers={"User-Agent": _UA})
     else:
         req = urllib.request.Request(url, data=urllib.parse.urlencode(params).encode(),
-                                     method="POST")
+                                     method="POST", headers={"User-Agent": _UA})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.load(r)
