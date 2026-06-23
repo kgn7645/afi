@@ -122,9 +122,9 @@ prompts:
   style_guide: ""              # 空ならコード内デフォルト(STYLE_GUIDE_DEFAULT)を使用
   extra_instructions: ""       # 本文生成に追加する指示（任意）
   # 記事タイトルの型。差し込み語: {brand} {category} {product_name} {model} {year}
-  # 空ならコード内デフォルト(DEFAULT_TITLE_FORMAT)を使用。「どこの国？」にしたいなら例:
-  #   【{year}】{brand}はどこの国の企業？{category}の評判・口コミを徹底レビュー
-  title_format: "【{year}】{brand}の{category}は買い？評判・口コミ・実力を徹底レビュー"
+  # 空ならコード内デフォルト(DEFAULT_TITLE_FORMAT)を使用。
+  # ※ASP規約対応: タイトル・本文に「口コミ」「評判」を入れない（もしもアフィリでNG警告）
+  title_format: "【{year}】{brand}の{category}は買い？特徴と実力を徹底レビュー"
 
 # --- 媒体（複数サイトへの並行量産 / #95） ---
 # media[0]=このconfigのトップレベル設定(=おうちベース)を自動で使う。
@@ -264,9 +264,9 @@ canva:
 eeat:
   site_name: "おうちベース"
   # サイトの軸（在宅ワーク・おうち時間）。記事のフレーミングにも使う
-  site_concept: "在宅ワーク・おうち時間を快適にする道具を、企業の素性や口コミまで調べて選ぶメディア"
+  site_concept: "在宅ワーク・おうち時間を快適にする道具を、企業の素性や特徴まで調べて選ぶメディア"
   author_name: "おうちベース編集部"     # 運営者名（ハンドルでOK。実名不要・要確認）
-  author_bio: "在宅ワークで使えるガジェット・家電を、メーカーの素性や実際の口コミまで調べてレビューしています。"
+  author_bio: "在宅ワークで使えるガジェット・家電を、メーカーの素性や特徴・使い勝手まで調べてレビューしています。"
   profile_slug: "about"               # 運営者情報ページのスラッグ
   # 自動割当に失敗した時の保険カテゴリslug（「未分類(uncategorized)」を避ける）
   default_category_slug: "tools"
