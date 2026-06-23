@@ -117,6 +117,7 @@
   {% if saved.startswith('img') %}<div class="flash">🖼 画像を {{ saved[3:] }} 枚取得しました（参照元・楽天・Web検索）。下の候補から選び直せます。</div>{% endif %}
   {% if saved.startswith('genmuq') %}<div class="flash" style="background:#fff3e0;color:#c2410c;">⏳ つぶやき {{ saved[6:] }}件を「生成待ち」に追加しました。Claude Codeで「Threadsの生成待ちを処理して」と指示すると文章化されてここに並びます。</div>
   {% elif saved.startswith('genmu') %}<div class="flash">✓ つぶやきを {{ saved[5:] }} 件生成しました</div>
+  {% elif saved=='genbg' %}<div class="flash">⏳ つぶやき生成をバックグラウンドで開始。完了後ここに反映されます（待たずに次へどうぞ）</div>
   {% elif saved.startswith('gen') %}<div class="flash">✓ ドラフトを {{ saved[3:] }} 件生成しました</div>{% endif %}
   {% if saved=='fail' %}<div class="flash warn">処理に失敗しました</div>{% endif %}
   {% if not can_save %}<div class="flash warn">⚠️ 保存無効（CONFIG_OVERRIDES=1＋WP接続が必要）</div>{% endif %}
@@ -129,7 +130,7 @@
   <div class="bar">
     <h2>{{ '💬 つぶやき' if view=='musing' else '🛒 商品PR' }}（承認待ち {{ drafts|length }}）</h2>
     {% if view=='musing' %}
-    <form method="post" action="/threads/generate" style="margin:0;" data-busy="つぶやきを生成中…">
+    <form method="post" action="/threads/generate" style="margin:0;" data-bg>
       <button class="genbtn" type="submit" style="line-height:2.4;">＋つぶやき生成</button>
     </form>
     {% else %}
@@ -334,6 +335,7 @@ document.querySelectorAll('form[action="/threads/approve"]').forEach(updateCnt);
 </script>
 <script src="/static/ui.js" defer></script>
 <script src="/static/ux.js" defer></script>
+<script src="/static/jobs.js" defer></script>
 <script src="/static/threads-stats.js" defer></script>
 </body>
 </html>

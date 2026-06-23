@@ -55,12 +55,14 @@
   {% if saved=='art' %}<div class="flash">✓ 記事化しました（投稿タブで5案から選んで承認）</div>{% endif %}
   {% if saved=='artq' %}<div class="flash" style="background:#fff3e0;color:#c2410c;">⏳ 生成待ちに追加しました。Claude Codeで「Threadsの生成待ちを処理して」と指示してください。</div>{% endif %}
   {% if saved=='artfail' %}<div class="flash warn">記事化に失敗しました（商品が取得できない可能性）</div>{% endif %}
+  {% if saved=='artbg' %}<div class="flash">⏳ 記事化をバックグラウンドで開始。完了後に投稿タブへ反映されます（待たずに次へどうぞ）</div>{% endif %}
+  {% if saved=='colbg' %}<div class="flash">⏳ 楽天収集をバックグラウンドで開始。完了後この画面に反映されます</div>{% endif %}
   {% if gen_mode=='claude' %}<div class="flash" style="background:#eef2ff;color:#3730a3;">⚙️ Claude Codeモード：記事化は「生成待ち」に積まれます（Gemini API不使用）{% if gen_pending %}・現在 <b>{{ gen_pending }}</b>件待ち{% endif %}</div>{% endif %}
   {% if saved=='prej' %}<div class="flash">却下しました</div>{% endif %}
 
   <div class="bar">
     <a class="badd" href="/threads/add">＋ 商品追加</a>
-    <form action="/threads/collect" method="post" style="flex:1;margin:0;"><button class="bcol" type="submit" data-busy="楽天から商品を収集中…" data-busy-label="収集中…">⚡ 楽天収集</button></form>
+    <form action="/threads/collect" method="post" style="flex:1;margin:0;" data-bg><button class="bcol" type="submit">⚡ 楽天収集</button></form>
     <a class="bpost" href="/threads/posts">🧵 投稿 (PR {{ pending }})</a>
   </div>
 
@@ -84,8 +86,7 @@
       </div>
       {% if p.source_url %}<div style="margin-top:3px;"><a href="{{ p.source_url }}" target="_blank" rel="noopener noreferrer" style="color:#4a8fe0;font-size:11px;text-decoration:none;word-break:break-all;">🔎 取得元: {{ p.source_url[:46] }}{% if p.source_url|length > 46 %}…{% endif %}</a></div>{% endif %}
       <div class="acts">
-        <form action="/threads/articleize" method="post" style="flex:1;margin:0;"
-              data-busy="記事化中…（@cosme/LIPSは口コミ取得で最大15秒）" data-busy-label="記事化中…">
+        <form action="/threads/articleize" method="post" style="flex:1;margin:0;" data-bg>
           <input type="hidden" name="product_id" value="{{ p.id }}">
           <button class="ok" type="submit">✍️ 記事化する</button>
         </form>
@@ -101,6 +102,7 @@
 </div>
 <script src="/static/ui.js" defer></script>
 <script src="/static/ux.js" defer></script>
+<script src="/static/jobs.js" defer></script>
 <script src="/static/threads-stats.js" defer></script>
 </body>
 </html>

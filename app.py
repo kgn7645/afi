@@ -14,9 +14,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from core import (candidates, gemini_client, internal_links, overrides, pipeline,
-                  prompts, ranking_catalog, rakuten_catalog, review, reviser,
-                  sheet_log, threads_pipeline, wordpress)
+from core import (candidates, gemini_client, internal_links, jobs, overrides,
+                  pipeline, prompts, ranking_catalog, rakuten_catalog, review,
+                  reviser, sheet_log, threads_pipeline, wordpress)
 from core.config import ROOT, get_rules, get_settings
 
 app = FastAPI(title="アフィリエイト記事 自動化ツール")
@@ -28,6 +28,11 @@ _COOKIE = "review_auth"
 
 def _authed(request: Request) -> bool:
     return review.valid_token(request.cookies.get(_COOKIE, ""))
+
+
+def _is_ajax(request: Request) -> bool:
+    """fetch等のAJAX要求か（JSONを返してUIを遷移させない）。"""
+    return request.headers.get("x-requested-with", "").lower() == "fetch"
 
 
 def _set_auth_cookie(resp: RedirectResponse, request: Request) -> None:
@@ -440,6 +445,16 @@ def crawl_status_json(request: Request):
     except Exception:  # noqa: BLE001
         pass
     return JSONResponse({"ok": True, "crawl": st})
+
+
+@app.get("/jobs/status")
+def jobs_status(request: Request):
+    """バックグラウンドジョブの状況（UIのポーリング用・操作中の媒体分）。"""
+    if not _authed(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    aid = _active_acc_id(request)
+    return JSONResponse({"ok": True, "active": jobs.active_count(aid),
+                         "jobs": jobs.for_account(aid, 15)})
 
 
 @app.get("/manual", response_class=HTMLResponse)
@@ -985,13 +1000,12 @@ def threads_generate(request: Request, kind: str = Form("musing")):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     acc = _threads_acc(_active_acc_id(request))    # 操作中の媒体に生成
-    try:
-        made = threads_pipeline.generate_musings(acc, int(acc.get("musing_per_run", 3)))
-    except Exception:  # noqa: BLE001
-        made = 0
-    # claudeモードは「生成待ち」に積むだけ＝/createで文章化。誤解を避けて別コードで案内
-    code = (f"genmuq{made}" if threads_pipeline.gen_mode() == "claude" else f"genmu{made}")
-    return RedirectResponse(f"/threads/posts?view=musing&saved={code}", status_code=303)
+    n = int(acc.get("musing_per_run", 3))
+    jid = jobs.submit("generate", acc.get("id", ""),
+                      lambda: threads_pipeline.generate_musings(acc, n))
+    if _is_ajax(request):
+        return JSONResponse({"ok": True, "job_id": jid})
+    return RedirectResponse("/threads/posts?view=musing&saved=genbg", status_code=303)
 
 
 @app.post("/threads/collect")
@@ -1000,11 +1014,12 @@ def threads_collect(request: Request):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     acc = _threads_acc(_active_acc_id(request))    # 操作中の媒体へ収集
-    try:
-        made = threads_pipeline.collect_products_rakuten(acc, int(acc.get("per_run", 6)))
-    except Exception:  # noqa: BLE001
-        made = 0
-    return RedirectResponse(f"/threads/select?saved=col{made}", status_code=303)
+    n = int(acc.get("per_run", 6))
+    jid = jobs.submit("collect", acc.get("id", ""),
+                      lambda: threads_pipeline.collect_products_rakuten(acc, n))
+    if _is_ajax(request):
+        return JSONResponse({"ok": True, "job_id": jid})
+    return RedirectResponse("/threads/select?saved=colbg", status_code=303)
 
 
 @app.get("/threads/select", response_class=HTMLResponse)
@@ -1028,13 +1043,16 @@ def threads_select(request: Request, saved: str = "", m: str = ""):
 
 @app.post("/threads/articleize")
 def threads_articleize(request: Request, product_id: str = Form("")):
-    """商品選定でOK→投稿作成（AIで5案ドラフト生成→投稿タブへ）。"""
+    """商品選定でOK→投稿作成（AIで5案ドラフト生成）。バックグラウンド実行で即返す。"""
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
     acc = _threads_acc(product_id.split("::")[0] if "::" in product_id else "")
-    status = threads_pipeline.articleize(acc, product_id)
-    code = {"done": "art", "queued": "artq", "fail": "artfail"}.get(status, "artfail")
-    return RedirectResponse(f"/threads/select?saved={code}", status_code=303)
+    jid = jobs.submit("articleize", acc.get("id", ""),
+                      lambda: threads_pipeline.articleize(acc, product_id),
+                      label=product_id)
+    if _is_ajax(request):
+        return JSONResponse({"ok": True, "job_id": jid})
+    return RedirectResponse("/threads/select?saved=artbg", status_code=303)
 
 
 @app.post("/threads/product/reject")
