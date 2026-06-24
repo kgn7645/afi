@@ -25,6 +25,40 @@ SIGNS = [
     ("♌", "しし座"), ("♍", "おとめ座"), ("♎", "てんびん座"), ("♏", "さそり座"),
     ("♐", "いて座"), ("♑", "やぎ座"), ("♒", "みずがめ座"), ("♓", "うお座"),
 ]
+# エレメント（0=火,1=地,2=風,3=水）を Aries..Pisces 順に
+ELEMENTS = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3]
+ELEM_NAME = {0: "火", 1: "地", 2: "風", 3: "水"}
+
+
+def moon_sign_index(d: date) -> int:
+    """その日(JST正午)の月の星座 index(0=おひつじ..11=うお)。月の平均黄経の近似。
+    月は約27.3日で黄道一周＝1星座約2.3日。外部データ不要で決定的。"""
+    jd_noon = d.toordinal() + 1721425.0          # JST正午相当のユリウス日
+    dd = jd_noon - 2451545.0                      # J2000.0 からの経過日
+    lon = (218.316 + 13.176396 * dd) % 360.0      # 月の平均黄経(度)
+    return int(lon // 30) % 12
+
+
+def _compat(sign: int, moon: int) -> float:
+    """月の星座と各星座の相性スコア（高いほど吉）。アスペクト距離(0〜11)で評価。"""
+    diff = (sign - moon) % 12
+    return {0: 5.0,            # 同じ星座（月が宿る）
+            4: 4.2, 8: 4.2,    # トライン120°（同エレメント）
+            2: 3.4, 10: 3.4,   # セクスタイル60°（協力エレメント）
+            6: 2.8,            # オポジション180°（引き合う）
+            1: 2.2, 11: 2.2,   # セミセクスタイル30°
+            5: 1.6, 7: 1.6,    # クインカンクス150°
+            3: 1.4, 9: 1.4,    # スクエア90°（試練）
+            }.get(diff, 2.0)
+
+
+def daily_rank(d: date, seed: random.Random) -> tuple[list[int], int]:
+    """その日の月の星座を基に上位5星座を算出。(top5 index, 月の星座index)。
+    相性スコア＋微小な日替わりノイズで、同月星座の連日でも順位が自然に動く。"""
+    moon = moon_sign_index(d)
+    scored = sorted(range(12),
+                    key=lambda s: -( _compat(s, moon) + seed.random() * 0.9 ))
+    return scored[:5], moon
 EMOJI = ["🌙", "✨", "🌹", "🕊️", "💫", "💰", "🔮", "🌕", "🐱", "🌈", "⭐", "🪽"]
 
 # 金運軸のラッキー要素・締め（MDの金運開運法ベース。断定/誇大・必ず/絶対は使わない）
@@ -145,13 +179,22 @@ def style_B_sign(seed: random.Random, idx: int) -> str:
     return (f"{em}{name}｜今日は「{seed.choice(SIGN_WORDS)}」。{seed.choice(SIGN_BODY)}{seed.choice(EMOJI)}")
 
 
-def style_B_rank(seed: random.Random) -> str:
-    order = seed.sample(range(12), 5)
+def style_B_rank(seed: random.Random, d: date) -> str:
+    top5, moon = daily_rank(d, seed)
     e = seed.choice(EMOJI)
-    lines = "\n".join(f"{i+1}位 {SIGNS[o][0]}{SIGNS[o][1]}" for i, o in enumerate(order))
+    lines = "\n".join(f"{i+1}位 {SIGNS[o][0]}{SIGNS[o][1]}" for i, o in enumerate(top5))
     tail = seed.choice(RANK_TAIL).format(
         e=e, color=seed.choice(LUCKY_COLORS), dir=seed.choice(LUCKY_DIRS))
-    return f"🔮今日の運勢ランキング🔮\n{lines}\n{tail}"
+    moon_name = SIGNS[moon][1]
+    elem = ELEM_NAME[ELEMENTS[moon]]
+    # 算出根拠（月の星座×エレメント）を冒頭に出して説得力を持たせる
+    lead = seed.choice([
+        f"今日は月が{moon_name}に。{elem}のエネルギーが満ちる一日🌙",
+        f"本日の月は{moon_name}。{elem}の星座に追い風が巡ります🌙",
+        f"月が{moon_name}を運行中。{elem}のリズムが今日の鍵🌙",
+        f"今日の月は{moon_name}。{elem}に縁のある星座が上位に🌙",
+    ])
+    return f"🔮今日の運勢ランキング🔮\n{lead}\n{lines}\n{tail}"
 
 
 def style_C(seed: random.Random) -> str:
@@ -198,7 +241,7 @@ def gen_day(d: date, seen: set) -> list[dict]:
     # 朝は反応の良い「運勢ランキング（金運軸）」を主軸に。
     # 5日に1回だけ誕生月メッセージを挟んで単調さを避ける。
     morning = ("A_month", lambda r: style_A_month(r, ((doy // 3) % 12) + 1)) \
-        if doy % 5 == 0 else ("B_rank", style_B_rank)
+        if doy % 5 == 0 else ("B_rank", lambda r: style_B_rank(r, d))
     message = [
         ("C_emoji", style_C),
         ("D_oracle", style_D),
