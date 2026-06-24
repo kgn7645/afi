@@ -266,19 +266,20 @@ def gen_day(d: date, seen: set) -> list[dict]:
         seen.add(text)
         return text
 
-    # 朝は反応の良い「運勢ランキング（金運軸）」を主軸に。
-    # 5日に1回だけ誕生月メッセージを挟んで単調さを避ける。
-    morning = ("A_month", lambda r: style_A_month(r, ((doy // 3) % 12) + 1)) \
+    # 同日の3枠は必ず別系統にする（朝=ランキング系 / 昼=メッセージ系 / 夜=開運・金運系）。
+    month = ((doy // 3) % 12) + 1
+    # 朝(08:00): 反応の良い運勢ランキングを主軸に。5日に1回だけ誕生月メッセージで変化。
+    morning = ("A_month", lambda r: style_A_month(r, month)) \
         if doy % 5 == 0 else ("B_rank", lambda r: style_B_rank(r, d))
-    message = [
-        ("C_emoji", style_C),
-        ("D_oracle", style_D),
-    ][doy % 2]
-    night = [
-        ("E_action", style_E),
-        ("A_money", lambda r: birth_money(r, ((doy // 3) % 12) + 1)),
-        ("C_emoji", style_C),
-    ][doy % 3]
+    # 昼(12:00): メッセージ系（絵文字置かせ / オラクル1枚引き）
+    message = [("C_emoji", style_C), ("D_oracle", style_D)][doy % 2]
+    # 夜(20:00): 開運・金運系（夜の開運アクション / 誕生月金運）。
+    #   朝が誕生月メッセージ(A_month)の日は「【N月生まれ】」が被るため夜は開運アクション固定。
+    if morning[0] == "A_month":
+        night = ("E_action", style_E)
+    else:
+        night = [("E_action", style_E),
+                 ("A_money", lambda r: birth_money(r, month))][doy % 2]
 
     return [
         {"time": "08:00", "slot": "morning", "style": morning[0], "text": emit(*morning)},
