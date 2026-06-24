@@ -27,6 +27,23 @@ SIGNS = [
 ]
 EMOJI = ["🌙", "✨", "🌹", "🕊️", "💫", "💰", "🔮", "🌕", "🐱", "🌈", "⭐", "🪽"]
 
+# 金運軸のラッキー要素・締め（MDの金運開運法ベース。断定/誇大・必ず/絶対は使わない）
+LUCKY_COLORS = ["ゴールド", "山吹色", "若草色", "ラベンダー", "パールホワイト", "深緑", "ターコイズ", "小豆色"]
+LUCKY_DIRS = ["東", "南東", "南", "北西", "西"]
+# ランキングの締め（金運軸）。{e}=絵文字 {color}=ラッキーカラー {dir}=方位
+RANK_TAIL = [
+    "上位の星座さん、今日はお財布の中を整えると金運の流れがもっと整います💰 共感したら{e}を置いて",
+    "ランクインした人へ。お札の向きをそろえるだけで、巡りが変わる合図です✨",
+    "1位さんは思いがけない豊かさの波が近づいているかも💰 受け取る人は{e}を置いて",
+    "今日のラッキーカラーは{color}。財布や小物に取り入れると金運が動きやすい日✨",
+    "上位の方は{dir}の窓を開けて新しい気を。お金とご縁が巡りやすくなります🪙 ピンと来たら{e}を",
+    "玄関にお花や緑をひとつ飾ってみて。良いご縁とお金が入ってくる入口になります🌿",
+    "ランクインした人、抱えていた重さがふっと軽くなる日✨ そっと{e}を置いて受け取って",
+    "上位さんへ。新しい財布を迎えるなら今日が好機。種銭を入れて始めると流れに乗れます💰",
+    "今日は{dir}まわりを少し片づけると金運アップの合図。できた人は{e}を置いて",
+    "1〜3位さんは、今日の小さな「ありがとう」が豊かさの種に。{color}を身につけると後押しに✨",
+]
+
 # ---------- A: 誕生月の運勢 ----------
 MONTH_THEME = {
     "金運": ["お金の流れが大きく変わろうとしています", "豊かさの扉が静かに開き始めています",
@@ -132,11 +149,8 @@ def style_B_rank(seed: random.Random) -> str:
     order = seed.sample(range(12), 5)
     e = seed.choice(EMOJI)
     lines = "\n".join(f"{i+1}位 {SIGNS[o][0]}{SIGNS[o][1]}" for i, o in enumerate(order))
-    tail = seed.choice([
-        f"今日「{e}」を置けた星座さんから、流れが動き出します",
-        f"ランクインした人、抱えていた重さがふっと軽くなる日✨",
-        f"上位の星座さんは、宇宙からのギフトを受け取る準備を",
-    ])
+    tail = seed.choice(RANK_TAIL).format(
+        e=e, color=seed.choice(LUCKY_COLORS), dir=seed.choice(LUCKY_DIRS))
     return f"🔮今日の運勢ランキング🔮\n{lines}\n{tail}"
 
 
@@ -181,11 +195,10 @@ def gen_day(d: date, seen: set) -> list[dict]:
         seen.add(text)
         return text
 
-    morning = [
-        ("B_sign", lambda r: style_B_sign(r, doy)),
-        ("B_rank", style_B_rank),
-        ("A_month", lambda r: style_A_month(r, ((doy // 3) % 12) + 1)),
-    ][doy % 3]
+    # 朝は反応の良い「運勢ランキング（金運軸）」を主軸に。
+    # 5日に1回だけ誕生月メッセージを挟んで単調さを避ける。
+    morning = ("A_month", lambda r: style_A_month(r, ((doy // 3) % 12) + 1)) \
+        if doy % 5 == 0 else ("B_rank", style_B_rank)
     message = [
         ("C_emoji", style_C),
         ("D_oracle", style_D),
