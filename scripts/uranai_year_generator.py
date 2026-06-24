@@ -56,8 +56,12 @@ def daily_rank(d: date, seed: random.Random) -> tuple[list[int], int]:
     """その日の月の星座を基に上位5星座を算出。(top5 index, 月の星座index)。
     相性スコア＋微小な日替わりノイズで、同月星座の連日でも順位が自然に動く。"""
     moon = moon_sign_index(d)
-    scored = sorted(range(12),
-                    key=lambda s: -( _compat(s, moon) + seed.random() * 0.9 ))
+    # 月の星座×相性で「上位に来やすさ」を決めつつ、日替わりの揺らぎを大きめ(2.6)に取り、
+    # 毎日 顔ぶれ・順位が動くように。月のエレメント星座は傾向として上位に出やすい。
+    def score(s: int) -> float:
+        boost = 0.8 if s == moon else 0.0
+        return _compat(s, moon) + boost + seed.random() * 2.6
+    scored = sorted(range(12), key=lambda s: -score(s))
     return scored[:5], moon
 EMOJI = ["🌙", "✨", "🌹", "🕊️", "💫", "💰", "🔮", "🌕", "🐱", "🌈", "⭐", "🪽"]
 
