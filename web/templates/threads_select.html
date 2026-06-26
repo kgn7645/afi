@@ -90,8 +90,8 @@
           <input type="hidden" name="product_id" value="{{ p.id }}">
           <button class="ok" type="submit">✍️ 記事化する</button>
         </form>
-        <form action="/threads/product/reject" method="post" style="flex:1;margin:0;"
-              data-confirm="この商品を候補から外しますか？" data-confirm-ok="却下する">
+        <form action="/threads/product/reject" method="post" style="flex:1;margin:0;" data-bg
+              data-bg-confirm="この商品を候補から外しますか？">
           <input type="hidden" name="product_id" value="{{ p.id }}">
           <button class="ng2" type="submit">却下</button>
         </form>

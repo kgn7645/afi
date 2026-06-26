@@ -56,6 +56,11 @@ def _summary(kind: str, res: Any) -> str:
         return f"{res}件を候補に収集しました"
     if kind == "generate":
         return f"つぶやきを{res}件生成しました"
+    if kind == "reject":
+        return "却下しました"
+    if kind == "regenerate":
+        return "生成待ちへ戻しました（/createで5案を作り直し）" if str(res) == "queued" \
+            else "再生成に失敗しました"
     return str(res)
 
 

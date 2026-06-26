@@ -1059,7 +1059,11 @@ def threads_articleize(request: Request, product_id: str = Form("")):
 def threads_product_reject(request: Request, product_id: str = Form("")):
     if not _authed(request):
         return RedirectResponse("/review/login", status_code=303)
-    threads_pipeline.reject_product("", product_id)
+    aid = product_id.split("::")[0] if "::" in product_id else _active_acc_id(request)
+    jid = jobs.submit("reject", aid,
+                      lambda: threads_pipeline.reject_product("", product_id), label=product_id)
+    if _is_ajax(request):
+        return JSONResponse({"ok": True, "job_id": jid})
     return RedirectResponse("/threads/select?saved=prej", status_code=303)
 
 
@@ -1160,8 +1164,25 @@ def threads_reject(request: Request, draft_id: str = Form(...)):
         return RedirectResponse("/review/login", status_code=303)
     d = next((x for x in threads_pipeline.drafts() if x["id"] == draft_id), None)
     v = "musing" if (d and d.get("type") == "musing") else "pr"
-    threads_pipeline.reject(draft_id)
+    aid = (d or {}).get("account", _active_acc_id(request))
+    jid = jobs.submit("reject", aid, lambda: threads_pipeline.reject(draft_id), label=draft_id)
+    if _is_ajax(request):
+        return JSONResponse({"ok": True, "job_id": jid})
     return RedirectResponse(f"/threads/posts?view={v}&saved=rej", status_code=303)
+
+
+@app.post("/threads/regenerate")
+def threads_regenerate(request: Request, draft_id: str = Form(...)):
+    """PRドラフトを破棄して同じ商品を生成待ちへ戻す（/createで5案を作り直す）。"""
+    if not _authed(request):
+        return RedirectResponse("/review/login", status_code=303)
+    d = next((x for x in threads_pipeline.drafts() if x["id"] == draft_id), None)
+    aid = (d or {}).get("account", _active_acc_id(request))
+    jid = jobs.submit("regenerate", aid,
+                      lambda: threads_pipeline.regenerate(draft_id), label=draft_id)
+    if _is_ajax(request):
+        return JSONResponse({"ok": True, "job_id": jid})
+    return RedirectResponse("/threads/posts?view=pr&saved=regen", status_code=303)
 
 
 @app.post("/threads/draft/images")

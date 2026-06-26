@@ -111,6 +111,7 @@
   {% if saved=='man' %}<div class="flash">✓ URLから商品を追加しました（下に表示）</div>{% endif %}
   {% if saved=='manfail' %}<div class="flash warn">追加に失敗（楽天の商品URLか確認／重複の可能性）</div>{% endif %}
   {% if saved=='rej' %}<div class="flash">却下しました</div>{% endif %}
+  {% if saved=='regen' %}<div class="flash">🔄 生成待ちへ戻しました。次の <b>/create</b> で5案を作り直します</div>{% endif %}
   {% if saved=='wd' %}<div class="flash">↩ 取り下げました。上の「承認待ち」に戻したので、編集してもう一度承認できます。</div>{% endif %}
   {% if saved=='pubok' %}<div class="flash">🚀 今すぐ投稿しました（Threadsに公開）。</div>{% endif %}
   {% if saved=='puberr' %}<div class="flash warn">公開に失敗しました：{{ msg or 'トークン/接続を確認してください' }}</div>{% endif %}
@@ -170,7 +171,8 @@
           {% endif %}
           <div class="acts"><button class="approve" type="submit">✓ 承認してキューへ</button></div>
         </form>
-        <form method="post" action="/threads/reject" style="margin-top:8px;" data-confirm="このドラフトを却下しますか？" data-confirm-ok="却下する">
+        <form method="post" action="/threads/reject" style="margin-top:8px;" data-bg
+              data-bg-confirm="このドラフトを却下しますか？">
           <input type="hidden" name="draft_id" value="{{ d.id }}">
           <button class="reject" type="submit">却下</button>
         </form>
@@ -231,7 +233,13 @@
           <button class="approve" type="submit">✓ 承認してキューへ</button>
         </div>
       </form>
-      <form method="post" action="/threads/reject" style="margin-top:8px;" data-confirm="このドラフトを却下しますか？" data-confirm-ok="却下する">
+      <form method="post" action="/threads/regenerate" style="margin-top:8px;" data-bg
+            data-bg-confirm="この5案を破棄して、同じ商品で5案を作り直しますか？（次回の /create で生成）">
+        <input type="hidden" name="draft_id" value="{{ d.id }}">
+        <button type="submit" style="width:100%;border:none;border-radius:11px;padding:12px;font-size:14px;font-weight:800;background:#eef2ff;color:#3730a3;">🔄 どれもイマイチ→5案を再生成</button>
+      </form>
+      <form method="post" action="/threads/reject" style="margin-top:8px;" data-bg
+            data-bg-confirm="このドラフトを却下しますか？">
         <input type="hidden" name="draft_id" value="{{ d.id }}">
         <button class="reject" type="submit">却下</button>
       </form>

@@ -212,6 +212,30 @@ def articleize(account: dict, product_id: str) -> str:
     return "done"
 
 
+def regenerate(draft_id: str) -> str:
+    """PRドラフトを破棄し、同じ商品を生成待ちへ戻す（Claude Codeで5案を作り直す）。
+    返り 'queued'(生成待ちへ) / 'fail'。"""
+    cur = drafts()
+    d = next((x for x in cur if x.get("id") == draft_id), None)
+    if not d or d.get("type") == "musing":
+        return "fail"
+    src = d.get("_gensrc") or {}
+    acc = get_account(src.get("account") or d.get("account") or "")
+    p = {
+        "id": draft_id,
+        "item": src.get("item") or {"itemName": d.get("product", "")},
+        "name": d.get("product", ""),
+        "label": src.get("label", d.get("label", "")),
+        "review_gist": src.get("review_gist", d.get("review_gist", "")),
+        "cosme_images": src.get("cosme_images", []),
+        "source": src.get("source", d.get("source", "")),
+        "source_url": src.get("source_url", ""),
+    }
+    _enqueue_pr(acc, p)
+    _save("_threads_drafts", [x for x in cur if x.get("id") != draft_id])
+    return "queued"
+
+
 def pending_generation() -> list:
     """Claude Codeが生成すべきプロンプト一覧（id/type/product/prompt）。"""
     return [{"id": x["id"], "type": x.get("type", "pr"), "product": x.get("product", ""),
@@ -253,6 +277,11 @@ def apply_generation(results: dict) -> int:
                 continue
             d["source"] = item.get("source", "")
             d["cosme_image_count"] = len(extra)
+            d["_gensrc"] = {                       # 再生成用に元の生成素材を保持
+                "account": item["account"], "item": it,
+                "label": item.get("label", ""), "review_gist": item.get("review_gist", ""),
+                "cosme_images": item.get("cosme_images", []),
+                "source": item.get("source", ""), "source_url": item.get("source_url", "")}
             cur.append(d)
         applied.append(gid)
         made += 1
